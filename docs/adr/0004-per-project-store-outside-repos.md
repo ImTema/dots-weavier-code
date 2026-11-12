@@ -1,0 +1,3 @@
+# One SQLite store per project under ~/.gofacon; never write inside a project
+
+gofacon must leave no trace in tracked repositories, so all state lives in `~/.gofacon`: no config files, ignore entries or generated files in projects. Each project gets its own SQLite store, which lets nested workspaces reuse indexes. A workspace is a manifest of projects plus the links between them. `trace` loads only the projects it needs into an in-memory graph for path search. We chose SQLite over JSON files (as graft and graphify use) because it can be queried without loading everything, updated incrementally, and reused by the future UI. gortex and codebase-memory-mcp make the same choice.

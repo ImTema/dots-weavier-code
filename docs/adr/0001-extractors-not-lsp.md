@@ -1,0 +1,3 @@
+# Language extractors feed a language-agnostic core; LSP is not the MVP engine
+
+The core owns nodes, edges, storage and pathfinding and knows no language. Each language plugs in through an extractor that emits the core schema. The Go extractor builds on the Go toolchain's own type and call-graph analysis (seeded from `scoring-workspace/tools/grpctrace`), not on gopls/LSP. LSP call hierarchy answers one symbol per request, gives no cross-project gRPC or pubsub matching, and stops at interface methods. Whether LSP is still useful (for example as a fallback extractor for other languages) is an open research question on the gofacon MVP map.

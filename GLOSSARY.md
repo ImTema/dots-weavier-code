@@ -32,6 +32,21 @@ _Avoid_: vertex, entity
 A typed, directed relation between two nodes, such as `call`, `grpc` or `pubsub`.
 _Avoid_: link (reserved), relation
 
+**Hop**:
+One edge along a path, from one node to the next.
+_Avoid_: step, jump
+
+**Interface hop**:
+A hop where the code calls through an interface or a function value (callback, closure), so the function that runs is decided at runtime. All other call hops are direct calls.
+_Avoid_: dispatch, dynamic call
+
+**Sure**:
+An edge known to be real. Every direct call is sure. An interface hop is sure only when gofacon has tracked that a value of that concrete type actually reaches the call.
+
+**Guess**:
+An interface hop whose target was linked only because its type has a matching method, with no evidence that such a value reaches the call. A guess may be an invented call.
+_Avoid_: approx, low-confidence, inferred
+
 **Link**:
 An edge that crosses from one project to another.
 _Avoid_: cross-edge, bridge
@@ -42,7 +57,7 @@ A node that comes from test code. In Go, that means `_test.go` files and configu
 ### Querying
 
 **Symbol address**:
-How a user names a node on the command line: `project::Type.Method`, or `project:relative/path.go:Type.Method`.
+How a user names a node on the command line: `project::Type.Method`, or `project:relative/path.go:Type.Method`. A line form, `project:relative/path.go:LINE`, names the innermost function whose declaration contains that line.
 _Avoid_: selector, locator
 
 **Trace**:

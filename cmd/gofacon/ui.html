@@ -1,0 +1,172 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>gofacon trace</title>
+<style>
+html,body{margin:0;height:100%;background:#02030a;color:#cdd5ff;font:12px/1.45 ui-monospace,Menlo,monospace;overflow:hidden}
+canvas{position:absolute;inset:0;display:block}
+#side{position:absolute;top:0;left:0;bottom:0;width:390px;box-sizing:border-box;padding:14px;overflow:auto;
+  background:linear-gradient(180deg,rgba(10,12,32,.92),rgba(5,6,18,.88));border-right:1px solid #1b2045;backdrop-filter:blur(6px)}
+h1{margin:0 0 6px;font-size:13px;letter-spacing:.2em;color:#fff}
+.ep{color:#8b93c4;font-size:11px;word-break:break-all;margin:2px 0}
+.ep b{color:#fff}
+.hint{color:#5d6596;font-size:11px;margin:10px 0 4px}
+.path{padding:8px 9px;margin:7px 0;border:1px solid #1b2045;border-radius:7px;cursor:pointer;transition:.15s}
+.path:hover{border-color:#47509a;background:rgba(70,80,180,.08)}
+.path.sel{border-color:#a9b6ff;background:rgba(90,110,255,.16);box-shadow:0 0 14px rgba(120,140,255,.25)}
+.path.dim{opacity:.35}
+.hd{display:flex;gap:6px;align-items:center;color:#fff}
+.hd .n{color:#8b93c4}
+.tag{font-size:10px;padding:0 6px;border-radius:9px;background:#20264d;color:#bfc7ff}
+.tag.g{background:#4a1650;color:#ffb0f6}
+.tag.s{background:#123d2c;color:#8cf5c0}
+.steps{margin-top:5px;font-size:11px;color:#9aa2d0}
+.steps .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:3px;vertical-align:middle}
+.steps .k{color:#58608f}
+.steps .k.grpc{color:#ff6cf0}
+.steps .k.guess{color:#ffb35c}
+.steps .k.sure{color:#5fe3a1}
+#legend{position:absolute;right:14px;bottom:14px;padding:9px 11px;border:1px solid #1b2045;border-radius:7px;background:rgba(5,6,18,.8)}
+#legend div{margin:2px 0}
+#legend i{display:inline-block;width:22px;height:0;border-top:2px solid;vertical-align:middle;margin-right:6px}
+#tip{position:absolute;pointer-events:none;display:none;max-width:560px;padding:7px 9px;border-radius:6px;
+  background:rgba(8,10,28,.96);border:1px solid #39407a;color:#e6e9ff;word-break:break-all}
+#tip .p{color:#8b93c4}
+</style></head>
+<body>
+<canvas id="c"></canvas>
+<div id="side"></div>
+<div id="legend"></div>
+<div id="tip"></div>
+<script type="application/json" id="data">/*DATA*/</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+const PAL = ['#7aa2ff','#ff7ad9','#6dffc6','#ffd06b','#b88bff','#6be4ff','#ff9b6b','#c4ff6b'];
+const KIND = {'call':'#6878b8','iface:sure':'#5fe3a1','iface:guess':'#ffb35c','grpc':'#ff4ff0'};
+const KCLS = {'call':'','iface:sure':'sure','iface:guess':'guess','grpc':'grpc'};
+const projColor = {}; D.projects.forEach((p,i)=>projColor[p]=PAL[i%PAL.length]);
+const N = D.nodes, E = D.edges, P = D.paths;
+N.forEach(n=>{n.paths=new Set(); n.color=projColor[n.project]||'#aaa';});
+P.forEach((p,pi)=>p.nodes.forEach(i=>N[i].paths.add(pi)));
+const iA = P.length?P[0].nodes[0]:-1, iB = P.length?P[0].nodes.at(-1):-1;
+
+// ---- layout: one galaxy per project, force-directed inside ----
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const centers = {};
+D.projects.forEach((p,i)=>{const a=Math.PI*(i/Math.max(1,D.projects.length))*2-Math.PI; const r=D.projects.length>1?620:0; centers[p]={x:Math.cos(a)*r,y:Math.sin(a)*r*.6};});
+let seed=7; const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+N.forEach((n,i)=>{const c=centers[n.project]; n.x=c.x+(rnd()-.5)*200; n.y=c.y+(rnd()-.5)*200; n.vx=0; n.vy=0;});
+// order along paths gives the flow a left-to-right drift
+N.forEach(n=>n.depth=0); P.forEach(p=>p.nodes.forEach((i,k)=>N[i].depth=Math.max(N[i].depth,k/(p.nodes.length-1||1))));
+function tick(alpha){
+  for(let i=0;i<N.length;i++)for(let j=i+1;j<N.length;j++){
+    const a=N[i],b=N[j]; let dx=b.x-a.x,dy=b.y-a.y,d2=dx*dx+dy*dy+.01; const f=7000/d2*alpha, d=Math.sqrt(d2);
+    dx/=d;dy/=d; a.vx-=dx*f;a.vy-=dy*f;b.vx+=dx*f;b.vy+=dy*f;}
+  for(const e of E){const a=N[e.s],b=N[e.t]; const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1;
+    const L=e.kind==='grpc'?420:120, f=(d-L)*.04*alpha; a.vx+=dx/d*f;a.vy+=dy/d*f;b.vx-=dx/d*f;b.vy-=dy/d*f;}
+  for(const n of N){const c=centers[n.project]; n.vx+=(c.x+(n.depth-.5)*320-n.x)*.012*alpha; n.vy+=(c.y-n.y)*.012*alpha;
+    n.vx*=.82;n.vy*=.82;n.x+=n.vx;n.y+=n.vy;}
+}
+for(let i=0;i<500;i++)tick(1-i/600);
+
+// ---- view ----
+let W,H,dpr; const view={x:0,y:0,k:1};
+function resize(){dpr=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';}
+function fit(){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const n of N){x0=Math.min(x0,n.x);y0=Math.min(y0,n.y);x1=Math.max(x1,n.x);y1=Math.max(y1,n.y);}
+  const left=390, w=W-left-60, h=H-80; view.k=Math.min(2,Math.min(w/(x1-x0+1),h/(y1-y0+1)));
+  view.x=left+30+w/2-(x0+x1)/2*view.k; view.y=H/2-(y0+y1)/2*view.k;}
+resize(); fit(); addEventListener('resize',()=>{resize();fit();});
+const stars=[...Array(500)].map(()=>({x:Math.random(),y:Math.random(),r:Math.random()*1.2+.2,p:Math.random()*6,z:Math.random()*.6+.2}));
+
+// ---- selection: selected paths = clicked path, or every path through a clicked node ----
+let selPath=-1, selNode=-1, hover=-1;
+function activePaths(){ if(selPath>=0)return new Set([selPath]); if(selNode>=0)return N[selNode].paths; return null; }
+function activeSets(){const ap=activePaths(); if(!ap)return null; const nodes=new Set(), edges=new Set();
+  ap.forEach(pi=>{P[pi].nodes.forEach(i=>nodes.add(i)); P[pi].edges.forEach(i=>edges.add(i));}); return {ap,nodes,edges};}
+
+function draw(t){
+  ctx.setTransform(dpr,0,0,dpr,0,0); ctx.fillStyle='#02030a'; ctx.fillRect(0,0,W,H);
+  for(const s of stars){ctx.globalAlpha=.25+.35*Math.sin(t/900+s.p)**2; ctx.fillStyle='#cfd8ff';
+    ctx.beginPath(); ctx.arc((s.x*W+view.x*s.z*.15)%W,(s.y*H+view.y*s.z*.15)%H,s.r,0,7); ctx.fill();}
+  ctx.globalAlpha=1;
+  ctx.setTransform(dpr*view.k,0,0,dpr*view.k,dpr*view.x,dpr*view.y);
+  const A=activeSets();
+  // nebulae
+  for(const p of D.projects){const ns=N.filter(n=>n.project===p); if(!ns.length)continue;
+    const cx=ns.reduce((s,n)=>s+n.x,0)/ns.length, cy=ns.reduce((s,n)=>s+n.y,0)/ns.length;
+    const r=Math.max(120,...ns.map(n=>Math.hypot(n.x-cx,n.y-cy)))+70;
+    const g=ctx.createRadialGradient(cx,cy,0,cx,cy,r); g.addColorStop(0,projColor[p]+'2a'); g.addColorStop(.6,projColor[p]+'10'); g.addColorStop(1,projColor[p]+'00');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fill();
+    ctx.fillStyle=projColor[p]; ctx.globalAlpha=.75; ctx.font=`${15/Math.sqrt(view.k)}px Menlo`; ctx.textAlign='center';
+    ctx.fillText(p.toUpperCase(),cx,cy-r+22/view.k); ctx.globalAlpha=1;}
+  // edges
+  E.forEach((e,i)=>{const a=N[e.s],b=N[e.t]; const on=!A||A.edges.has(i);
+    const mx=(a.x+b.x)/2-(b.y-a.y)*.12, my=(a.y+b.y)/2+(b.x-a.x)*.12;
+    ctx.strokeStyle=KIND[e.kind]; ctx.globalAlpha=on?(A?.95:.45):.05;
+    ctx.lineWidth=(e.kind==='grpc'?2.6:1.2)*(A&&on?1.6:1)/Math.sqrt(view.k);
+    ctx.setLineDash(e.kind==='iface:guess'?[5,4]:e.kind==='grpc'?[10,6]:[]); ctx.lineDashOffset=e.kind==='grpc'?-t/40:0;
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.quadraticCurveTo(mx,my,b.x,b.y); ctx.stroke();
+    if(A&&on){ // particles flowing A->B
+      for(let q=0;q<3;q++){const u=((t/1400)+q/3+i*.137)%1, x=(1-u)**2*a.x+2*(1-u)*u*mx+u*u*b.x, y=(1-u)**2*a.y+2*(1-u)*u*my+u*u*b.y;
+        ctx.setLineDash([]); ctx.globalAlpha=1; ctx.fillStyle='#fff'; ctx.shadowColor=KIND[e.kind]; ctx.shadowBlur=10;
+        ctx.beginPath(); ctx.arc(x,y,1.8/Math.sqrt(view.k),0,7); ctx.fill(); ctx.shadowBlur=0;}}
+  });
+  ctx.setLineDash([]);
+  // nodes
+  N.forEach((n,i)=>{const on=!A||A.nodes.has(i), end=i===iA||i===iB;
+    const r=(3+Math.sqrt(n.paths.size)*1.6+(end?3:0))/Math.sqrt(view.k)*(i===hover?1.5:1);
+    ctx.globalAlpha=on?1:.12; ctx.shadowColor=n.color; ctx.shadowBlur=on?(end?28:16):0; ctx.fillStyle=n.color;
+    ctx.beginPath(); ctx.arc(n.x,n.y,r,0,7); ctx.fill();
+    ctx.shadowBlur=0; ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(n.x,n.y,r*.42,0,7); ctx.fill();
+    if(end){ctx.strokeStyle='#fff'; ctx.lineWidth=1.2/view.k; ctx.beginPath(); ctx.arc(n.x,n.y,r+5/view.k+Math.sin(t/300)*1.5/view.k,0,7); ctx.stroke();}
+    if(on&&(A||end||i===hover||view.k>1.6)){ctx.globalAlpha=on?.95:.3; ctx.fillStyle=end?'#fff':'#c9d1ff'; ctx.textAlign='left';
+      ctx.font=`${(end?12:10.5)/Math.sqrt(view.k)}px Menlo`; ctx.fillText((i===iA?'A ':i===iB?'B ':'')+n.name,n.x+r+4/view.k,n.y+3/view.k);}
+  });
+  ctx.globalAlpha=1;
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+// ---- interaction ----
+const toWorld=(x,y)=>({x:(x-view.x)/view.k,y:(y-view.y)/view.k});
+function pick(x,y){const w=toWorld(x,y); let best=-1,bd=14/view.k; N.forEach((n,i)=>{const d=Math.hypot(n.x-w.x,n.y-w.y); if(d<bd){bd=d;best=i;}}); return best;}
+let drag=null, moved=false;
+cv.onmousedown=e=>{const i=pick(e.clientX,e.clientY); drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y,node:i,nx:i>=0?N[i].x:0,ny:i>=0?N[i].y:0};moved=false; cv.style.cursor='grabbing';};
+addEventListener('mouseup',e=>{if(drag&&!moved&&e.target===cv){const i=pick(e.clientX,e.clientY); selPath=-1; selNode=(i===selNode?-1:i); render();} drag=null;});
+addEventListener('mousemove',e=>{
+  if(drag){const dx=e.clientX-drag.x,dy=e.clientY-drag.y; if(Math.abs(dx)+Math.abs(dy)>3)moved=true; if(drag.node>=0){N[drag.node].x=drag.nx+dx/view.k; N[drag.node].y=drag.ny+dy/view.k;} else {view.x=drag.vx+dx; view.y=drag.vy+dy;} return;}
+  if(e.target!==cv){tip.style.display='none';hover=-1;return;}
+  hover=pick(e.clientX,e.clientY); cv.style.cursor=hover>=0?'pointer':'grab';
+  if(hover<0){tip.style.display='none';return;}
+  const n=N[hover]; tip.style.display='block'; tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+12)+'px';
+  tip.innerHTML=`<b>${esc(n.name)}</b><div class="p">${esc(n.project)}:${esc(n.file)}:${n.line}</div><div class="p">on ${n.paths.size} of ${P.length} paths — click to filter</div>`;
+});
+cv.addEventListener('wheel',e=>{e.preventDefault(); const f=Math.exp(-e.deltaY*.0015), w=toWorld(e.clientX,e.clientY);
+  view.k=Math.min(8,Math.max(.15,view.k*f)); view.x=e.clientX-w.x*view.k; view.y=e.clientY-w.y*view.k;},{passive:false});
+addEventListener('keydown',e=>{if(!P.length)return;
+  if(e.key==='ArrowDown'||e.key==='j'){selNode=-1;selPath=(selPath+1)%P.length;render();}
+  if(e.key==='ArrowUp'||e.key==='k'){selNode=-1;selPath=(selPath-1+P.length)%P.length;render();}
+  if(e.key==='Escape'){selNode=-1;selPath=-1;render();}
+  if(e.key==='f')fit();});
+
+// ---- side panel ----
+const side=document.getElementById('side'), tip=document.getElementById('tip');
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function render(){
+  const ap=activePaths();
+  side.innerHTML=`<h1>GOFACON · TRACE</h1>
+   <div class="ep"><b>A</b> ${esc(D.a)}</div><div class="ep"><b>B</b> ${esc(D.b)}</div>
+   <div class="hint">${P.length} paths · ${N.length} nodes (shared nodes drawn once) · ${D.projects.length} projects<br>
+   click a path or a star · drag a star to move it · ↑/↓ cycle · esc clear · f fit · wheel zoom · drag pan</div>`+
+   (P.length?'':'<div class="ep">no path</div>')+
+   P.map((p,pi)=>{
+     const tags=(p.iface?`<span class="tag ${p.sure===p.iface?'s':''}">${p.sure}/${p.iface} sure</span>`:'')+p.grpc.map(m=>`<span class="tag g">grpc ${esc(m)}</span>`).join('');
+     const steps=p.nodes.map((ni,k)=>{const n=N[ni]; const e=k?E[p.edges[k-1]]:null;
+       return (e?` <span class="k ${KCLS[e.kind]}">─${e.kind}→</span> `:'')+`<span class="dot" style="background:${n.color}"></span>${esc(n.name)}`;}).join('');
+     return `<div class="path ${selPath===pi?'sel':''} ${ap&&!ap.has(pi)?'dim':''}" data-i="${pi}">
+       <div class="hd"><span class="n">#${pi+1}</span><span>${p.nodes.length-1} hops</span>${tags}</div><div class="steps">${steps}</div></div>`;}).join('');
+  side.querySelectorAll('.path').forEach(el=>el.onclick=()=>{const i=+el.dataset.i; selNode=-1; selPath=selPath===i?-1:i; render();});
+}
+render();
+document.getElementById('legend').innerHTML=Object.entries(KIND).map(([k,c])=>`<div><i style="border-color:${c};${k==='iface:guess'||k==='grpc'?'border-top-style:dashed':''}"></i>${k}</div>`).join('')+
+  D.projects.map(p=>`<div><span class="dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${projColor[p]};margin:0 10px 0 6px;box-shadow:0 0 8px ${projColor[p]}"></span>${esc(p)}</div>`).join('');
+</script>
+</body></html>

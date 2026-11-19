@@ -29,9 +29,27 @@ func (r VolumeRule) Discount(subtotal, units int64) int64 {
 	return r.OffCents
 }
 
-// Rules returns the rules a customer tier is eligible for.
-func Rules(tier string) []Rule {
-	rules := []Rule{VolumeRule{MinUnits: 10, OffCents: 500}}
+// LoyaltyRule takes a percentage off for customers with at least MinOrders
+// earlier orders. Orders comes from OrderPlaced events.
+type LoyaltyRule struct {
+	Orders, MinOrders int
+	Percent           int64
+}
+
+func (r LoyaltyRule) Discount(subtotal, _ int64) int64 {
+	if r.Orders < r.MinOrders {
+		return 0
+	}
+	return subtotal * r.Percent / 100
+}
+
+// Rules returns the rules a customer is eligible for, given their tier and
+// how many orders they placed before.
+func Rules(tier string, priorOrders int) []Rule {
+	rules := []Rule{
+		VolumeRule{MinUnits: 10, OffCents: 500},
+		LoyaltyRule{Orders: priorOrders, MinOrders: 3, Percent: 10},
+	}
 	if tier == "gold" {
 		rules = append(rules, TierRule{Percent: 15})
 	} else if tier == "silver" {

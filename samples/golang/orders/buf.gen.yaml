@@ -1,0 +1,8 @@
+# Go code for this project's own protos under api/ (the OrderPlaced event).
+# Regenerate: PATH="$(go env GOPATH)/bin:$PATH" buf generate
+# The inventory client has its own template: buf generate --template buf.gen.inventory.yaml
+version: v2
+plugins:
+  - local: protoc-gen-go
+    out: api
+    opt: paths=source_relative

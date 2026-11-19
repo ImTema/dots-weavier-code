@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package orders.events.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "example.com/samples/orders/api/events/v1;eventsv1";
+
+// OrderPlaced is published to topic "order-placed" (TopicOrderPlaced) once per
+// placed order. Delivery is at-least-once: subscribers dedupe on order_id.
+message OrderPlaced {
+  string order_id = 1;
+  string customer_id = 2;
+  int64 total_cents = 3;
+  int64 units = 4;
+  google.protobuf.Timestamp placed_at = 5;
+}

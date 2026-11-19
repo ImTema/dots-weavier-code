@@ -46,9 +46,12 @@ func (h *Handler) placeOrder(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, order.ErrInvalid) || errors.Is(err, customer.ErrNotFound) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	} else if errors.Is(err, order.ErrUnavailable) {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
 	} else if err != nil {
 		slog.ErrorContext(ctx, "place order", "err", err)
-		http.Error(w, "pricing unavailable", http.StatusBadGateway)
+		http.Error(w, "upstream service unavailable", http.StatusBadGateway)
 		return
 	}
 	writeJSON(w, http.StatusCreated, api.PlaceOrderResponse{OrderID: o.ID, TotalCents: o.TotalCents})

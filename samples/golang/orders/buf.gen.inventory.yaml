@@ -1,0 +1,12 @@
+# Generates the Go client for the Java inventory service from its proto.
+# Regenerate: PATH="$(go env GOPATH)/bin:$PATH" buf generate --template buf.gen.inventory.yaml
+version: v2
+inputs:
+  - directory: ../../java/inventory/src/main/proto
+plugins:
+  - local: protoc-gen-go
+    out: internal/inventorypb
+    opt: paths=source_relative
+  - local: protoc-gen-go-grpc
+    out: internal/inventorypb
+    opt: paths=source_relative

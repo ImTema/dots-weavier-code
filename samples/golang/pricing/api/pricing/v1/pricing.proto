@@ -25,5 +25,8 @@ message QuoteResponse {
   int64 subtotal_cents = 1;
   int64 discount_cents = 2;
   int64 tax_cents = 3;
+  // total_cents = subtotal - discount + tax + shipping.
   int64 total_cents = 4;
+  // From the Kotlin shipping service.
+  int64 shipping_cents = 5;
 }

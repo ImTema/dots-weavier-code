@@ -25,21 +25,46 @@ type Line struct {
 
 // Quote is a priced basket, all amounts in cents.
 type Quote struct {
-	Subtotal, Discount, Tax, Total int64
+	Subtotal, Discount, Tax, Shipping, Total int64
 }
 
-// Calculate prices lines for a customer tier in region.
-func Calculate(lines []Line, tier, region string) (Quote, error) {
+// Units returns the total quantity across lines.
+func Units(lines []Line) int64 {
+	var n int64
+	for _, l := range lines {
+		n += l.Qty
+	}
+	return n
+}
+
+// Customer is what pricing knows about the buyer.
+type Customer struct {
+	Tier, Region string
+	PriorOrders  int
+}
+
+// Calculate prices lines for c. Tax applies to goods only; shippingCents is
+// added untaxed.
+func Calculate(lines []Line, c Customer, shippingCents int64) (Quote, error) {
+	if shippingCents < 0 {
+		return Quote{}, fmt.Errorf("%w: negative shipping", ErrInvalidLine)
+	}
 	sub, units, err := subtotal(lines)
 	if err != nil {
 		return Quote{}, err
 	}
-	d := discount.Best(discount.Rules(tier), sub, units)
-	t, err := tax.Amount(region, sub-d)
+	d := discount.Best(discount.Rules(c.Tier, c.PriorOrders), sub, units)
+	t, err := tax.Amount(c.Region, sub-d)
 	if err != nil {
 		return Quote{}, err
 	}
-	return Quote{Subtotal: sub, Discount: d, Tax: t, Total: sub - d + t}, nil
+	return Quote{
+		Subtotal: sub,
+		Discount: d,
+		Tax:      t,
+		Shipping: shippingCents,
+		Total:    sub - d + t + shippingCents,
+	}, nil
 }
 
 func subtotal(lines []Line) (cents, units int64, err error) {

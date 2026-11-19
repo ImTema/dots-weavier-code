@@ -146,7 +146,10 @@ type QuoteResponse struct {
 	SubtotalCents int64                  `protobuf:"varint,1,opt,name=subtotal_cents,json=subtotalCents,proto3" json:"subtotal_cents,omitempty"`
 	DiscountCents int64                  `protobuf:"varint,2,opt,name=discount_cents,json=discountCents,proto3" json:"discount_cents,omitempty"`
 	TaxCents      int64                  `protobuf:"varint,3,opt,name=tax_cents,json=taxCents,proto3" json:"tax_cents,omitempty"`
-	TotalCents    int64                  `protobuf:"varint,4,opt,name=total_cents,json=totalCents,proto3" json:"total_cents,omitempty"`
+	// total_cents = subtotal - discount + tax + shipping.
+	TotalCents int64 `protobuf:"varint,4,opt,name=total_cents,json=totalCents,proto3" json:"total_cents,omitempty"`
+	// From the Kotlin shipping service.
+	ShippingCents int64 `protobuf:"varint,5,opt,name=shipping_cents,json=shippingCents,proto3" json:"shipping_cents,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -209,6 +212,13 @@ func (x *QuoteResponse) GetTotalCents() int64 {
 	return 0
 }
 
+func (x *QuoteResponse) GetShippingCents() int64 {
+	if x != nil {
+		return x.ShippingCents
+	}
+	return 0
+}
+
 var File_api_pricing_v1_pricing_proto protoreflect.FileDescriptor
 
 const file_api_pricing_v1_pricing_proto_rawDesc = "" +
@@ -224,13 +234,14 @@ const file_api_pricing_v1_pricing_proto_rawDesc = "" +
 	"\vcustomer_id\x18\x01 \x01(\tR\n" +
 	"customerId\x12\x16\n" +
 	"\x06region\x18\x02 \x01(\tR\x06region\x12&\n" +
-	"\x05items\x18\x03 \x03(\v2\x10.pricing.v1.ItemR\x05items\"\x9b\x01\n" +
+	"\x05items\x18\x03 \x03(\v2\x10.pricing.v1.ItemR\x05items\"\xc2\x01\n" +
 	"\rQuoteResponse\x12%\n" +
 	"\x0esubtotal_cents\x18\x01 \x01(\x03R\rsubtotalCents\x12%\n" +
 	"\x0ediscount_cents\x18\x02 \x01(\x03R\rdiscountCents\x12\x1b\n" +
 	"\ttax_cents\x18\x03 \x01(\x03R\btaxCents\x12\x1f\n" +
 	"\vtotal_cents\x18\x04 \x01(\x03R\n" +
-	"totalCents2N\n" +
+	"totalCents\x12%\n" +
+	"\x0eshipping_cents\x18\x05 \x01(\x03R\rshippingCents2N\n" +
 	"\x0ePricingService\x12<\n" +
 	"\x05Quote\x12\x18.pricing.v1.QuoteRequest\x1a\x19.pricing.v1.QuoteResponseB6Z4example.com/samples/pricing/api/pricing/v1;pricingv1b\x06proto3"
 

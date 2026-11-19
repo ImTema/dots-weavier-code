@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package inventory.v1;
+
+option java_multiple_files = true;
+option java_package = "com.example.inventory.api.v1";
+option go_package = "example.com/samples/orders/internal/inventorypb/inventory/v1;inventoryv1";
+
+// InventoryService holds stock for orders. Reservations are all-or-nothing.
+service InventoryService {
+  // Reserve holds every item for the customer, or none of them.
+  rpc Reserve(ReserveRequest) returns (ReserveResponse);
+  // Release returns a reservation's stock, for orders that fail after Reserve.
+  rpc Release(ReleaseRequest) returns (ReleaseResponse);
+}
+
+message Item {
+  string sku = 1;
+  int32 qty = 2;
+}
+
+message ReserveRequest {
+  string customer_id = 1;
+  repeated Item items = 2;
+}
+
+message ReserveResponse {
+  string reservation_id = 1;
+}
+
+message ReleaseRequest {
+  string reservation_id = 1;
+}
+
+message ReleaseResponse {
+  // False when the reservation was unknown or already released.
+  bool released = 1;
+}

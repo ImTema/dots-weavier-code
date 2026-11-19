@@ -1,5 +1,5 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>gofacon trace</title>
+<html><head><meta charset="utf-8"><title>dotweavier trace</title>
 <style>
 html,body{margin:0;height:100%;background:#02030a;color:#cdd5ff;font:12px/1.45 ui-monospace,Menlo,monospace;overflow:hidden}
 canvas{position:absolute;inset:0;display:block}
@@ -152,7 +152,7 @@ const side=document.getElementById('side'), tip=document.getElementById('tip');
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function render(){
   const ap=activePaths();
-  side.innerHTML=`<h1>GOFACON · TRACE</h1>
+  side.innerHTML=`<h1>DOTWEAVIER · TRACE</h1>
    <div class="ep"><b>A</b> ${esc(D.a)}</div><div class="ep"><b>B</b> ${esc(D.b)}</div>
    <div class="hint">${P.length} paths · ${N.length} nodes (shared nodes drawn once) · ${D.projects.length} projects<br>
    click a path or a star · drag a star to move it · ↑/↓ cycle · esc clear · f fit · wheel zoom · drag pan</div>`+

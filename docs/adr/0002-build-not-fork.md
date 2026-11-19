@@ -1,3 +1,3 @@
-# Build gofacon, using gortex and graft as references; don't fork
+# Build dotweavier, using gortex and graft as references; don't fork
 
 We looked at graft/Trail-Code, codebase-memory-mcp, gortex and graphify. gortex is closest: it is written in Go, does go/types interface fan-out, A-to-B path search and cross-repo contract matching. But it writes `.gortex.yaml`/`.mcp.json` into repos, which breaks the "leave no trace" rule. It is also very large (175 MCP tools plus a daemon), lacks the SSA call graph, `go.work` and cross-module receiver linking we need, and its code sits under `internal/`, so it can't be imported. We copy ideas (edge confidence tiers, bidirectional path search, contract matching) and keep our own code.

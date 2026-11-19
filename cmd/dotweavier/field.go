@@ -1,4 +1,4 @@
-// `gofacon trace field`: the full lifecycle of one value, as two trees.
+// `dotweavier trace field`: the full lifecycle of one value, as two trees.
 //
 //   - origin: where the value comes from, back to literals, parsing, other projects'
 //     gRPC clients, ...; each line flows into the one above it.
@@ -1348,7 +1348,7 @@ func runTraceField(args []string) {
 	depth := fl.Int("depth", 0, "text: print at most N levels of each tree (0: all); ui: levels open at first (0: 6)")
 	tests := fl.Bool("include-tests", false, "include test code (_test.go, mock/fake packages)")
 	maxProjects := fl.Int("max-projects", 10, "load at most N projects when following fields shared across projects")
-	format := fl.String("format", "text", "text (two trees) or ui (tree view written to ~/.gofacon/ui/trace-field.html)")
+	format := fl.String("format", "text", "text (two trees) or ui (tree view written to ~/.dotweavier/ui/trace-field.html)")
 	// Accept the address before or after the flags.
 	var pos []string
 	for len(args) > 0 {

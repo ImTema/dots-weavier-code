@@ -1,9 +1,9 @@
-// Throwaway prototype of `gofacon trace` (ticket .scratch/gofacon-mvp/issues/11).
+// Throwaway prototype of `dotweavier trace` (ticket .scratch/dotweavier-mvp/issues/11).
 // No core/extractor split, no schema; field tracing lives in field.go.
 //
-//	gofacon index [--workspace DIR] [project ...]
-//	gofacon trace path -A <addr> -B <addr> [--max-paths 10] [--include-tests]
-//	gofacon trace field [project:]rel/path.go:LINE [--depth N] [--include-tests] [--format text|ui]
+//	dotweavier index [--workspace DIR] [project ...]
+//	dotweavier trace path -A <addr> -B <addr> [--max-paths 10] [--include-tests]
+//	dotweavier trace field [project:]rel/path.go:LINE [--depth N] [--include-tests] [--format text|ui]
 //
 // Addresses: project::Type.Method, project:rel/path.go:Type.Method, project:rel/path.go:LINE.
 package main
@@ -691,7 +691,7 @@ type stored struct {
 // shortcut: gob files instead of per-project SQLite (ADR 0004); fine for a prototype.
 func storeDir() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".gofacon", "proto")
+	return filepath.Join(home, ".dotweavier", "proto")
 }
 
 func storePath(project string) string {
@@ -847,9 +847,9 @@ func (g *graph) ui(paths []*state, a, b string) ([]byte, error) {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
-  gofacon index [--workspace DIR] [project ...]   (no projects: every go.mod under the workspace)
-  gofacon trace path -A <addr> -B <addr> [--max-paths N] [--include-tests] [--format text|ui]
-  gofacon trace field [project:]rel/path.go:LINE [--workspace DIR] [--depth N] [--include-tests] [--max-projects N] [--format text|ui]`)
+  dotweavier index [--workspace DIR] [project ...]   (no projects: every go.mod under the workspace)
+  dotweavier trace path -A <addr> -B <addr> [--max-paths N] [--include-tests] [--format text|ui]
+  dotweavier trace field [project:]rel/path.go:LINE [--workspace DIR] [--depth N] [--include-tests] [--max-projects N] [--format text|ui]`)
 	os.Exit(2)
 }
 
@@ -881,7 +881,7 @@ func main() {
 	fmt.Fprintf(os.Stderr, "wall=%s maxRSS=%dMB\n", time.Since(start).Round(time.Millisecond), ru.Maxrss>>20) // darwin: bytes
 }
 
-// shortcut: hard-coded proving ground; the real CLI gets it from `gofacon init`.
+// shortcut: hard-coded proving ground; the real CLI gets it from `dotweavier init`.
 func defaultWorkspace() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, "GolandProjects/scoring-workspace")
@@ -925,7 +925,7 @@ func runTrace(args []string) {
 	bFlag := fl.String("B", "", "end symbol address")
 	maxPaths := fl.Int("max-paths", 10, "number of paths to print")
 	tests := fl.Bool("include-tests", false, "include test nodes (_test.go, mock/fake packages)")
-	format := fl.String("format", "text", "text (one line per path) or ui (galaxy view written to ~/.gofacon/ui/trace-path.html)")
+	format := fl.String("format", "text", "text (one line per path) or ui (galaxy view written to ~/.dotweavier/ui/trace-path.html)")
 	_ = fl.Parse(args)
 
 	addrA, err := parseAddr(*aFlag)
@@ -947,7 +947,7 @@ func runTrace(args []string) {
 	}
 	for _, p := range []string{addrA.Project, addrB.Project} {
 		if !loaded[p] {
-			must(fmt.Errorf("project %q is not indexed; run: gofacon index %s", p, p))
+			must(fmt.Errorf("project %q is not indexed; run: dotweavier index %s", p, p))
 		}
 	}
 	if !*tests {
@@ -991,7 +991,7 @@ func runTrace(args []string) {
 	}
 }
 
-// writeUI writes a page under ~/.gofacon/ui and returns its path.
+// writeUI writes a page under ~/.dotweavier/ui and returns its path.
 func writeUI(name string, html []byte) string {
 	out := filepath.Join(filepath.Dir(storeDir()), "ui", name)
 	must(os.MkdirAll(filepath.Dir(out), 0o755))
@@ -1001,7 +1001,7 @@ func writeUI(name string, html []byte) string {
 
 func must(err error) {
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "gofacon:", err)
+		fmt.Fprintln(os.Stderr, "dotweavier:", err)
 		os.Exit(1)
 	}
 }

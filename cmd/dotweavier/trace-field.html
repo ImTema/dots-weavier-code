@@ -1,5 +1,5 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>gofacon trace field</title>
+<html><head><meta charset="utf-8"><title>dotweavier trace field</title>
 <style>
 html,body{margin:0;height:100%;background:#02030a;color:#cdd5ff;font:12px/1.45 ui-monospace,Menlo,monospace;overflow:hidden}
 svg{position:absolute;inset:0;width:100%;height:100%;cursor:grab}
@@ -114,7 +114,7 @@ addEventListener('keydown',e=>{if(e.target.id==='q'){if(e.key==='Enter')search(t
 
 // ---- side panel ----
 const side=document.getElementById('side');
-side.innerHTML=`<h1>GOFACON · LIFECYCLE</h1><div class="ep">${esc(D.addr)}</div>
+side.innerHTML=`<h1>DOTWEAVIER · LIFECYCLE</h1><div class="ep">${esc(D.addr)}</div>
  <div class="hint">${nOrigin} origin steps ◀ seed ▶ ${nUses} lifecycle steps<br>click a node to open/close it · wheel zoom · drag pan · f fit · esc clear</div>
  <input id="q" placeholder="search: file, code, field, type…"><div class="hint" id="hits"></div>
  <button id="ea">expand all</button><button id="ca">collapse all</button><button id="fi">fit</button>
@@ -132,7 +132,7 @@ function details(){const el=document.getElementById('det'); if(!sel){el.innerHTM
     (d.fn?`<div class="row">in <b>${esc(d.fn)}</b></div>`:'')+(d.type?`<div class="row">type <b>${esc(d.type)}</b></div>`:'')+
     (d.via?`<div class="row">called at <b>${esc(d.via)}</b></div>`:'')+(d.code?`<pre>${esc(d.code)}</pre>`:'')+
     (sel.kids.length?`<div class="row">${count(sel)} steps ${sel.side<0?'further back':'further on'}</div>`:'')+
-    (d.loc?`<div class="row">trace from here:</div><pre>gofacon trace field ${esc(d.loc)} --format ui</pre>`:'');}
+    (d.loc?`<div class="row">trace from here:</div><pre>dotweavier trace field ${esc(d.loc)} --format ui</pre>`:'');}
 details(); draw(); fit(); addEventListener('resize',fit);
 </script>
 </body></html>

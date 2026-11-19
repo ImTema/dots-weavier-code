@@ -1,6 +1,6 @@
-# gofacon
+# dotweavier
 
-gofacon is a CLI that indexes many code projects into one typed graph and traces call paths between symbols, including across project boundaries.
+dotweavier is a CLI that indexes many code projects into one typed graph and traces call paths between symbols, including across project boundaries.
 
 ## Language
 
@@ -11,15 +11,15 @@ One unit of source code, discovered by its module manifest (Go: a directory cont
 _Avoid_: repo, service, module
 
 **Workspace**:
-A directory that gofacon has been initialized on, plus the set of projects found beneath it. Workspaces nest: a parent workspace reuses the indexes of the projects inside it.
+A directory that dotweavier has been initialized on, plus the set of projects found beneath it. Workspaces nest: a parent workspace reuses the indexes of the projects inside it.
 _Avoid_: monorepo, root
 
 **Index**:
-The stored graph of one project, kept outside the project in `~/.gofacon`. An index is **stale** when the project's source has changed since it was built.
+The stored graph of one project, kept outside the project in `~/.dotweavier`. An index is **stale** when the project's source has changed since it was built.
 _Avoid_: cache, snapshot
 
 **Extractor**:
-The language-specific part of gofacon that reads one project and emits nodes and edges in the core schema.
+The language-specific part of dotweavier that reads one project and emits nodes and edges in the core schema.
 _Avoid_: parser, analyzer, provider
 
 ### Graph
@@ -41,7 +41,7 @@ A hop where the code calls through an interface or a function value (callback, c
 _Avoid_: dispatch, dynamic call
 
 **Sure**:
-An edge known to be real. Every direct call is sure. An interface hop is sure only when gofacon has tracked that a value of that concrete type actually reaches the call.
+An edge known to be real. Every direct call is sure. An interface hop is sure only when dotweavier has tracked that a value of that concrete type actually reaches the call.
 
 **Guess**:
 An interface hop whose target was linked only because its type has a matching method, with no evidence that such a value reaches the call. A guess may be an invented call.
@@ -61,10 +61,10 @@ How a user names a node on the command line: `project::Type.Method`, or `project
 _Avoid_: selector, locator
 
 **Trace**:
-A query for the directed paths from symbol A to symbol B (`gofacon trace path`).
+A query for the directed paths from symbol A to symbol B (`dotweavier trace path`).
 
 **Field trace**:
-A query for the full lifecycle of one value (`gofacon trace field [project:]relative/path.go:LINE`), printed as two trees: its origin (where it comes from) and its uses (every variable, conversion, struct field, call and return it may flow into). A field of a struct declared in the workspace stands for that field in every object of the type, across projects, so a protobuf field written by a client in one project meets its server's reads in another. The trees show where the value may come from and go, not where it must. Unlike a trace, it analyses projects live and needs no index.
+A query for the full lifecycle of one value (`dotweavier trace field [project:]relative/path.go:LINE`), printed as two trees: its origin (where it comes from) and its uses (every variable, conversion, struct field, call and return it may flow into). A field of a struct declared in the workspace stands for that field in every object of the type, across projects, so a protobuf field written by a client in one project meets its server's reads in another. The trees show where the value may come from and go, not where it must. Unlike a trace, it analyses projects live and needs no index.
 _Avoid_: variable trace, taint trace
 
 **Path**:

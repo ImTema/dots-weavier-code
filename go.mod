@@ -1,4 +1,4 @@
-module gofacon
+module dotweavier
 
 go 1.27.2
 

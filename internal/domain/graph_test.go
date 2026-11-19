@@ -35,9 +35,9 @@ func TestTraceRanksFewerGuessesFirst(t *testing.T) {
 
 func TestParseAddr(t *testing.T) {
 	for in, want := range map[string]address{
-		"scoring::Service.proxyPolicy":           {Project: "scoring", Name: "Service.proxyPolicy"},
-		"scoring:internal/a/b.go:Server.Approve": {Project: "scoring", File: "internal/a/b.go", Name: "Server.Approve"},
-		"scoring-system:service/x.go:243":        {Project: "scoring-system", File: "service/x.go", Line: 243},
+		"billing::Service.proxyPolicy":           {Project: "billing", Name: "Service.proxyPolicy"},
+		"billing:internal/a/b.go:Server.Approve": {Project: "billing", File: "internal/a/b.go", Name: "Server.Approve"},
+		"billing-system:service/x.go:243":        {Project: "billing-system", File: "service/x.go", Line: 243},
 	} {
 		if got, err := parseAddr(in); err != nil || got != want {
 			t.Errorf("parseAddr(%q) = %+v, %v; want %+v", in, got, err, want)

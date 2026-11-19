@@ -59,10 +59,10 @@ func main() {
 	fmt.Fprintf(os.Stderr, "wall=%s maxRSS=%dMB\n", time.Since(start).Round(time.Millisecond), ru.Maxrss>>20) // darwin: bytes
 }
 
-// shortcut: hard-coded proving ground; the real CLI gets it from `dotweavier init`.
+// defaultWorkspace is the current directory, made absolute so stored file paths stay relative to projects.
 func defaultWorkspace() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, "GolandProjects/scoring-workspace")
+	wd, _ := os.Getwd()
+	return wd
 }
 
 func runIndex(args []string) {

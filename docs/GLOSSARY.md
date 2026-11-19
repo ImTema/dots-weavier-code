@@ -18,6 +18,10 @@ _Avoid_: monorepo, root
 The stored graph of one project, kept outside the project in `~/.dotweavier`. An index is **stale** when the project's source has changed since it was built.
 _Avoid_: cache, snapshot
 
+**Invalid index**:
+An index whose project no longer exists where it was found. It is kept, shown as invalid, and never re-indexed automatically.
+_Avoid_: orphaned index, missing index
+
 **Extractor**:
 The language-specific part of dotweavier that reads one project and emits nodes and edges in the core schema.
 _Avoid_: parser, analyzer, provider
@@ -78,3 +82,9 @@ _Avoid_: blocked node, avoided node, filter
 **Overview**:
 The galaxy view of every indexed project: the top K nodes that are link endpoints or public functions, ranked by how many edges they have. Test nodes never appear in it.
 _Avoid_: galaxy, map
+
+### Running
+
+**Server**:
+The long-running dotweavier process (`dotweavier serve`) that serves the UI and keeps a workspace's indexes from going stale.
+_Avoid_: daemon, ui, backend

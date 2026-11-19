@@ -1,7 +1,7 @@
 ## Project context
 
 - This repo builds **dotweavier**, a CLI that indexes Go projects and traces call paths between symbols. See `GLOSSARY.md`, `docs/adr/` and `.scratch/dotweavier-mvp/map.md`.
-- "DDD" describes dotweavier's own codebase only. Target projects that dotweavier analyzes (e.g. `~/GolandProjects/scoring-workspace`) have no assumed architecture and may be messy. Justify analysis decisions with measured facts about the targets, never with an assumed architecture.
+- "DDD" describes dotweavier's own codebase only. Target projects that dotweavier analyzes have no assumed architecture and may be messy. Justify analysis decisions with measured facts about the targets, never with an assumed architecture.
 - dotweavier never writes inside a target project. All state lives in `~/.dotweavier`.
 
 ## Agent skills

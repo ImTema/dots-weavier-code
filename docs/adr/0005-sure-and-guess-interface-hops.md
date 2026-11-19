@@ -4,4 +4,4 @@ At an interface hop, dotweavier links every implementation in the project (class
 - codebase-memory-mcp stops at interfaces that have several implementations, which breaks traces.
 - gortex and graphify link everything and attach a confidence value, with no flow check.
 
-On `scoring`'s own code the two analyses give 19,841 vs 8,578 edges and take about 0.5s together, so the extra pass is cheap.
+On a real production project's own code the two analyses give 19,841 vs 8,578 edges and take about 0.5s together, so the extra pass is cheap.

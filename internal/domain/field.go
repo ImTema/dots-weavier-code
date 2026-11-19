@@ -12,18 +12,14 @@
 // the same location its server reads in another. Projects that import a reached
 // field's package are loaded until nothing new is reached. That over-approximates by
 // design: the trees show where the value may come from and go, not where it must.
-package main
+package domain
 
 import (
 	"cmp"
-	_ "embed"
-	"encoding/json"
-	"flag"
 	"fmt"
 	"go/parser"
 	"go/token"
 	"go/types"
-	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -197,7 +193,9 @@ func (t *tracker) add(prog *ssa.Program, own map[*types.Package]bool) {
 		slices.SortFunc(ss, func(a, b ssa.CallInstruction) int { return byPos(a.Pos(), b.Pos()) })
 	}
 	for _, fs := range t.callees {
-		slices.SortFunc(fs, func(a, b *ssa.Function) int { return cmp.Or(byPos(a.Pos(), b.Pos()), cmp.Compare(a.String(), b.String())) })
+		slices.SortFunc(fs, func(a, b *ssa.Function) int {
+			return cmp.Or(byPos(a.Pos(), b.Pos()), cmp.Compare(a.String(), b.String()))
+		})
 	}
 	for _, ms := range t.closures {
 		slices.SortFunc(ms, func(a, b *ssa.MakeClosure) int { return byPos(a.Pos(), b.Pos()) })
@@ -971,14 +969,13 @@ func (t *tracker) overwrites(f fieldKey) []token.Pos {
 	return out
 }
 
+// printer turns a finished trace into Steps: paths relative to the projects,
+// source lines read from disk.
 type printer struct {
-	w        io.Writer
 	t        *tracker
-	home     project   // files here print without a project prefix
+	home     project   // files here show without a project prefix
 	projects []project // innermost first
-	depth    int
 	src      map[string][]string
-	steps    int
 }
 
 func (p *printer) rel(file string) string {
@@ -1021,138 +1018,6 @@ func (p *printer) fieldName(k fieldKey) string {
 		name = v.Pkg().Name() + "." + name
 	}
 	return name
-}
-
-func (p *printer) label(n, parent *tnode) string {
-	if n.field != "" {
-		return fmt.Sprintf("[field] %s : %s", p.fieldName(n.field), types.TypeString(n.typ, qual))
-	}
-	s := fmt.Sprintf("[%s] %s:%d  %s", n.how, p.rel(n.file), n.line, p.text(n.file, n.line))
-	if n.typ != nil {
-		s += "  : " + types.TypeString(n.typ, qual)
-	}
-	if n.via.IsValid() {
-		s += "  <- called at " + p.where(n.via)
-	}
-	if n.fn != nil && (parent == nil || parent.fn != n.fn) {
-		s += "  in " + display(n.fn)
-	}
-	return s
-}
-
-func (p *printer) print(n, parent *tnode, prefix string, last bool, depth int) {
-	p.steps++
-	branch, next := "├─ ", "│  "
-	if last {
-		branch, next = "└─ ", "   "
-	}
-	if parent == nil {
-		branch, next = "", ""
-	}
-	fmt.Fprintln(p.w, prefix+branch+p.label(n, parent))
-	if p.depth > 0 && depth >= p.depth {
-		if len(n.kids) > 0 {
-			fmt.Fprintf(p.w, "%s%s… %d more steps below (raise --depth)\n", prefix, next, count(n)-1)
-		}
-		return
-	}
-	kids := slices.Clone(n.kids)
-	slices.SortStableFunc(kids, func(a, b *tnode) int {
-		return cmp.Or(cmp.Compare(p.rel(a.file), p.rel(b.file)), cmp.Compare(a.line, b.line))
-	})
-	for i, k := range kids {
-		p.print(k, n, prefix+next, i == len(kids)-1 && len(n.over) == 0, depth+1)
-	}
-	for i, o := range n.over {
-		b := "├─ "
-		if i == len(n.over)-1 {
-			b = "└─ "
-		}
-		ps := p.t.fset.Position(o)
-		fmt.Fprintf(p.w, "%s%s[overwritten] %s  %s\n", prefix+next, b, p.where(o), p.text(ps.Filename, ps.Line))
-	}
-}
-
-func count(n *tnode) int {
-	c := 1
-	for _, k := range n.kids {
-		c += count(k)
-	}
-	return c
-}
-
-// lifecycle prints both trees of a finished trace.
-func (p *printer) lifecycle() {
-	fmt.Fprintln(p.w, "== origin: each line flows into the one above it ==")
-	for _, r := range p.t.back.tree() {
-		p.print(r, nil, "", true, 0)
-	}
-	fmt.Fprintln(p.w, "\n== lifecycle: each line flows into the ones below it ==")
-	for _, r := range p.t.fwd.tree() {
-		p.print(r, nil, "", true, 0)
-	}
-}
-
-//go:embed trace-field.html
-var fieldUITemplate string
-
-// uiStep is one tnode for the HTML view; overwrites become "overwritten" kids.
-type uiStep struct {
-	Kind string    `json:"kind"`
-	Name string    `json:"name,omitempty"` // field
-	Loc  string    `json:"loc,omitempty"`
-	Code string    `json:"code,omitempty"`
-	Type string    `json:"type,omitempty"`
-	Fn   string    `json:"fn,omitempty"`
-	Via  string    `json:"via,omitempty"`
-	Kids []*uiStep `json:"kids,omitempty"`
-}
-
-func (p *printer) uiStep(n *tnode) *uiStep {
-	s := &uiStep{Kind: n.how.String()}
-	if n.field != "" {
-		s.Kind, s.Name = "field", p.fieldName(n.field)
-	} else {
-		s.Loc, s.Code = p.rel(n.file)+":"+strconv.Itoa(n.line), p.text(n.file, n.line)
-		if n.fn != nil {
-			s.Fn = display(n.fn)
-		}
-	}
-	if n.typ != nil {
-		s.Type = types.TypeString(n.typ, qual)
-	}
-	if n.via.IsValid() {
-		s.Via = p.where(n.via)
-	}
-	for _, k := range n.kids {
-		s.Kids = append(s.Kids, p.uiStep(k))
-	}
-	for _, o := range n.over {
-		ps := p.t.fset.Position(o)
-		s.Kids = append(s.Kids, &uiStep{Kind: "overwritten", Loc: p.where(o), Code: p.text(ps.Filename, ps.Line)})
-	}
-	return s
-}
-
-// ui renders both trees as one page: origin grows left of the seed, uses right.
-func (p *printer) ui(addr string) ([]byte, error) {
-	data := struct {
-		Addr   string    `json:"addr"`
-		Open   int       `json:"open,omitempty"` // levels open at first; the page defaults to 6
-		Origin []*uiStep `json:"origin"`
-		Uses   []*uiStep `json:"uses"`
-	}{Addr: addr, Open: p.depth}
-	for _, r := range p.t.back.tree() {
-		data.Origin = append(data.Origin, p.uiStep(r))
-	}
-	for _, r := range p.t.fwd.tree() {
-		data.Uses = append(data.Uses, p.uiStep(r))
-	}
-	js, err := json.Marshal(data) // escapes <, > and &, so it is safe inside <script>
-	if err != nil {
-		return nil, err
-	}
-	return []byte(strings.Replace(fieldUITemplate, "/*DATA*/", string(js), 1)), nil
 }
 
 // resolveFile finds the project and absolute path of [project:]rel/path.go.
@@ -1339,50 +1204,5 @@ func traceField(projects []project, home project, file string, line int, tests b
 		}
 		t.back.requeueFields()
 		t.fwd.requeueFields()
-	}
-}
-
-func runTraceField(args []string) {
-	fl := flag.NewFlagSet("trace field", flag.ExitOnError)
-	ws := fl.String("workspace", defaultWorkspace(), "workspace root")
-	depth := fl.Int("depth", 0, "text: print at most N levels of each tree (0: all); ui: levels open at first (0: 6)")
-	tests := fl.Bool("include-tests", false, "include test code (_test.go, mock/fake packages)")
-	maxProjects := fl.Int("max-projects", 10, "load at most N projects when following fields shared across projects")
-	format := fl.String("format", "text", "text (two trees) or ui (tree view written to ~/.dotweavier/ui/trace-field.html)")
-	// Accept the address before or after the flags.
-	var pos []string
-	for len(args) > 0 {
-		_ = fl.Parse(args)
-		if fl.NArg() == 0 {
-			break
-		}
-		pos = append(pos, fl.Arg(0))
-		args = fl.Args()[1:]
-	}
-	if len(pos) != 1 {
-		usage()
-	}
-	addr := pos[0]
-	i := strings.LastIndex(addr, ":")
-	line, err := strconv.Atoi(addr[i+1:])
-	if i < 0 || err != nil || !strings.HasSuffix(addr[:i], ".go") {
-		must(fmt.Errorf("bad address %q, want [project:]rel/path.go:LINE", addr))
-	}
-	projects, err := discover(*ws)
-	must(err)
-	home, file, err := resolveFile(projects, addr[:i])
-	must(err)
-	t, err := traceField(projects, home, file, line, *tests, *maxProjects)
-	must(err)
-	slices.SortFunc(projects, func(a, b project) int { return cmp.Compare(len(b.dir), len(a.dir)) })
-	pr := &printer{w: os.Stdout, t: t, home: home, projects: projects, depth: *depth, src: map[string][]string{}}
-	switch *format {
-	case "ui":
-		html, err := pr.ui(addr)
-		must(err)
-		fmt.Printf("lifecycle of %s -> file://%s\n", addr, writeUI("trace-field.html", html))
-	default:
-		pr.lifecycle()
-		fmt.Fprintf(os.Stderr, "%d steps\n", pr.steps)
 	}
 }

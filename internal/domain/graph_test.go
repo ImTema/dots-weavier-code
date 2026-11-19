@@ -1,4 +1,4 @@
-package main
+package domain
 
 import (
 	"strings"
@@ -27,7 +27,7 @@ func TestTraceRanksFewerGuessesFirst(t *testing.T) {
 		"p:f.go:A -iface:guess-> p:f.go:B  (0/1 sure)",
 	}
 	for i, p := range paths {
-		if got := g.format(p); got != want[i] {
+		if got := g.path(p).String(); got != want[i] {
 			t.Errorf("path %d:\n got %s\nwant %s", i, got, want[i])
 		}
 	}

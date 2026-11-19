@@ -5,20 +5,21 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"dotweavier/internal/domain"
 )
 
 func TestTraceFieldLifecycle(t *testing.T) {
-	dir, err := filepath.Abs("testdata/fieldproj")
+	ws, err := filepath.Abs("testdata")
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := project{Name: "fieldproj", dir: dir}
-	tr, err := traceField([]project{p}, p, filepath.Join(dir, "main.go"), 16, false, 1) // func convert(raw string)
+	r, err := domain.TraceField(ws, "fieldproj:main.go:16", false, 1) // func convert(raw string)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var b bytes.Buffer
-	(&printer{w: &b, t: tr, home: p, src: map[string][]string{}}).lifecycle()
+	lifecycle(&b, r, 0)
 	got := b.String()
 	want := []string{
 		"└─ [arg] main.go:44  req, _ := convert(\"42\")  : string",

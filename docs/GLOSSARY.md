@@ -86,5 +86,5 @@ _Avoid_: galaxy, map
 ### Running
 
 **Server**:
-The long-running dotweavier process (`dotweavier serve`) that serves the UI and keeps a workspace's indexes from going stale.
+The long-running dotweavier process (`dotweavier serve`) that serves the UI for every configured workspace and keeps their indexes from going stale. One runs per machine.
 _Avoid_: daemon, ui, backend

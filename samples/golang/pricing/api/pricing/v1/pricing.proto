@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package pricing.v1;
+
+option go_package = "example.com/samples/pricing/api/pricing/v1;pricingv1";
+
+// PricingService prices a basket for one customer.
+service PricingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse);
+}
+
+message Item {
+  string sku = 1;
+  int64 unit_cents = 2;
+  int32 qty = 3;
+}
+
+message QuoteRequest {
+  string customer_id = 1;
+  string region = 2;
+  repeated Item items = 3;
+}
+
+message QuoteResponse {
+  int64 subtotal_cents = 1;
+  int64 discount_cents = 2;
+  int64 tax_cents = 3;
+  int64 total_cents = 4;
+}

@@ -70,3 +70,11 @@ _Avoid_: variable trace, taint trace
 **Path**:
 One ordered chain of nodes and edges returned by a trace. Paths are ranked shortest first.
 _Avoid_: route, chain
+
+**Excluded node**:
+A node the user bars from a trace: no returned path passes through it. Excluding a project excludes every node in it.
+_Avoid_: blocked node, avoided node, filter
+
+**Overview**:
+The galaxy view of every indexed project: the top K nodes that are link endpoints or public functions, ranked by how many edges they have. Test nodes never appear in it.
+_Avoid_: galaxy, map

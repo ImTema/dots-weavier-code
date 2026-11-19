@@ -1,8 +1,9 @@
 // Throwaway prototype of `gofacon trace` (ticket .scratch/gofacon-mvp/issues/11).
-// One file on purpose: no core/extractor split, no schema.
+// No core/extractor split, no schema; field tracing lives in field.go.
 //
 //	gofacon index [--workspace DIR] [project ...]
-//	gofacon trace -A <addr> -B <addr> [--max-paths 10] [--include-tests]
+//	gofacon trace path -A <addr> -B <addr> [--max-paths 10] [--include-tests]
+//	gofacon trace field [project:]rel/path.go:LINE [--depth N] [--include-tests] [--format text|ui]
 //
 // Addresses: project::Type.Method, project:rel/path.go:Type.Method, project:rel/path.go:LINE.
 package main
@@ -17,6 +18,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/constant"
+	"go/token"
 	"go/types"
 	"io/fs"
 	"os"
@@ -188,77 +190,12 @@ type loadStats struct {
 // and gRPC handlers to g. Only the project's own packages get bodies; dependencies
 // come from export data (type info only), which is the analysis boundary of ticket 10.
 func extract(g *graph, p project, tests bool) (st loadStats, err error) {
-	t0 := time.Now()
-	cfg := &packages.Config{
-		Mode:  packages.LoadSyntax,
-		Dir:   p.dir,
-		Tests: tests,
-		Env:   append(os.Environ(), "GOFLAGS=-mod=readonly", "GOWORK=off"),
-	}
-	pkgs, err := packages.Load(cfg, "./...")
+	prog, own, err := loadSSA(p, tests, &st, nil)
 	if err != nil {
 		return st, err
 	}
-	for _, pk := range pkgs {
-		st.pkgErrs += len(pk.Errors)
-	}
-	st.pkgs = len(pkgs)
-	st.load = time.Since(t0)
 	t1 := time.Now()
-
-	// Like ssautil.Packages, but ill-typed packages are kept: messy targets often
-	// have a broken import or two, and dropping the package loses every path through it.
-	if len(pkgs) == 0 {
-		return st, fmt.Errorf("no packages")
-	}
-	prog := ssa.NewProgram(pkgs[0].Fset, ssa.InstantiateGenerics)
-	root := map[*packages.Package]bool{}
-	for _, pk := range pkgs {
-		root[pk] = true
-	}
-	own := map[*types.Package]bool{}
-	var ownSSA []*ssa.Package
-	packages.Visit(pkgs, nil, func(pk *packages.Package) {
-		if pk.Types == nil {
-			return
-		}
-		if !root[pk] {
-			prog.CreatePackage(pk.Types, nil, nil, true)
-			return
-		}
-		if pk.IllTyped {
-			st.illTyped++
-			st.stubbed += stubBroken(pk)
-		}
-		own[pk.Types] = true
-		ownSSA = append(ownSSA, prog.CreatePackage(pk.Types, pk.Syntax, pk.TypesInfo, true))
-	})
-	for _, sp := range ownSSA {
-		for _, imp := range sp.Pkg.Imports() {
-			if prog.Package(imp) == nil { // unresolvable import: go/types made a fake package
-				prog.CreatePackage(imp, nil, nil, true)
-			}
-		}
-	}
-	for _, sp := range ownSSA {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					st.buildPanics++
-					fmt.Fprintf(os.Stderr, "  ssa build panic in %s: %v\n", sp.Pkg.Path(), r)
-				}
-			}()
-			sp.Build()
-		}()
-	}
-	isTest := func(f *ssa.Function) bool {
-		for f.Parent() != nil {
-			f = f.Parent()
-		}
-		path := strings.ToLower(f.Pkg.Pkg.Path())
-		return strings.HasSuffix(prog.Fset.Position(f.Pos()).Filename, "_test.go") ||
-			strings.Contains(path, "mock") || strings.Contains(path, "fake")
-	}
+	isTest := func(f *ssa.Function) bool { return isTestFunc(prog, f) }
 	canon := func(f *ssa.Function) *ssa.Function {
 		if o := f.Origin(); o != nil {
 			return o
@@ -423,6 +360,92 @@ func extract(g *graph, p project, tests bool) (st loadStats, err error) {
 	}
 	st.analyze = time.Since(t1)
 	return st, nil
+}
+
+// loadSSA loads one project and builds SSA for its own packages. Only they get
+// bodies; dependencies come from export data (type info only), which is the
+// analysis boundary of ticket 10.
+//
+// fset may be shared between loads so positions from several projects stay distinct;
+// nil gives the load its own.
+func loadSSA(p project, tests bool, st *loadStats, fset *token.FileSet) (*ssa.Program, map[*types.Package]bool, error) {
+	t0 := time.Now()
+	cfg := &packages.Config{
+		Fset:  fset,
+		Mode:  packages.LoadSyntax,
+		Dir:   p.dir,
+		Tests: tests,
+		Env:   append(os.Environ(), "GOFLAGS=-mod=readonly", "GOWORK=off"),
+	}
+	pkgs, err := packages.Load(cfg, "./...")
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, pk := range pkgs {
+		st.pkgErrs += len(pk.Errors)
+	}
+	st.pkgs = len(pkgs)
+	st.load = time.Since(t0)
+
+	// Like ssautil.Packages, but ill-typed packages are kept: messy targets often
+	// have a broken import or two, and dropping the package loses every path through it.
+	if len(pkgs) == 0 {
+		return nil, nil, fmt.Errorf("no packages")
+	}
+	prog := ssa.NewProgram(pkgs[0].Fset, ssa.InstantiateGenerics)
+	root := map[*packages.Package]bool{}
+	for _, pk := range pkgs {
+		root[pk] = true
+	}
+	own := map[*types.Package]bool{}
+	var ownSSA []*ssa.Package
+	packages.Visit(pkgs, nil, func(pk *packages.Package) {
+		if pk.Types == nil {
+			return
+		}
+		if !root[pk] {
+			prog.CreatePackage(pk.Types, nil, nil, true)
+			return
+		}
+		if pk.IllTyped {
+			st.illTyped++
+			st.stubbed += stubBroken(pk)
+		}
+		own[pk.Types] = true
+		ownSSA = append(ownSSA, prog.CreatePackage(pk.Types, pk.Syntax, pk.TypesInfo, true))
+	})
+	for _, sp := range ownSSA {
+		for _, imp := range sp.Pkg.Imports() {
+			if prog.Package(imp) == nil { // unresolvable import: go/types made a fake package
+				prog.CreatePackage(imp, nil, nil, true)
+			}
+		}
+	}
+	for _, sp := range ownSSA {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					st.buildPanics++
+					fmt.Fprintf(os.Stderr, "  ssa build panic in %s: %v\n", sp.Pkg.Path(), r)
+				}
+			}()
+			sp.Build()
+		}()
+	}
+	return prog, own, nil
+}
+
+// isTestFunc reports test code: _test.go files and mock/fake packages.
+func isTestFunc(prog *ssa.Program, f *ssa.Function) bool {
+	for f.Parent() != nil {
+		f = f.Parent()
+	}
+	path := strings.ToLower(f.Pkg.Pkg.Path())
+	return strings.HasSuffix(prog.Fset.Position(f.Pos()).Filename, "_test.go") ||
+		strings.Contains(path, "mock") || strings.Contains(path, "fake") ||
+		slices.ContainsFunc(strings.Split(path, "/"), func(seg string) bool { // test/, testutil, sessionviewtest
+			return strings.HasPrefix(seg, "test") || strings.HasSuffix(seg, "test") && seg != "latest"
+		})
 }
 
 // stubBroken empties, in memory only, the bodies of functions and drops the
@@ -734,7 +757,7 @@ func (g *graph) dropTests() {
 	}
 }
 
-//go:embed ui.html
+//go:embed trace-path.html
 var uiTemplate string
 
 type uiNode struct {
@@ -825,7 +848,8 @@ func (g *graph) ui(paths []*state, a, b string) ([]byte, error) {
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
   gofacon index [--workspace DIR] [project ...]   (no projects: every go.mod under the workspace)
-  gofacon trace -A <addr> -B <addr> [--max-paths N] [--include-tests] [--format text|ui]`)
+  gofacon trace path -A <addr> -B <addr> [--max-paths N] [--include-tests] [--format text|ui]
+  gofacon trace field [project:]rel/path.go:LINE [--workspace DIR] [--depth N] [--include-tests] [--max-projects N] [--format text|ui]`)
 	os.Exit(2)
 }
 
@@ -838,7 +862,17 @@ func main() {
 	case "index":
 		runIndex(os.Args[2:])
 	case "trace":
-		runTrace(os.Args[2:])
+		if len(os.Args) < 3 {
+			usage()
+		}
+		switch os.Args[2] {
+		case "path":
+			runTrace(os.Args[3:])
+		case "field":
+			runTraceField(os.Args[3:])
+		default:
+			usage()
+		}
 	default:
 		usage()
 	}
@@ -847,11 +881,15 @@ func main() {
 	fmt.Fprintf(os.Stderr, "wall=%s maxRSS=%dMB\n", time.Since(start).Round(time.Millisecond), ru.Maxrss>>20) // darwin: bytes
 }
 
-func runIndex(args []string) {
+// shortcut: hard-coded proving ground; the real CLI gets it from `gofacon init`.
+func defaultWorkspace() string {
 	home, _ := os.UserHomeDir()
+	return filepath.Join(home, "GolandProjects/scoring-workspace")
+}
+
+func runIndex(args []string) {
 	fl := flag.NewFlagSet("index", flag.ExitOnError)
-	// shortcut: hard-coded proving ground; the real CLI gets it from `gofacon init`.
-	ws := fl.String("workspace", filepath.Join(home, "GolandProjects/scoring-workspace"), "workspace root")
+	ws := fl.String("workspace", defaultWorkspace(), "workspace root")
 	_ = fl.Parse(args)
 	all, err := discover(*ws)
 	must(err)
@@ -859,8 +897,9 @@ func runIndex(args []string) {
 	for _, p := range fl.Args() {
 		want[p] = true
 	}
+	filter := len(want) > 0
 	for _, p := range all {
-		if len(want) > 0 && !want[p.Name] {
+		if filter && !want[p.Name] {
 			continue
 		}
 		delete(want, p.Name)
@@ -886,7 +925,7 @@ func runTrace(args []string) {
 	bFlag := fl.String("B", "", "end symbol address")
 	maxPaths := fl.Int("max-paths", 10, "number of paths to print")
 	tests := fl.Bool("include-tests", false, "include test nodes (_test.go, mock/fake packages)")
-	format := fl.String("format", "text", "text (one line per path) or ui (galaxy view written to ~/.gofacon/ui/trace.html)")
+	format := fl.String("format", "text", "text (one line per path) or ui (galaxy view written to ~/.gofacon/ui/trace-path.html)")
 	_ = fl.Parse(args)
 
 	addrA, err := parseAddr(*aFlag)
@@ -937,9 +976,7 @@ func runTrace(args []string) {
 	case "ui":
 		html, err := g.ui(paths, *aFlag, *bFlag)
 		must(err)
-		out := filepath.Join(filepath.Dir(storeDir()), "ui", "trace.html")
-		must(os.MkdirAll(filepath.Dir(out), 0o755))
-		must(os.WriteFile(out, html, 0o644))
+		out := writeUI("trace-path.html", html)
 		fmt.Printf("%d paths -> file://%s\n", len(paths), out)
 	default:
 		if len(paths) == 0 {
@@ -952,6 +989,14 @@ func runTrace(args []string) {
 	if !exhausted && len(paths) < *maxPaths {
 		fmt.Fprintf(os.Stderr, "search stopped at %d expansions; more paths may exist\n", popLimit)
 	}
+}
+
+// writeUI writes a page under ~/.gofacon/ui and returns its path.
+func writeUI(name string, html []byte) string {
+	out := filepath.Join(filepath.Dir(storeDir()), "ui", name)
+	must(os.MkdirAll(filepath.Dir(out), 0o755))
+	must(os.WriteFile(out, html, 0o644))
+	return out
 }
 
 func must(err error) {

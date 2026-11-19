@@ -1,0 +1,138 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>gofacon trace field</title>
+<style>
+html,body{margin:0;height:100%;background:#02030a;color:#cdd5ff;font:12px/1.45 ui-monospace,Menlo,monospace;overflow:hidden}
+svg{position:absolute;inset:0;width:100%;height:100%;cursor:grab}
+#side{position:absolute;top:0;left:0;bottom:0;width:360px;box-sizing:border-box;padding:14px;overflow:auto;
+  background:linear-gradient(180deg,rgba(10,12,32,.94),rgba(5,6,18,.9));border-right:1px solid #1b2045;backdrop-filter:blur(6px)}
+h1{margin:0 0 6px;font-size:13px;letter-spacing:.2em;color:#fff}
+.ep{color:#8b93c4;font-size:11px;word-break:break-all;margin:2px 0}
+.hint{color:#5d6596;font-size:11px;margin:10px 0 4px}
+input{width:100%;box-sizing:border-box;margin:8px 0 4px;padding:6px 8px;background:#0a0d24;border:1px solid #2a3166;border-radius:6px;color:#fff;font:inherit}
+button{background:#141a3d;border:1px solid #2a3166;color:#cdd5ff;border-radius:6px;padding:3px 8px;font:inherit;font-size:11px;cursor:pointer;margin:2px 2px 2px 0}
+button:hover{border-color:#6b78d8}
+.lg{display:inline-flex;align-items:center;gap:5px;margin:2px 10px 2px 0;font-size:11px}
+.lg i{width:9px;height:9px;border-radius:2px;display:inline-block}
+#det{margin-top:12px;padding:9px;border:1px solid #1b2045;border-radius:7px;word-break:break-all}
+#det .k{font-size:10px;padding:0 6px;border-radius:9px;color:#02030a}
+#det .row{margin:4px 0;color:#9aa2d0}#det .row b{color:#fff;font-weight:normal}
+#det pre{white-space:pre-wrap;margin:6px 0 0;padding:6px;background:#080b1e;border-radius:5px;color:#e6e9ff}
+.node rect{rx:7;stroke-width:1.2}
+.node text{font:11px ui-monospace,Menlo,monospace;pointer-events:none}
+.node .t1{fill:#fff}.node .t2{fill:#9aa2d0}
+.node.dim{opacity:.25}.node.hit rect{stroke:#fff!important;stroke-width:2.4}
+.node.sel rect{filter:drop-shadow(0 0 8px #a9b6ff)}
+.edge{fill:none;stroke-width:1.4;opacity:.7}
+.cap{font:12px ui-monospace,Menlo,monospace;letter-spacing:.2em;fill:#5d6596}
+</style></head>
+<body>
+<svg id="svg"><defs></defs><g id="g"></g></svg>
+<div id="side"></div>
+<script type="application/json" id="data">/*DATA*/</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+const KIND = {seed:'#ffffff',assign:'#6878b8',convert:'#6be4ff',transform:'#ffd06b',arg:'#7aa2ff',return:'#b88bff',
+  store:'#ff9b6b',read:'#6dffc6',field:'#ff7ad9',container:'#c4ff6b',capture:'#9aa2d0','callback?':'#ffb35c',overwritten:'#ff5c5c'};
+const NW=300, NH=40, COL=360, ROW=52;
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const cut=(s,n)=>s&&s.length>n?s.slice(0,n-1)+'…':(s||'');
+
+// ---- model: center = seed; origin kids grow left (side -1), uses kids grow right (side 1) ----
+let all=[];
+// Open the first levels; a step with one way on stays open so chains read through.
+function wrap(d,side,depth,parent){const n={d,side,depth,parent,open:depth<(D.open||6)||(d.kids||[]).length<=1,kids:[]}; all.push(n);
+  n.kids=(d.kids||[]).map(k=>wrap(k,side,depth+1,n)); return n;}
+const centers=[];
+(D.uses||[]).forEach((u,i)=>{const o=(D.origin||[]).find(o=>o.loc===u.loc)||{kids:[]};
+  const c={d:u,side:0,depth:0,parent:null,open:true,kids:[]}; all.push(c);
+  c.left=(o.kids||[]).map(k=>wrap(k,-1,1,c)); c.right=(u.kids||[]).map(k=>wrap(k,1,1,c)); centers.push(c);});
+const nOrigin=all.filter(n=>n.side<0).length, nUses=all.filter(n=>n.side>0).length;
+
+// ---- layout: tidy tree per side, leaves stacked, parents centered on their children ----
+function place(n,x,next){n.x=x; const ks=n.open?n.kids:[];
+  if(!ks.length){n.y=next.y; next.y+=ROW; return;}
+  ks.forEach(k=>place(k,x+n.side*COL,next)); n.y=(ks[0].y+ks.at(-1).y)/2;}
+function shift(n,dy){n.y+=dy; if(n.open)n.kids.forEach(k=>shift(k,dy));}
+function layout(){let top=0;
+  for(const c of centers){c.x=0;
+    const sides=[[c.left,-1],[c.right,1]].map(([ks,side])=>{const next={y:0}; ks.forEach(k=>place(k,side*COL,next)); return {ks,h:Math.max(next.y,ROW)};});
+    const h=Math.max(sides[0].h,sides[1].h); c.y=top+h/2-ROW/2;
+    sides.forEach(s=>{if(!s.ks.length)return; const mid=(s.ks[0].y+s.ks.at(-1).y)/2; s.ks.forEach(k=>shift(k,c.y-mid));});
+    top+=h+ROW*2;}
+}
+
+// ---- view ----
+const svg=document.getElementById('svg'), g=document.getElementById('g');
+const view={x:0,y:0,k:1}; const apply=()=>g.setAttribute('transform',`translate(${view.x},${view.y}) scale(${view.k})`);
+let sel=null, hits=[], hitI=-1;
+function visible(){const out=[]; const walk=n=>{out.push(n); if(n.open)n.kids.forEach(walk);};
+  centers.forEach(c=>{out.push(c); c.left.forEach(walk); c.right.forEach(walk);}); return out;}
+function title(n){const d=n.d; return d.kind==='field'?d.name:d.loc;}
+function draw(){layout(); const vs=visible(); const q=document.getElementById('q')?.value.trim().toLowerCase();
+  let h='<text class="cap" x="'+(-COL+NW/2-150)+'" y="-40">◀ ORIGIN</text><text class="cap" x="'+(COL)+'" y="-40">LIFECYCLE ▶</text>';
+  for(const n of vs){const p=n.parent; if(!p)continue;
+    const c=KIND[n.d.kind]||'#888';
+    // origin edges run child -> parent, lifecycle edges parent -> child
+    let x1,x2; if(n.side<0){x1=n.x+NW/2; x2=p.x-NW/2;} else {x1=p.x+NW/2; x2=n.x-NW/2;}
+    const [y1,y2]=n.side<0?[n.y,p.y]:[p.y,n.y], mx=(x1+x2)/2;
+    h+=`<path class="edge" stroke="${c}" ${n.d.kind==='overwritten'||n.d.kind==='callback?'?'stroke-dasharray="5 4"':''} d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" marker-end="url(#a${n.d.kind.replace('?','')})"/>`;}
+  vs.forEach((n,i)=>{const d=n.d, c=KIND[d.kind]||'#888', match=q&&(JSON.stringify(d.kids?{...d,kids:0}:d).toLowerCase().includes(q));
+    const more=!n.open&&n.kids.length?` ▸${count(n)}`:'';
+    const line2=d.kind==='field'?(d.type||''):cut(d.code,44);
+    h+=`<g class="node ${q&&!match?'dim':''} ${match?'hit':''} ${sel===n?'sel':''}" data-i="${i}" transform="translate(${n.x-NW/2},${n.y-NH/2})">
+      <rect width="${NW}" height="${NH}" fill="${d.kind==='field'?'#2a0f2d':'#0b0f2a'}" stroke="${c}" ${d.kind==='overwritten'?'stroke-dasharray="4 3"':''}/>
+      <rect width="5" height="${NH}" fill="${c}" stroke="none" rx="2"/>
+      <text class="t1" x="12" y="16"><tspan fill="${c}">${esc(d.kind)}</tspan> ${esc(cut(title(n),36))}<tspan fill="#ff7ad9">${more}</tspan></text>
+      <text class="t2" x="12" y="31">${esc(line2)}</text></g>`;});
+  g.innerHTML=h; window._vs=vs;
+  svg.querySelector('defs').innerHTML=Object.entries(KIND).map(([k,c])=>`<marker id="a${k.replace('?','')}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="${c}"/></marker>`).join('');
+  apply();}
+function count(n){return n.kids.reduce((s,k)=>s+1+count(k),0);}
+function fit(){const vs=visible(); let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  vs.forEach(n=>{x0=Math.min(x0,n.x-NW/2);x1=Math.max(x1,n.x+NW/2);y0=Math.min(y0,n.y-NH);y1=Math.max(y1,n.y+NH);});
+  const left=380,w=innerWidth-left-40,h=innerHeight-60; view.k=Math.min(1.2,w/(x1-x0),h/(y1-y0+60));
+  view.x=left+20+w/2-(x0+x1)/2*view.k; view.y=30+h/2-(y0+y1)/2*view.k; apply();}
+function center(n){view.x=(380+innerWidth)/2-n.x*view.k; view.y=innerHeight/2-n.y*view.k; apply();}
+function setAll(open){all.forEach(n=>{if(n.side)n.open=open;}); draw(); fit();}
+
+// ---- interaction ----
+let drag=null;
+svg.onmousedown=e=>{drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y,moved:false}; svg.style.cursor='grabbing';};
+addEventListener('mousemove',e=>{if(!drag)return; const dx=e.clientX-drag.x,dy=e.clientY-drag.y; if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true;
+  view.x=drag.vx+dx; view.y=drag.vy+dy; apply();});
+addEventListener('mouseup',e=>{svg.style.cursor='grab'; const was=drag; drag=null; if(!was||was.moved)return;
+  const el=e.target.closest?.('.node'); if(!el)return; const n=window._vs[+el.dataset.i];
+  if(n.kids.length)n.open=!n.open; sel=n; draw(); details();});
+svg.addEventListener('wheel',e=>{e.preventDefault(); const f=Math.exp(-e.deltaY*.0015), wx=(e.clientX-view.x)/view.k, wy=(e.clientY-view.y)/view.k;
+  view.k=Math.min(3,Math.max(.05,view.k*f)); view.x=e.clientX-wx*view.k; view.y=e.clientY-wy*view.k; apply();},{passive:false});
+function search(step){const q=document.getElementById('q').value.trim().toLowerCase(); hits=[];
+  if(q){all.forEach(n=>{const d={...n.d,kids:0}; if(JSON.stringify(d).toLowerCase().includes(q)){hits.push(n); for(let p=n.parent;p;p=p.parent)p.open=true;}});}
+  draw(); document.getElementById('hits').textContent=q?`${hits.length} matches${hits.length?' · enter: next':''}`:'';
+  if(step&&hits.length){hitI=(hitI+1)%hits.length; sel=hits[hitI]; draw(); center(sel); details();}}
+addEventListener('keydown',e=>{if(e.target.id==='q'){if(e.key==='Enter')search(true); return;}
+  if(e.key==='f')fit(); if(e.key==='Escape'){sel=null;draw();details();}});
+
+// ---- side panel ----
+const side=document.getElementById('side');
+side.innerHTML=`<h1>GOFACON · LIFECYCLE</h1><div class="ep">${esc(D.addr)}</div>
+ <div class="hint">${nOrigin} origin steps ◀ seed ▶ ${nUses} lifecycle steps<br>click a node to open/close it · wheel zoom · drag pan · f fit · esc clear</div>
+ <input id="q" placeholder="search: file, code, field, type…"><div class="hint" id="hits"></div>
+ <button id="ea">expand all</button><button id="ca">collapse all</button><button id="fi">fit</button>
+ <div class="hint">kinds</div>${Object.entries(KIND).map(([k,c])=>`<span class="lg"><i style="background:${c}"></i>${k}</span>`).join('')}
+ <div id="det"></div>`;
+document.getElementById('q').oninput=()=>{hitI=-1;search(false);};
+document.getElementById('ea').onclick=()=>setAll(true);
+document.getElementById('ca').onclick=()=>setAll(false);
+document.getElementById('fi').onclick=fit;
+function details(){const el=document.getElementById('det'); if(!sel){el.innerHTML='<div class="hint">select a node for details</div>';return;}
+  const d=sel.d, c=KIND[d.kind]||'#888', dir=d.kind==='overwritten'?'another value written into the field on its left; not traced here':
+    sel.side<0?'flows into the step on its right':sel.side>0?'flows from the step on its left':'the traced value';
+  el.innerHTML=`<span class="k" style="background:${c}">${esc(d.kind)}</span> <span class="hint">${dir}</span>`+
+    (d.name?`<div class="row">field <b>${esc(d.name)}</b></div>`:'')+(d.loc?`<div class="row">at <b>${esc(d.loc)}</b></div>`:'')+
+    (d.fn?`<div class="row">in <b>${esc(d.fn)}</b></div>`:'')+(d.type?`<div class="row">type <b>${esc(d.type)}</b></div>`:'')+
+    (d.via?`<div class="row">called at <b>${esc(d.via)}</b></div>`:'')+(d.code?`<pre>${esc(d.code)}</pre>`:'')+
+    (sel.kids.length?`<div class="row">${count(sel)} steps ${sel.side<0?'further back':'further on'}</div>`:'')+
+    (d.loc?`<div class="row">trace from here:</div><pre>gofacon trace field ${esc(d.loc)} --format ui</pre>`:'');}
+details(); draw(); fit(); addEventListener('resize',fit);
+</script>
+</body></html>

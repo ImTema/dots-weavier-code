@@ -67,7 +67,7 @@ Pub/Sub endpoint; locally that is the in-memory emulator in
 ```sh
 (cd golang/tools/pubsub-emulator && go run .)
 export PUBSUB_EMULATOR_HOST=localhost:8085   # in each Go service's shell
-(cd java/inventory && ./gradlew build && java -jar build/quarkus-app/quarkus-run.jar)
+(cd java/inventory && ./mvnw package && java -jar target/quarkus-app/quarkus-run.jar)
 (cd kotlin/shipping && ./gradlew run)
 (cd golang/pricing && go run ./cmd/pricing)
 (cd golang/orders && go run ./cmd/orders)
@@ -77,8 +77,9 @@ curl -XPOST localhost:8080/orders \
 # {"order_id":"o-1","total_cents":15050}
 ```
 
-The JVM projects build with JDK 25 through Gradle toolchains; run the
-inventory jar with a JDK 25 `java`. Start everything before calling
+The JVM projects build for JDK 25: inventory through Maven
+(`maven.compiler.release`), shipping through Gradle toolchains. Run the
+inventory jar with a JDK 25 or newer `java`. Start everything before calling
 `POST /orders`. `orders` creates the topic; `pricing` creates its
 subscription and, if it starts first, waits for the topic.
 
@@ -97,7 +98,7 @@ fourth 14210 once the loyalty discount applies.
 ```sh
 (cd golang/orders && go test ./...)
 (cd golang/pricing && go test ./...)
-(cd java/inventory && ./gradlew test)
+(cd java/inventory && ./mvnw test)
 (cd kotlin/shipping && ./gradlew test)
 ```
 

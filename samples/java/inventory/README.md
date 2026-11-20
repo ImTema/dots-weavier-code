@@ -39,8 +39,8 @@ src/main/java/com/example/inventory/
 ## Run and test
 
 ```sh
-./gradlew test
-./gradlew build && java -jar build/quarkus-app/quarkus-run.jar
+./mvnw test
+./mvnw package && java -jar target/quarkus-app/quarkus-run.jar
 ```
 
 Configuration through environment variables: `PORT` (gRPC, default `9091`) and

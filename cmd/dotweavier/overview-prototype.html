@@ -21,6 +21,7 @@ h2 .in{color:#4ad8ff}h2 .out{color:#ffb14a}
 label{display:block;color:#9aa2d0;cursor:pointer}
 #tip{position:absolute;pointer-events:none;z-index:3;background:rgba(8,10,28,.94);border:1px solid #2b3270;border-radius:6px;padding:6px 8px;display:none;max-width:520px}
 #tip b{color:#fff}
+.nm{position:absolute;z-index:1;pointer-events:none;transform:translate(8px,-50%);font-size:10px;text-shadow:0 0 4px #000,0 0 2px #000;white-space:nowrap}
 .lbl{position:absolute;z-index:1;pointer-events:none;transform:translate(-50%,-50%);color:#fff;font-size:11px;text-shadow:0 0 6px #000,0 0 3px #000;white-space:nowrap;opacity:.85}
 #sel{word-break:break-all}
 #sel .k{color:#58608f}
@@ -112,6 +113,7 @@ label{display:block;color:#9aa2d0;cursor:pointer}
   <label><input type="checkbox" id="showCalls" checked> calls inside projects</label>
   <label><input type="checkbox" id="showGrpc" checked> gRPC hops between projects</label>
   <label><input type="checkbox" id="showLabels" checked> project labels</label>
+  <label><input type="checkbox" id="showNames" checked> function names when zoomed in</label>
 </div>
 <div id="empty">Nothing in the overview yet.<br>Press <b>Sync</b> on a project in the top-right list to index it and add it here.</div>
 <div id="pp"><h2>PROJECTS <a id="ppAll" title="show every added project matching the filter">all</a><a id="ppNone" title="hide every added project matching the filter">none</a></h2>
@@ -119,7 +121,7 @@ label{display:block;color:#9aa2d0;cursor:pointer}
   <input id="pq" type="text" placeholder="find project" autocomplete="off">
   <div id="projects"></div>
   <div id="ppGrip" title="drag to resize · double-click to expand or shrink">◣</div></div>
-<div id="tip"></div><div id="ctx"></div><div id="pmenu"></div><div id="labels"></div><div id="markers"></div><div id="fps"><div id="counts"></div><div id="rate"></div></div>
+<div id="tip"></div><div id="ctx"></div><div id="pmenu"></div><div id="labels"></div><div id="names"></div><div id="markers"></div><div id="fps"><div id="counts"></div><div id="rate"></div></div>
 <script type="module">
 import * as THREE from 'three';
 import {OrbitControls} from '/overview_prototype_assets/OrbitControls.js';
@@ -131,7 +133,7 @@ const $ = id => document.getElementById(id);
 const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const color = name => { let h = 2166136261; for (const ch of name) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return new THREE.Color().setHSL((h >>> 0) / 2**32, 0.75, 0.6); };
 const IN = new THREE.Color('#4ad8ff'), OUT = new THREE.Color('#ffb14a'), WHITE = new THREE.Color('#ffffff'), GRPC = new THREE.Color('#ff4fe8');
-const CALL_OPACITY = 0.07, GRPC_OPACITY = 0.85, DIM = 0.1;
+let CALL_OPACITY = 0.07; const GRPC_OPACITY = 0.85, DIM = 0.1;
 
 const renderer = new THREE.WebGLRenderer({antialias: true});
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -169,6 +171,38 @@ const m4 = new THREE.Matrix4(), v = new THREE.Vector3(), q4 = new THREE.Quaterni
 const where = i => `${D.projects[D.proj[i]]}:${D.files[D.file[i]]}:${D.line[i]}`;
 const swatch = i => `<span class="sw" style="background:#${pcol[D.proj[i]].getHexString()}"></span>`;
 
+// Star skin: a camera-facing quad per instance with a white-hot core and a soft halo
+// in the project colour. Additive, so dimmed stars (colour scaled down) fade out.
+// The core keeps the old sphere's radius (the instance scale); the halo reaches HALO times further.
+const HALO = 2.2;
+const starMaterial = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: `
+    varying vec2 vUv; varying vec3 vColor;
+    void main() {
+      vUv = position.xy;
+      vColor = vec3(1.0);
+      #ifdef USE_INSTANCING_COLOR
+        vColor = instanceColor;
+      #endif
+      vec4 c = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+      c.xy += position.xy * length(instanceMatrix[0].xyz) * ${HALO.toFixed(1)};
+      gl_Position = projectionMatrix * c;
+    }`,
+  fragmentShader: `
+    varying vec2 vUv; varying vec3 vColor;
+    void main() {
+      float d = length(vUv);
+      if (d > 1.0) discard;
+      float r = 1.0 / ${HALO.toFixed(1)};
+      float x = d / r;                      // 0 at the centre, 1 at the old sphere's edge
+      float body = exp(-x * x * 2.5);       // bright centre fading smoothly to the edge
+      float hot = pow(body, 6.0);           // white only at the very centre
+      float halo = pow(1.0 - d, 3.0) * 0.2;
+      vec3 c = vColor * (body * 1.2 + halo) + vec3(hot * 0.7) * max(max(vColor.r, vColor.g), vColor.b);
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+});
 function segments(pairs, colorOf, opacity) {
   const pos = new Float32Array(pairs.length * 3), col = new Float32Array(pairs.length * 3);
   for (let k = 0; k < pairs.length; k++) {
@@ -225,13 +259,15 @@ async function load(refit) {
   pcol = D.projects.map(color); // by name, so a project keeps its colour whatever else is added
 
   stars = drop(stars); calls = drop(calls); grpc = drop(grpc); hl = drop(hl);
-  stars = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshBasicMaterial(), Math.max(N, 1));
+  stars = new THREE.InstancedMesh(new THREE.PlaneGeometry(2, 2), starMaterial, Math.max(N, 1));
   stars.count = N;
   for (let i = 0; i < N; i++) {
     v.set(D.pos[3*i], D.pos[3*i+1], D.pos[3*i+2]);
     stars.setMatrixAt(i, m4.compose(v, q4, s3.setScalar(0.35 + 0.3 * Math.log2(1 + D.deg[i]))));
     stars.setColorAt(i, pcol[D.proj[i]]);
   }
+  // Faint lines only read as structure when there are thousands; a few dozen need to be bright.
+  CALL_OPACITY = Math.min(0.6, Math.max(0.07, 20 / Math.sqrt(D.edges.length / 2 || 1)));
   calls = segments(D.edges, k => pcol[D.proj[D.edges[k]]], CALL_OPACITY);
   grpc = segments(D.grpc, () => GRPC, GRPC_OPACITY);
   calls.visible = $('showCalls').checked; grpc.visible = $('showGrpc').checked;
@@ -243,8 +279,8 @@ async function load(refit) {
 
   R = 1;
   for (let i = 0; i < N; i++) R = Math.max(R, Math.hypot(D.pos[3*i], D.pos[3*i+1], D.pos[3*i+2]));
-  if (refit) { controls.target.set(0, 0, 0); camera.position.set(0, R * 0.6, R * 2.2); }
-  else flyTo(new THREE.Vector3(), R * 2.3);
+  if (refit) { const h = hub(); controls.target.copy(h); camera.position.set(h.x, h.y + R * 0.6, h.z + R * 2.2); }
+  else flyTo(hub(), R * 2.3);
 
   $('labels').innerHTML = '';
   labels = D.projects.map((p, i) => {
@@ -434,6 +470,15 @@ function flyTo(target, dist) {
   anim = {t: 0, fromT: controls.target.clone(), toT: target.clone(), fromP: camera.position.clone(), toP: target.clone().add(dir.multiplyScalar(dist))};
 }
 function flyToProject(i) { flyTo(new THREE.Vector3(D.centers[3*i], D.centers[3*i+1], D.centers[3*i+2]), 30 * Math.cbrt(D.sizes[i]) + 40); }
+// The view orbits the midpoint of each shown project's most connected star (most calls
+// in and out): one project orbits its hub, two orbit the middle of the axis between theirs.
+function hub() {
+  const best = new Map(); // project -> its most connected star
+  for (let i = 0; i < N; i++) { const b = best.get(D.proj[i]); if (b === undefined || D.deg[i] > D.deg[b]) best.set(D.proj[i], i); }
+  const c = new THREE.Vector3();
+  for (const i of best.values()) c.add(nodePos(i));
+  return best.size ? c.divideScalar(best.size) : c;
+}
 const nodePos = i => new THREE.Vector3(D.pos[3*i], D.pos[3*i+1], D.pos[3*i+2]);
 
 // Focus: a node (it, its callers and callees stay lit, the rest dims; incoming
@@ -520,11 +565,34 @@ function renderCounts(litNodes, litEdges) {
 const recount = () => setFocus(focus);
 $('showCalls').onchange = e => { calls.visible = e.target.checked; recount(); };
 $('showGrpc').onchange = e => { grpc.visible = e.target.checked; recount(); };
+$('showNames').onchange = () => drawNames();
 $('showLabels').onchange = e => $('labels').style.display = e.target.checked ? '' : 'none';
 
 // Picking in screen space: project every star once per camera move.
 let sx = new Float32Array(0), sy = sx, sz = sx;
 let projected = false, mouse = null, hover = -1;
+// Function names: the stars nearest the camera, once they are closer than NAME_DIST,
+// a share of the layout radius so the start view (about 2.3 R away) shows none.
+// ponytail: fixed cap of MAX_NAMES; declutter overlapping labels if dense clusters need it.
+const MAX_NAMES = 150, NAME_OPACITY = 0.55;
+let NAME_DIST = 150;
+let projGen = 0, namesGen = -1;
+const namePool = [];
+function drawNames() {
+  namesGen = projGen; NAME_DIST = R * 0.9;
+  const on = $('showNames').checked, near = [];
+  if (on) for (let i = 0; i < N; i++)
+    if (sz[i] > 0 && sz[i] < NAME_DIST && sx[i] > -50 && sx[i] < innerWidth && sy[i] > 0 && sy[i] < innerHeight) near.push(i);
+  near.sort((a, b) => sz[a] - sz[b]); near.length = Math.min(near.length, MAX_NAMES);
+  while (namePool.length < near.length) { const el = document.createElement('div'); el.className = 'nm'; $('names').appendChild(el); namePool.push(el); }
+  namePool.forEach((el, k) => {
+    const i = near[k];
+    if (i === undefined) { el.style.display = 'none'; return; }
+    el.style.display = ''; el.textContent = D.name[i]; el.style.color = '#' + pcol[D.proj[i]].getHexString();
+    el.style.left = sx[i] + 'px'; el.style.top = sy[i] + 'px';
+    el.style.opacity = NAME_OPACITY * Math.min(1, (NAME_DIST - sz[i]) / (NAME_DIST * 0.3)); // fade in as you approach
+  });
+}
 function project() {
   if (sx.length !== N) { sx = new Float32Array(N); sy = new Float32Array(N); sz = new Float32Array(N); }
   const e = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).elements;
@@ -536,7 +604,7 @@ function project() {
     sx[i] = (e[0]*x + e[4]*y + e[8]*z + e[12]) / w * w2 + w2;
     sy[i] = -(e[1]*x + e[5]*y + e[9]*z + e[13]) / w * h2 + h2;
   }
-  projected = true;
+  projected = true; projGen++;
 }
 function pickNode(mx, my) {
   if (!projected) project();
@@ -584,7 +652,7 @@ renderer.domElement.addEventListener('pointerup', e => {
   const ed = pickEdge(e.clientX, e.clientY);
   setFocus(ed ? {edge: ed} : null);
 });
-addEventListener('keydown', e => { if (e.key === 'Escape') { if (pmenuFor !== null) closeProjectMenu(); else if (menuNode >= 0) closeMenu(); else setFocus(null); } if (e.key === 'f' && e.target === document.body) flyTo(new THREE.Vector3(), R * 2.3); });
+addEventListener('keydown', e => { if (e.key === 'Escape') { if (pmenuFor !== null) closeProjectMenu(); else if (menuNode >= 0) closeMenu(); else setFocus(null); } if (e.key === 'f' && e.target === document.body) flyTo(hub(), R * 2.3); });
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); projected = false;
   for (const o of routeObjs) o.material.resolution.set(innerWidth, innerHeight);
@@ -833,6 +901,8 @@ function frame(now) {
   controls.update();
   renderer.render(scene, camera);
   if (!D) return;
+  if (!projected) project();
+  if (namesGen !== projGen) drawNames();
   if ($('labels').style.display !== 'none') {
     for (let i = 0; i < P; i++) {
       pv.set(D.centers[3*i], D.centers[3*i+1], D.centers[3*i+2]).project(camera);

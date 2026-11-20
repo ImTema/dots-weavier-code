@@ -3,22 +3,31 @@
 <style>
 html,body{margin:0;height:100%;background:#02030a;color:#cdd5ff;font:12px/1.45 ui-monospace,Menlo,monospace;overflow:hidden}
 svg{position:absolute;inset:0;width:100%;height:100%;cursor:grab}
-#side{position:absolute;top:0;left:0;bottom:0;width:360px;box-sizing:border-box;padding:14px;overflow:auto;
-  background:linear-gradient(180deg,rgba(10,12,32,.94),rgba(5,6,18,.9));border-right:1px solid #1b2045;backdrop-filter:blur(6px)}
+/* Bottom panel, full width: call path on top, then controls | details, then the kinds legend. */
+#dock{position:absolute;left:0;right:0;bottom:0;z-index:2;max-height:45vh;display:flex;flex-direction:column;
+  background:linear-gradient(180deg,rgba(10,12,32,.94),rgba(5,6,18,.92));border-top:1px solid #1b2045;backdrop-filter:blur(6px)}
+#side{display:flex;gap:16px;min-height:0;padding:10px 14px;box-sizing:border-box}
+#side .ctl{flex:0 0 340px;overflow:auto}
+#det{flex:1 1 auto;min-width:0;overflow:auto}
 h1{margin:0 0 6px;font-size:13px;letter-spacing:.2em;color:#fff}
 .ep{color:#8b93c4;font-size:11px;word-break:break-all;margin:2px 0}
 .hint{color:#5d6596;font-size:11px;margin:10px 0 4px}
+#hist{max-height:160px;overflow:auto;border:1px solid #1b2045;border-radius:6px}
+#hist .hr{padding:3px 8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+#hist .hr:hover{background:#141a3d}#hist .hr.cur{background:#1d2456;color:#fff}
+#hist .at{color:#5d6596}
 input{width:100%;box-sizing:border-box;margin:8px 0 4px;padding:6px 8px;background:#0a0d24;border:1px solid #2a3166;border-radius:6px;color:#fff;font:inherit}
 button{background:#141a3d;border:1px solid #2a3166;color:#cdd5ff;border-radius:6px;padding:3px 8px;font:inherit;font-size:11px;cursor:pointer;margin:2px 2px 2px 0}
 button:hover{border-color:#6b78d8}
 .lg{display:inline-flex;align-items:center;gap:5px;margin:2px 10px 2px 0;font-size:11px}
 .lg i{width:9px;height:9px;border-radius:2px;display:inline-block}
-#calls{position:absolute;left:360px;right:0;bottom:0;z-index:2;box-sizing:border-box;padding:8px 12px;background:rgba(8,10,28,.92);border-top:1px solid #1b2045;white-space:nowrap;overflow-x:auto;display:none}
+#calls{box-sizing:border-box;padding:8px 12px;border-bottom:1px solid #1b2045;white-space:nowrap;overflow-x:auto;display:none}
+#legend{padding:5px 14px;white-space:nowrap;overflow-x:auto;border-top:1px solid #1b2045}
 #calls .fn{display:inline-block;padding:2px 8px;border:1px solid #2b3270;border-radius:10px;color:#fff;cursor:pointer}
 #calls .fn:hover{border-color:#8b93c4}#calls .fn.cur{border-color:#fff}
 #calls .hop{color:#8b93c4;margin:0 6px;font-size:10px}
 #det .ctx{color:#8b93c4}
-#det{margin-top:12px;padding:9px;border:1px solid #1b2045;border-radius:7px;word-break:break-all}
+#det{padding:9px;border:1px solid #1b2045;border-radius:7px;word-break:break-all}
 #det .k{font-size:10px;padding:0 6px;border-radius:9px;color:#02030a}
 #det .row{margin:4px 0;color:#9aa2d0}#det .row b{color:#fff;font-weight:normal}
 #det pre{white-space:pre-wrap;margin:6px 0 0;padding:6px;background:#080b1e;border-radius:5px;color:#e6e9ff}
@@ -32,10 +41,17 @@ button:hover{border-color:#6b78d8}
 </style></head>
 <body>
 <svg id="svg"><defs></defs><g id="g"></g></svg>
-<div id="side"></div><div id="calls"></div>
-<script type="application/json" id="data">/*DATA*/</script>
+<div id="dock"><div id="calls"></div><div id="side"></div><div id="legend"></div></div>
 <script>
-const D = JSON.parse(document.getElementById('data').textContent);
+// The page is static: every run is a data file in ~/.dotweavier/trace-field-history,
+// <time>_<address>.js, which sets window.TRACE; index.js lists the runs (window.HISTORY).
+// ?t=<name> picks one (default: latest). A <script src> works from file://, fetch() of a local file does not.
+const HIST='../trace-field-history/';
+const traceName=new URLSearchParams(location.search).get('t')||'latest';
+const loadScript=(src,ok,fail)=>{const el=document.createElement('script'); el.src=src; el.onload=ok; el.onerror=fail||(()=>ok()); document.head.appendChild(el);};
+loadScript(HIST+'index.js',()=>loadScript(HIST+encodeURIComponent(traceName)+'.js',()=>start(window.TRACE),noData));
+function noData(){document.body.insertAdjacentHTML('beforeend',`<div style="position:absolute;inset:40% 0 auto;text-align:center;color:#ff7a7a">no trace data at trace-field-history/${traceName.replace(/[<>&]/g,'')}.js<br><span style="color:#8b93c4">run: dotweavier trace field ADDR --format ui</span></div>`);}
+function start(D){
 const KIND = {seed:'#ffffff',assign:'#6878b8',convert:'#6be4ff',transform:'#ffd06b',arg:'#7aa2ff',return:'#b88bff',
   store:'#ff9b6b',read:'#6dffc6',field:'#ff7ad9',container:'#c4ff6b',capture:'#9aa2d0','callback?':'#ffb35c',overwritten:'#ff5c5c'};
 const NW=300, NH=40, COL=360, ROW=52;
@@ -93,15 +109,16 @@ function draw(){layout(); const vs=visible(); const q=document.getElementById('q
   svg.querySelector('defs').innerHTML=Object.entries(KIND).map(([k,c])=>`<marker id="a${k.replace('?','')}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="${c}"/></marker>`).join('');
   apply();}
 function count(n){return n.kids.reduce((s,k)=>s+1+count(k),0);}
-// focus: fit the anchor (the selected box, else the seed) and the column of boxes
+// focus: fit the anchor (the selected box, else the seed) and up to 2 columns of boxes
 // on each side of it, so the first steps read at a useful size; fit shows everything.
 function focusView(){const a=sel||centers[0]; if(!a)return fit();
-  fit(visible().filter(n=>Math.abs(n.x-a.x)<=COL+1));}
+  fit(visible().filter(n=>Math.abs(n.x-a.x)<=2*COL+1));}
 function fit(only){const vs=Array.isArray(only)&&only.length?only:visible(); let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
   vs.forEach(n=>{x0=Math.min(x0,n.x-NW/2);x1=Math.max(x1,n.x+NW/2);y0=Math.min(y0,n.y-NH);y1=Math.max(y1,n.y+NH);});
-  const left=380,w=innerWidth-left-40,h=innerHeight-60; view.k=Math.min(1.2,w/(x1-x0),h/(y1-y0+60));
-  view.x=left+20+w/2-(x0+x1)/2*view.k; view.y=30+h/2-(y0+y1)/2*view.k; apply();}
-function center(n){view.x=(380+innerWidth)/2-n.x*view.k; view.y=innerHeight/2-n.y*view.k; apply();}
+  const w=innerWidth-40,h=innerHeight-panelH()-60; view.k=Math.min(1.2,w/(x1-x0),h/(y1-y0+60));
+  view.x=20+w/2-(x0+x1)/2*view.k; view.y=30+h/2-(y0+y1)/2*view.k; apply();}
+const panelH=()=>document.getElementById('dock').offsetHeight; // the canvas is the area above the bottom panel
+function center(n){view.x=innerWidth/2-n.x*view.k; view.y=(innerHeight-panelH())/2-n.y*view.k; apply();}
 function setAll(open){all.forEach(n=>{if(n.side)n.open=open;}); draw(); fit();}
 
 // ---- interaction ----
@@ -138,17 +155,19 @@ addEventListener('keydown',e=>{if(e.target.id==='q'){if(e.key==='Enter')search(t
 
 // ---- side panel ----
 const side=document.getElementById('side');
-side.innerHTML=`<h1>DOTWEAVIER · LIFECYCLE</h1><div class="ep">${esc(D.addr)}</div>
+side.innerHTML=`<div class="ctl"><h1>DOTWEAVIER · LIFECYCLE</h1><div class="ep">${esc(D.addr)}</div>
  <div class="hint">${nOrigin} origin steps ◀ seed ▶ ${nUses} lifecycle steps<br>click a node to open it · alt-click to close · two-finger scroll pan · pinch or ⌘+scroll zoom · drag pan · f fit · c focus · esc clear</div>
  <input id="q" placeholder="search: file, code, field, type…"><div class="hint" id="hits"></div>
  <button id="ea">expand all</button><button id="ca">collapse all</button><button id="fi">fit</button><button id="fo">focus</button>
- <div class="hint">kinds</div>${Object.entries(KIND).map(([k,c])=>`<span class="lg"><i style="background:${c}"></i>${k}</span>`).join('')}
- <div id="det"></div>`;
+ ${(window.HISTORY||[]).length?`<div class="hint">history · ${window.HISTORY.length} runs, newest first</div><div id="hist">${window.HISTORY.map((h,k)=>`<div class="hr${(h.name===traceName||traceName==='latest'&&k===0)?' cur':''}" data-t="${esc(h.name)}" title="${esc(h.name)}"><span class="at">${esc(h.at)}</span> ${esc(h.addr||h.name)}</div>`).join('')}</div>`:''}
+ </div><div id="det"></div>`;
+document.getElementById('legend').innerHTML=Object.entries(KIND).map(([k,c])=>`<span class="lg"><i style="background:${c}"></i>${k}</span>`).join('');
 document.getElementById('q').oninput=()=>{hitI=-1;search(false);};
 document.getElementById('ea').onclick=()=>setAll(true);
 document.getElementById('ca').onclick=()=>setAll(false);
 document.getElementById('fi').onclick=()=>fit();
 document.getElementById('fo').onclick=focusView;
+document.getElementById('hist')?.addEventListener('click',e=>{const r=e.target.closest('[data-t]'); if(r)location.search='?t='+encodeURIComponent(r.dataset.t);});
 function details(){calls(); const el=document.getElementById('det'); if(!sel){el.innerHTML='<div class="hint">select a node for details</div>';return;}
   const d=sel.d, c=KIND[d.kind]||'#888', dir=d.kind==='overwritten'?'another value written into the field on its left; not traced here':
     sel.side<0?'flows into the step on its right':sel.side>0?'flows from the step on its left':'the traced value';
@@ -159,5 +178,6 @@ function details(){calls(); const el=document.getElementById('det'); if(!sel){el
     (sel.kids.length?`<div class="row">${count(sel)} steps ${sel.side<0?'further back':'further on'}</div>`:'')+
     (d.loc?`<div class="row">trace from here:</div><pre>dotweavier trace field ${esc(d.loc)} --format ui</pre>`:'');}
 details(); draw(); focusView(); addEventListener('resize',focusView);
+}
 </script>
 </body></html>

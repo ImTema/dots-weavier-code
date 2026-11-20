@@ -459,7 +459,34 @@ func stubBroken(pk *packages.Package) (n int) {
 		})
 		return bad
 	}
+	// ssa.CreatePackage dereferences Defs[name] for every declared name; go/types
+	// leaves it nil for some broken decls (e.g. redeclarations), so drop those.
+	undefined := func(id *ast.Ident) bool { return pk.TypesInfo.Defs[id] == nil }
 	for _, f := range pk.Syntax {
+		f.Decls = slices.DeleteFunc(f.Decls, func(d ast.Decl) bool {
+			switch d := d.(type) {
+			case *ast.FuncDecl:
+				if undefined(d.Name) {
+					n++
+					return true
+				}
+			case *ast.GenDecl:
+				d.Specs = slices.DeleteFunc(d.Specs, func(s ast.Spec) bool {
+					bad := false
+					switch s := s.(type) {
+					case *ast.ValueSpec:
+						bad = slices.ContainsFunc(s.Names, undefined)
+					case *ast.TypeSpec:
+						bad = undefined(s.Name)
+					}
+					if bad {
+						n++
+					}
+					return bad
+				})
+			}
+			return false
+		})
 		for _, d := range f.Decls {
 			if fd, ok := d.(*ast.FuncDecl); ok && fd.Body != nil && invalid(fd.Body) {
 				fd.Body = &ast.BlockStmt{Lbrace: fd.Body.Lbrace, Rbrace: fd.Body.Rbrace}

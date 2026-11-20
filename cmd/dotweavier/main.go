@@ -39,6 +39,8 @@ func main() {
 	switch os.Args[1] {
 	case "index":
 		runIndex(os.Args[2:])
+	case "overview": // PROTOTYPE
+		runOverview(os.Args[2:])
 	case "trace":
 		if len(os.Args) < 3 {
 			usage()

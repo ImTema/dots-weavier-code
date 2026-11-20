@@ -1,0 +1,577 @@
+// PROTOTYPE, throwaway (branch prototype/overview): data and layout for a
+// whole-workspace galaxy overview. Answers "is a galaxy of every indexed function
+// readable and fast?" before the real `dotweavier serve` Overview tab is designed.
+package domain
+
+import (
+	"cmp"
+	"database/sql"
+	"errors"
+	"fmt"
+	"hash/fnv"
+	"io/fs"
+	"math"
+	"math/rand/v2"
+	"os"
+	"path"
+	"path/filepath"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+)
+
+// OverviewGraph is packed into parallel arrays: ~50k nodes stay a few MB of JSON.
+type OverviewGraph struct {
+	Projects []string  `json:"projects"` // every indexed project, biggest first
+	Sizes    []int     `json:"sizes"`    // nodes per project
+	Hidden   []bool    `json:"hidden"`   // excluded from this layout: no nodes, no edges
+	Centers  []float32 `json:"centers"`  // x,y,z per project; 0 for hidden ones
+	Files    []string  `json:"files"`
+	Proj     []int32   `json:"proj"` // per node: index into Projects
+	File     []int32   `json:"file"` // per node: index into Files
+	Name     []string  `json:"name"`
+	ID       []int32   `json:"id"` // per node: stable graph node id, what /route takes and returns
+	Line     []int32   `json:"line"`
+	Deg      []int32   `json:"deg"`     // in+out edges
+	Pos      []float32 `json:"pos"`     // x,y,z per node
+	Edges    []int32   `json:"edges"`   // s,t pairs, calls inside one project
+	GRPC     []int32   `json:"grpc"`    // s,t pairs, grpc hops (cross-project)
+	Methods  []string  `json:"methods"` // per grpc pair: full method name
+	LayoutMs int64     `json:"layoutMs"`
+	Total    int       `json:"total"` // functions in the shown projects before the node cap
+	Limit    int       `json:"limit"` // the node cap; 0 means none
+}
+
+// OverviewSource is every index merged once; Build lays it out per request and
+// Sync re-indexes one project of the workspace, then merges again.
+type OverviewSource struct {
+	ws   string
+	mu   sync.RWMutex // guards g: Sync swaps it while requests read it
+	g    *graph
+	sync sync.Mutex // one Sync at a time
+}
+
+func LoadOverview(ws string) (*OverviewSource, error) {
+	g, err := mergedGraph()
+	if err != nil {
+		return nil, err
+	}
+	return &OverviewSource{ws: ws, g: g}, nil
+}
+
+func mergedGraph() (*graph, error) {
+	g, _, err := loadIndexes()
+	if err != nil {
+		return nil, err
+	}
+	g.dropTests()
+	g.join()
+	return g, nil
+}
+
+// DetectedProject is one go.mod under the workspace and the state of its index.
+type DetectedProject struct {
+	Name    string    `json:"name"`
+	Indexed bool      `json:"indexed"`
+	Built   time.Time `json:"built,omitzero"`
+	Parent  string    `json:"parent,omitempty"` // nearest detected project folder containing this one
+	Nodes   int       `json:"nodes"`            // non-test functions in the index
+	Edges   int       `json:"edges"`            // calls between them, plus outgoing gRPC hops
+	GRPC    int       `json:"grpc"`             // outgoing gRPC hops to another indexed project
+}
+
+// Detect lists the workspace's projects; it reads only each index's meta row.
+func (src *OverviewSource) Detect() ([]DetectedProject, error) {
+	ps, err := discover(src.ws)
+	if err != nil {
+		return nil, err
+	}
+	nodes, edges, grpc := src.counts()
+	names := map[string]bool{}
+	for _, p := range ps {
+		names[p.Name] = true
+	}
+	out := make([]DetectedProject, 0, len(ps))
+	for _, p := range ps {
+		d := DetectedProject{Name: p.Name, Parent: parentOf(p.Name, names), Nodes: nodes[p.Name], Edges: edges[p.Name], GRPC: grpc[p.Name]}
+		if built, ok := indexBuilt(p.Name); ok {
+			d.Indexed, d.Built = true, built
+		}
+		out = append(out, d)
+	}
+	return out, nil
+}
+
+// counts tallies the merged graph per project, the same nodes and edges an
+// overview would draw for it before the node cap.
+func (src *OverviewSource) counts() (nodes, edges, grpc map[string]int) {
+	src.mu.RLock()
+	defer src.mu.RUnlock()
+	g := src.g
+	nodes, edges, grpc = map[string]int{}, map[string]int{}, map[string]int{}
+	drawn := func(i int32) bool { n := g.Nodes[i]; return n.Project != "" && !n.Test }
+	for i, n := range g.Nodes {
+		if !drawn(int32(i)) {
+			continue
+		}
+		nodes[n.Project]++
+		for _, e := range g.Out[i] {
+			if !drawn(e.To) || int(e.To) == i {
+				continue
+			}
+			edges[n.Project]++
+			if e.Kind == grpcHop {
+				grpc[n.Project]++
+			}
+		}
+	}
+	return nodes, edges, grpc
+}
+
+func indexBuilt(project string) (time.Time, bool) {
+	path := storePath(project)
+	if _, err := os.Stat(path); err != nil {
+		return time.Time{}, false
+	}
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	if err != nil {
+		return time.Time{}, false
+	}
+	defer db.Close()
+	var built string
+	if err := db.QueryRow(`SELECT built FROM meta`).Scan(&built); err != nil {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339Nano, built)
+	return t, err == nil
+}
+
+// detected returns the workspace project with this name. Request input is only
+// ever turned into a store path through a name discover produced.
+func (src *OverviewSource) family(name string) ([]project, error) {
+	ps, err := discover(src.ws)
+	if err != nil {
+		return nil, err
+	}
+	var fam []project
+	for _, p := range ps {
+		if p.Name == name {
+			fam = append([]project{p}, fam...)
+		} else if strings.HasPrefix(p.Name, name+"/") {
+			fam = append(fam, p)
+		}
+	}
+	if len(fam) == 0 || fam[0].Name != name {
+		return nil, fmt.Errorf("project %q not found under %s", name, src.ws)
+	}
+	return fam, nil
+}
+
+// parentOf is the nearest detected project folder that contains name, or "".
+func parentOf(name string, names map[string]bool) string {
+	for i := strings.LastIndex(name, "/"); i > 0; i = strings.LastIndex(name[:i], "/") {
+		if names[name[:i]] {
+			return name[:i]
+		}
+	}
+	return ""
+}
+
+var errChanged = errors.New("changed")
+
+// changedSince reports whether any Go source of the project (.go, go.mod, go.sum,
+// or a directory, whose mtime moves when a file is added, removed or renamed)
+// is newer than t. Nested modules, vendor, testdata and dot-dirs are other
+// projects or not analyzed, the same skips as discover.
+// shortcut: mtimes only, so a checkout that restores old mtimes looks unchanged; hash contents if that bites.
+func changedSince(dir string, t time.Time) bool {
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() && p != dir {
+			n := d.Name()
+			if strings.HasPrefix(n, ".") || n == "vendor" || n == "testdata" || n == "node_modules" {
+				return filepath.SkipDir
+			}
+			if _, err := os.Stat(filepath.Join(p, "go.mod")); err == nil {
+				return filepath.SkipDir
+			}
+		}
+		if !d.IsDir() && !strings.HasSuffix(p, ".go") && d.Name() != "go.mod" && d.Name() != "go.sum" {
+			return nil
+		}
+		if info, err := d.Info(); err == nil && info.ModTime().After(t) {
+			return errChanged
+		}
+		return nil
+	})
+	return errors.Is(err, errChanged)
+}
+
+// SyncResult is what Sync did for one project of the family.
+type SyncResult struct {
+	Project  string `json:"project"`
+	UpToDate bool   `json:"upToDate"`
+	Stats    string `json:"stats,omitempty"`
+	Error    string `json:"error,omitempty"`
+}
+
+// Sync syncs a project and every project nested in its folder. Each keeps its
+// own index and is re-indexed only if a source file is newer than that index.
+// The graph is re-merged once if anything was re-indexed; node ids then change,
+// so clients must reload their layout.
+func (src *OverviewSource) Sync(project string) ([]SyncResult, error) {
+	src.sync.Lock()
+	defer src.sync.Unlock()
+	fam, err := src.family(project)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]SyncResult, len(fam))
+	at := map[string]int{}
+	var stale []string
+	for i, p := range fam {
+		res[i].Project = p.Name
+		at[p.Name] = i
+		if built, ok := indexBuilt(p.Name); ok && !changedSince(p.dir, built) {
+			res[i].UpToDate = true
+		} else {
+			stale = append(stale, p.Name)
+		}
+	}
+	if len(stale) == 0 {
+		return res, nil
+	}
+	if err := Index(src.ws, stale, func(name, st string, e error) {
+		res[at[name]].Stats = st
+		if e != nil {
+			res[at[name]].Error = e.Error()
+		}
+	}); err != nil {
+		return nil, err
+	}
+	return res, src.remerge()
+}
+
+// Remove deletes the index of a project and of every project nested in it.
+func (src *OverviewSource) Remove(project string) ([]string, error) {
+	src.sync.Lock()
+	defer src.sync.Unlock()
+	fam, err := src.family(project)
+	if err != nil {
+		return nil, err
+	}
+	var removed []string
+	for _, p := range fam {
+		if err := os.Remove(storePath(p.Name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return removed, err
+		}
+		removed = append(removed, p.Name)
+	}
+	return removed, src.remerge()
+}
+
+func (src *OverviewSource) remerge() error {
+	g, err := mergedGraph()
+	if err != nil {
+		return err
+	}
+	src.mu.Lock()
+	src.g = g
+	src.mu.Unlock()
+	return nil
+}
+
+// Build lays out every non-test, non-external function outside the hidden
+// projects: one cluster per project, one sub-cluster per package directory.
+// Hidden projects free their space, so the rest is laid out as if they were never indexed.
+func (src *OverviewSource) Build(show map[string]bool, limit int) *OverviewGraph {
+	src.mu.RLock()
+	defer src.mu.RUnlock()
+	g := src.g
+	hide := hiddenExcept(g, show)
+	t0 := time.Now()
+	keep, total := selectNodes(g, hide, limit)
+
+	// Empty, not nil: an overview with nothing shown must still encode as [] for the page.
+	o := &OverviewGraph{Projects: []string{}, Sizes: []int{}, Hidden: []bool{}, Centers: []float32{}, Files: []string{},
+		Proj: []int32{}, File: []int32{}, Name: []string{}, ID: []int32{}, Line: []int32{}, Deg: []int32{}, Pos: []float32{},
+		Edges: []int32{}, GRPC: []int32{}, Methods: []string{}}
+	idx := make([]int32, len(g.Nodes)) // graph node -> overview node, -1 when dropped
+	projOf := map[string]int32{}
+	fileOf := map[string]int32{}
+	count := map[string]int{}
+	for _, n := range g.Nodes {
+		if n.Project != "" && !n.Test {
+			count[n.Project]++
+		}
+	}
+	for p := range count {
+		o.Projects = append(o.Projects, p)
+	}
+	slices.SortFunc(o.Projects, func(a, b string) int { return cmp.Or(cmp.Compare(count[b], count[a]), cmp.Compare(a, b)) })
+	for i, p := range o.Projects {
+		projOf[p] = int32(i)
+		o.Sizes = append(o.Sizes, count[p])
+		o.Hidden = append(o.Hidden, hide[p])
+	}
+	for i, n := range g.Nodes {
+		if !keep[i] {
+			idx[i] = -1
+			continue
+		}
+		fk := n.Project + ":" + n.File
+		f, ok := fileOf[fk]
+		if !ok {
+			f = int32(len(o.Files))
+			fileOf[fk] = f
+			o.Files = append(o.Files, n.File)
+		}
+		idx[i] = int32(len(o.Name))
+		o.ID = append(o.ID, int32(i))
+		o.Proj = append(o.Proj, projOf[n.Project])
+		o.File = append(o.File, f)
+		o.Name = append(o.Name, n.Name)
+		o.Line = append(o.Line, int32(n.Line))
+	}
+	o.Deg = make([]int32, len(o.Name))
+	for from, es := range g.Out {
+		s := idx[from]
+		for _, e := range es {
+			t := idx[e.To]
+			if s < 0 || t < 0 || s == t {
+				continue
+			}
+			o.Deg[s]++
+			o.Deg[t]++
+			if e.Kind == grpcHop {
+				o.GRPC = append(o.GRPC, s, t)
+				o.Methods = append(o.Methods, e.Method)
+			} else {
+				o.Edges = append(o.Edges, s, t)
+			}
+		}
+	}
+	o.layout()
+	o.Total, o.Limit = total, limit
+	o.LayoutMs = time.Since(t0).Milliseconds()
+	return o
+}
+
+type vec [3]float64
+
+func (a vec) add(b vec, k float64) vec { return vec{a[0] + b[0]*k, a[1] + b[1]*k, a[2] + b[2]*k} }
+
+// inBall is a deterministic point in the unit ball for key.
+func inBall(key string) vec {
+	h := fnv.New64a()
+	h.Write([]byte(key))
+	r := rand.New(rand.NewPCG(h.Sum64(), 0x9e3779b97f4a7c15))
+	for {
+		v := vec{r.Float64()*2 - 1, r.Float64()*2 - 1, r.Float64()*2 - 1}
+		if v[0]*v[0]+v[1]*v[1]+v[2]*v[2] <= 1 {
+			return v
+		}
+	}
+}
+
+// layout seeds projects on a Fibonacci sphere, packages around their project and
+// functions around their package, then pulls each function toward its callees.
+// shortcut: anchored neighbour smoothing, no Barnes-Hut repulsion; upgrade if clusters look mushy.
+func (o *OverviewGraph) layout() {
+	const spread = 6.0 // world units per cbrt(node)
+	radius := make([]float64, len(o.Projects))
+	sum := 0.0
+	var shown []int
+	for i, n := range o.Sizes {
+		if o.Hidden[i] {
+			continue
+		}
+		shown = append(shown, i)
+		radius[i] = spread * math.Cbrt(float64(n))
+		sum += radius[i] * radius[i]
+	}
+	// Sphere surface ~ 4πR² must hold every cluster's disc πr² with room to spare.
+	R := 1.4 * math.Sqrt(sum)
+	centers := make([]vec, len(o.Projects))
+	golden := math.Pi * (3 - math.Sqrt(5))
+	for k, i := range shown {
+		y := 1 - 2*(float64(k)+0.5)/float64(len(shown))
+		rr := math.Sqrt(1 - y*y)
+		th := golden * float64(k)
+		centers[i] = vec{math.Cos(th) * rr * R, y * R, math.Sin(th) * rr * R}
+	}
+	for _, c := range centers {
+		o.Centers = append(o.Centers, float32(c[0]), float32(c[1]), float32(c[2]))
+	}
+
+	pkgSize := map[[2]string]int{}
+	pkgCenter := map[[2]string]vec{}
+	pkgKey := make([][2]string, len(o.Name))
+	for i := range o.Name {
+		j := o.Proj[i]
+		k := [2]string{o.Projects[j], path.Dir(o.Files[o.File[i]])}
+		pkgKey[i] = k
+		if pkgSize[k]++; pkgSize[k] == 1 {
+			pkgCenter[k] = centers[j].add(inBall(k[0]+"/"+k[1]), 0.75*radius[j])
+		}
+	}
+	anchor := make([]vec, len(o.Name))
+	for i := range o.Name {
+		k := pkgKey[i]
+		r := 1.2 * math.Cbrt(float64(pkgSize[k]))
+		anchor[i] = pkgCenter[k].add(inBall(k[0]+"|"+o.Files[o.File[i]]+"|"+o.Name[i]), r)
+	}
+
+	adj := make([][]int32, len(o.Name))
+	for i := 0; i < len(o.Edges); i += 2 {
+		s, t := o.Edges[i], o.Edges[i+1]
+		adj[s] = append(adj[s], t)
+		adj[t] = append(adj[t], s)
+	}
+	pos := slices.Clone(anchor)
+	next := make([]vec, len(pos))
+	for range 20 {
+		for i, ns := range adj {
+			if len(ns) == 0 {
+				next[i] = pos[i]
+				continue
+			}
+			var m vec
+			for _, n := range ns {
+				m = m.add(pos[n], 1/float64(len(ns)))
+			}
+			next[i] = anchor[i].add(anchor[i], -0.35).add(m, 0.35)
+		}
+		pos, next = next, pos
+	}
+	o.Pos = make([]float32, 0, 3*len(pos))
+	for _, p := range pos {
+		o.Pos = append(o.Pos, float32(p[0]), float32(p[1]), float32(p[2]))
+	}
+}
+
+// Route is one path for the overview's directions panel, in graph node ids.
+type Route struct {
+	Nodes   []int32  `json:"nodes"`
+	Via     []string `json:"via"`     // per hop (len(Nodes)-1): call, iface:sure, iface:guess, grpc
+	Methods []string `json:"methods"` // per hop: gRPC full method name, or ""
+	Sure    int      `json:"sure"`
+	Iface   int      `json:"iface"`
+}
+
+// Routes returns up to k ranked paths a->b (fewest guesses, then fewest hops) that
+// stay out of hidden projects, so every route can be drawn on the current layout.
+// exhausted is false when the search hit its limit and more routes may exist.
+func (src *OverviewSource) Routes(a, b int32, k int, show map[string]bool, limit int) (routes []Route, exhausted bool) {
+	src.mu.RLock()
+	defer src.mu.RUnlock()
+	g := src.g
+	hide := hiddenExcept(g, show)
+	// Same cap as Build: a route may only pass through functions the page draws.
+	// shortcut: a route through a capped-out function is not found; send its nodes with the route if that bites.
+	keep, _ := selectNodes(g, hide, limit)
+	if a < 0 || b < 0 || int(a) >= len(g.Nodes) || int(b) >= len(g.Nodes) || a == b {
+		return nil, true
+	}
+	f := &graph{Nodes: g.Nodes, Out: make([][]edge, len(g.Out))}
+	for from, es := range g.Out {
+		if !keep[from] {
+			continue
+		}
+		for _, e := range es {
+			if keep[e.To] {
+				f.Out[from] = append(f.Out[from], e)
+			}
+		}
+	}
+	states, exhausted := f.trace(a, b, k)
+	for _, st := range states {
+		var r Route
+		for s := st; s != nil; s = s.parent {
+			r.Nodes = append(r.Nodes, s.n)
+			if s.parent != nil {
+				r.Via = append(r.Via, s.in.Kind.String())
+				r.Methods = append(r.Methods, s.in.Method)
+				switch s.in.Kind {
+				case sure:
+					r.Sure++
+					r.Iface++
+				case guess:
+					r.Iface++
+				}
+			}
+		}
+		slices.Reverse(r.Nodes)
+		slices.Reverse(r.Via)
+		slices.Reverse(r.Methods)
+		routes = append(routes, r)
+	}
+	return routes, exhausted
+}
+
+// hiddenExcept marks every indexed project not in show as hidden.
+func hiddenExcept(g *graph, show map[string]bool) map[string]bool {
+	hide := map[string]bool{}
+	for _, n := range g.Nodes {
+		if n.Project != "" && !show[n.Project] {
+			hide[n.Project] = true
+		}
+	}
+	return hide
+}
+
+// selectNodes picks the functions an overview draws: every non-test function of a
+// shown project, capped at limit (0: no cap). Over the cap it keeps functions with
+// an edge to another project first (the links between projects are the point of
+// the overview), then the most connected. total is the count before the cap.
+func selectNodes(g *graph, hide map[string]bool, limit int) (keep []bool, total int) {
+	keep = make([]bool, len(g.Nodes))
+	for i, n := range g.Nodes {
+		if n.Project != "" && !n.Test && !hide[n.Project] {
+			keep[i] = true
+			total++
+		}
+	}
+	if limit <= 0 || total <= limit {
+		return keep, total
+	}
+	deg := make([]int32, len(g.Nodes))
+	cross := make([]bool, len(g.Nodes))
+	for from, es := range g.Out {
+		if !keep[from] {
+			continue
+		}
+		for _, e := range es {
+			if !keep[e.To] || int(e.To) == from {
+				continue
+			}
+			deg[from]++
+			deg[e.To]++
+			if g.Nodes[from].Project != g.Nodes[e.To].Project {
+				cross[from], cross[e.To] = true, true
+			}
+		}
+	}
+	cand := make([]int32, 0, total)
+	for i, k := range keep {
+		if k {
+			cand = append(cand, int32(i))
+		}
+	}
+	slices.SortFunc(cand, func(a, b int32) int {
+		if cross[a] != cross[b] {
+			if cross[a] {
+				return -1
+			}
+			return 1
+		}
+		return cmp.Or(cmp.Compare(deg[b], deg[a]), cmp.Compare(a, b))
+	})
+	for _, i := range cand[limit:] {
+		keep[i] = false
+	}
+	return keep, total
+}

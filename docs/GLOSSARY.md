@@ -7,12 +7,12 @@ dotweavier is a CLI that indexes many code projects into one typed graph and tra
 ### Sources
 
 **Project**:
-One unit of source code, discovered by its module manifest (Go: a directory containing `go.mod`).
-_Avoid_: repo, service, module
+A single folder that is indexed on its own, recognised by its module manifest (Go: a directory containing `go.mod`). A folder with its own manifest inside a project is not part of that project's index: it is a **Module** of it.
+_Avoid_: workspace, repo, service, monorepo
 
-**Workspace**:
-A directory that dotweavier has been initialized on, plus the set of projects found beneath it. Workspaces nest: a parent workspace reuses the indexes of the projects inside it.
-_Avoid_: monorepo, root
+**Module**:
+A project detected inside the folder of another project. It keeps its own index, but it is synced and removed together with the project that contains it, and shown beneath it. A module of a module belongs to the outermost project.
+_Avoid_: subproject, nested project, child project
 
 **Index**:
 The stored graph of one project, kept outside the project in `~/.dotweavier`. An index is **stale** when the project's source has changed since it was built.
@@ -68,7 +68,7 @@ _Avoid_: selector, locator
 A query for the directed paths from symbol A to symbol B (`dotweavier trace path`).
 
 **Field trace**:
-A query for the full lifecycle of one value (`dotweavier trace field [project:]relative/path.go:LINE`), printed as two trees: its origin (where it comes from) and its uses (every variable, conversion, struct field, call and return it may flow into). A field of a struct declared in the workspace stands for that field in every object of the type, across projects, so a protobuf field written by a client in one project meets its server's reads in another. The trees show where the value may come from and go, not where it must. Unlike a trace, it analyses projects live and needs no index.
+A query for the full lifecycle of one value (`dotweavier trace field [project:]relative/path.go:LINE`), printed as two trees: its origin (where it comes from) and its uses (every variable, conversion, struct field, call and return it may flow into). A field of a struct declared in any loaded project stands for that field in every object of the type, across projects, so a protobuf field written by a client in one project meets its server's reads in another. The trees show where the value may come from and go, not where it must. Unlike a trace, it analyses projects live and needs no index.
 _Avoid_: variable trace, taint trace
 
 **Path**:
@@ -86,5 +86,5 @@ _Avoid_: galaxy, map
 ### Running
 
 **Server**:
-The long-running dotweavier process (`dotweavier serve`) that serves the UI for every configured workspace and keeps their indexes from going stale. One runs per machine.
+The long-running dotweavier process (`dotweavier serve`) that serves the UI for every synced project and keeps their indexes from going stale. One runs per machine.
 _Avoid_: daemon, ui, backend

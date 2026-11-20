@@ -1,0 +1,873 @@
+<!doctype html>
+<!-- PROTOTYPE, throwaway (branch prototype/overview): whole-workspace galaxy overview. -->
+<html><head><meta charset="utf-8"><title>dotweavier overview (prototype)</title>
+<style>
+html,body{margin:0;height:100%;background:#02030a;color:#cdd5ff;font:12px/1.45 ui-monospace,Menlo,monospace;overflow:hidden}
+canvas{position:absolute;inset:0;display:block}
+#side{position:absolute;top:0;left:0;bottom:0;width:330px;box-sizing:border-box;padding:12px;overflow:auto;z-index:2;
+  background:linear-gradient(180deg,rgba(10,12,32,.92),rgba(5,6,18,.88));border-right:1px solid #1b2045}
+h1{margin:0 0 4px;font-size:13px;letter-spacing:.2em;color:#fff}
+.proto{color:#ffb86b;font-size:10px;letter-spacing:.1em}
+.muted{color:#5d6596;font-size:11px}
+#qp{width:100%;box-sizing:border-box;background:#0b0e24;border:1px solid #262c5c;color:#cdd5ff;padding:4px 6px;border-radius:6px;font:inherit;margin:0 0 4px}
+#hits .n{cursor:pointer;text-decoration:underline dotted}
+input[type=text]{width:100%;box-sizing:border-box;background:#0b0e24;border:1px solid #262c5c;color:#fff;padding:6px 8px;border-radius:6px;font:inherit;margin:8px 0 4px}
+.row{display:flex;align-items:center;gap:6px;padding:2px 4px;border-radius:4px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row:hover{background:rgba(90,110,255,.14)}
+.sw{flex:none;width:9px;height:9px;border-radius:50%}
+.n{margin-left:auto;color:#5d6596}
+h2{font-size:11px;letter-spacing:.15em;color:#8b93c4;margin:12px 0 4px;font-weight:normal}
+h2 .in{color:#4ad8ff}h2 .out{color:#ffb14a}
+label{display:block;color:#9aa2d0;cursor:pointer}
+#tip{position:absolute;pointer-events:none;z-index:3;background:rgba(8,10,28,.94);border:1px solid #2b3270;border-radius:6px;padding:6px 8px;display:none;max-width:520px}
+#tip b{color:#fff}
+.lbl{position:absolute;z-index:1;pointer-events:none;transform:translate(-50%,-50%);color:#fff;font-size:11px;text-shadow:0 0 6px #000,0 0 3px #000;white-space:nowrap;opacity:.85}
+#sel{word-break:break-all}
+#sel .k{color:#58608f}
+#fps{position:absolute;right:10px;bottom:8px;z-index:2;color:#5d6596;text-align:right}
+#counts{color:#9aa2d0}
+#reset{float:right;margin-top:-2px;padding:3px 10px;border:1px solid #2b3270;border-radius:12px;color:#bfc7ff;cursor:pointer;font-size:11px}
+#reset:hover{background:rgba(255,90,90,.15);border-color:#ff5a5a}
+#pp{position:absolute;top:10px;right:10px;z-index:2;width:340px;max-height:calc(100% - 60px);overflow:auto;box-sizing:border-box;padding:8px 10px 14px;
+  background:rgba(8,10,28,.88);border:1px solid #1b2045;border-radius:8px}
+#pp h2{margin:0 0 2px;display:flex;gap:8px;align-items:center}
+#pp h2 a{color:#8b93c4;cursor:pointer;text-decoration:underline;font-size:10px}
+#pp input[type=text]{margin:4px 0 6px}
+#pp .row input{margin:0}
+#pp .row.off{opacity:.4}
+#pp.busy #projects{opacity:.6}
+#pp .st{flex:none;color:#5d6596;font-size:10px;margin-left:auto}
+#pp .nm{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis} /* long names shrink, buttons stay */
+#pp .cnt{flex:none;color:#8b93c4;font-size:10px}
+#pp .cnt .g{color:#ff4fe8}
+#ppGrip{position:sticky;float:left;bottom:-14px;margin:4px 0 -14px -10px;width:16px;height:16px;cursor:nesw-resize;color:#5d6596;font-size:12px;line-height:16px;text-align:center;user-select:none}
+#ppGrip:hover{color:#fff}
+#pp .row input,#pp .sw{flex:none}
+#pp .err{color:#ff7a7a}
+.sb{flex:none;padding:1px 8px;border:1px solid #2b3270;border-radius:10px;color:#bfc7ff;cursor:pointer;font-size:10px}
+.sb:hover{background:rgba(76,141,255,.18)}
+.sb.go{border-color:#4c8dff;color:#fff}
+.sb.wait{opacity:.6;pointer-events:none}
+.dots{flex:none;color:#8b93c4;cursor:pointer;padding:0 5px;border-radius:4px;font-weight:bold}.dots:hover{background:rgba(76,141,255,.22);color:#fff}
+#pmenu{position:absolute;z-index:5;display:none;min-width:150px;background:rgba(8,10,28,.98);border:1px solid #2b3270;border-radius:7px;padding:4px 0;box-shadow:0 6px 24px rgba(0,0,0,.6)}
+#pmenu .it{padding:5px 12px;cursor:pointer;color:#cdd5ff;white-space:nowrap}
+#pmenu .it:hover{background:rgba(76,141,255,.18)}
+#pmenu .it.danger{color:#ff8a8a}#pmenu .it.danger:hover{background:rgba(255,90,90,.15)}
+#pp .ok{color:#3ddc84}
+#pp .sec{color:#5d6596;font-size:10px;letter-spacing:.12em;margin:8px 0 2px;cursor:pointer;user-select:none}
+#pp .sec:hover{color:#cdd5ff}
+#pp .modline{padding:0 0 3px 26px;color:#8b93c4;font-size:10px;cursor:pointer;user-select:none}
+#pp .modline:hover{color:#fff}
+#pp .row.mod{padding-left:26px}
+#pp .sec .tw{display:inline-block;width:12px}
+#empty{position:absolute;left:330px;right:0;top:45%;z-index:1;text-align:center;color:#8b93c4;display:none;pointer-events:none}
+.fld{display:flex;align-items:center;gap:6px;border:1px solid #262c5c;background:#0b0e24;border-radius:6px;padding:5px 7px;margin:4px 0;cursor:pointer;overflow:hidden}
+.fld input{flex:1;min-width:0;background:none;border:0;outline:0;color:#fff;font:inherit;padding:0}
+.fld input::placeholder{color:#5d6596}
+.fld:focus-within{border-color:#4c8dff;box-shadow:0 0 0 2px rgba(76,141,255,.25)}
+.fld .x{color:#5d6596;padding:0 2px;cursor:pointer}.fld .x:hover{color:#fff}
+.dd{display:none;border:1px solid #2b3270;border-radius:6px;background:#0b0e24;margin:-2px 0 4px;max-height:280px;overflow:auto}
+.dd .row{padding:4px 6px}.dd .row.hi{background:rgba(76,141,255,.22)}
+#ctx{position:absolute;z-index:4;display:none;min-width:230px;max-width:360px;background:rgba(8,10,28,.97);border:1px solid #2b3270;border-radius:8px;padding:6px 0;box-shadow:0 6px 24px rgba(0,0,0,.6)}
+#ctx .hd{padding:2px 12px 6px;border-bottom:1px solid #1b2045;margin-bottom:4px;word-break:break-all}
+#ctx .hd b{color:#fff}
+#ctx .it{padding:5px 12px;cursor:pointer;color:#cdd5ff;white-space:nowrap}
+#ctx .it:hover{background:rgba(76,141,255,.18)}
+#ctx .it .ic{display:inline-block;width:18px;color:#8b93c4}
+.pin{flex:none;width:16px;height:16px;border-radius:50%;color:#02030a;font-weight:bold;font-size:10px;display:flex;align-items:center;justify-content:center}
+.pin.a{background:#3ddc84}.pin.b{background:#ff5a5a}
+#swap{color:#8b93c4;cursor:pointer;font-size:11px;text-decoration:underline}
+.rt{border:1px solid #1b2045;border-radius:7px;padding:7px 8px;margin:6px 0;cursor:pointer}
+.rt:hover{border-color:#47509a}
+.rt.sel{border-color:#4c8dff;background:rgba(76,141,255,.10)}
+.rt .t{color:#fff}.rt .m{color:#8b93c4;font-size:11px}
+.step{display:flex;gap:6px;align-items:baseline;padding:1px 0 1px 4px}
+.step .ic{flex:none;width:18px;text-align:center}
+.ic.call,.ic.sure{color:#4c8dff}.ic.guess{color:#ffa63d}.ic.grpc{color:#ff4fe8}
+.step .row{flex:1;padding:1px 2px}
+.dbtn{display:inline-block;margin:6px 6px 0 0;padding:3px 8px;border:1px solid #2b3270;border-radius:12px;color:#bfc7ff;cursor:pointer;font-size:11px}
+.dbtn:hover{background:rgba(76,141,255,.15)}
+.mk{position:absolute;z-index:1;pointer-events:none;transform:translate(-50%,-120%);width:20px;height:20px;border-radius:50% 50% 50% 0;rotate:-45deg;display:flex;align-items:center;justify-content:center;box-shadow:0 0 8px #000}
+.mk span{rotate:45deg;color:#02030a;font-weight:bold;font-size:11px}
+</style>
+<script type="importmap">{"imports":{"three":"/overview_prototype_assets/three.module.js","three/addons/":"/overview_prototype_assets/"}}</script>
+</head><body>
+<div id="side">
+  <span id="reset" title="show every project, clear selection, directions and search, fit the view">reset</span>
+  <h1>DOTWEAVIER</h1><div class="proto">OVERVIEW PROTOTYPE</div>
+  <div id="stats" class="muted">loading…</div>
+  <h2>DIRECTIONS</h2>
+  <div class="fld" id="fa"><span class="pin a">A</span><input placeholder="start: type a function or project" autocomplete="off" spellcheck="false"><span class="x" title="clear">×</span></div>
+  <div class="dd" id="dda"></div>
+  <div class="fld" id="fb"><span class="pin b">B</span><input placeholder="destination" autocomplete="off" spellcheck="false"><span class="x" title="clear">×</span></div>
+  <div class="dd" id="ddb"></div>
+  <a id="swap">⇅ swap</a>
+  <div id="routes"></div>
+  <h2>SEARCH</h2>
+  <input id="q" type="text" placeholder="find function (Enter: fly to first)" autocomplete="off">
+  <select id="qp"><option value="-1">in all projects</option></select>
+  <div id="hits"></div>
+  <h2>SELECTION</h2><div id="sel" class="muted">click a star or an edge</div>
+  <h2>SHOW</h2>
+  <label><input type="checkbox" id="showCalls" checked> calls inside projects</label>
+  <label><input type="checkbox" id="showGrpc" checked> gRPC hops between projects</label>
+  <label><input type="checkbox" id="showLabels" checked> project labels</label>
+</div>
+<div id="empty">Nothing in the overview yet.<br>Press <b>Sync</b> on a project in the top-right list to index it and add it here.</div>
+<div id="pp"><h2>PROJECTS <a id="ppAll" title="show every added project matching the filter">all</a><a id="ppNone" title="hide every added project matching the filter">none</a></h2>
+  <div id="ws" class="muted"></div>
+  <input id="pq" type="text" placeholder="find project" autocomplete="off">
+  <div id="projects"></div>
+  <div id="ppGrip" title="drag to resize · double-click to expand or shrink">◣</div></div>
+<div id="tip"></div><div id="ctx"></div><div id="pmenu"></div><div id="labels"></div><div id="markers"></div><div id="fps"><div id="counts"></div><div id="rate"></div></div>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from '/overview_prototype_assets/OrbitControls.js';
+import {LineSegments2} from '/overview_prototype_assets/lines/LineSegments2.js';
+import {LineSegmentsGeometry} from '/overview_prototype_assets/lines/LineSegmentsGeometry.js';
+import {LineMaterial} from '/overview_prototype_assets/lines/LineMaterial.js';
+
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const color = name => { let h = 2166136261; for (const ch of name) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return new THREE.Color().setHSL((h >>> 0) / 2**32, 0.75, 0.6); };
+const IN = new THREE.Color('#4ad8ff'), OUT = new THREE.Color('#ffb14a'), WHITE = new THREE.Color('#ffffff'), GRPC = new THREE.Color('#ff4fe8');
+const CALL_OPACITY = 0.07, GRPC_OPACITY = 0.85, DIM = 0.1;
+
+const renderer = new THREE.WebGLRenderer({antialias: true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 1, 1e6);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.zoomToCursor = true; // wheel zooms toward the point under the cursor
+// Left drag always orbits, right drag always pans. OrbitControls swaps the two when
+// ctrl/meta/shift is held, and macOS ctrl-click arrives as a right click with ctrlKey,
+// so pre-swap the mapping before its own pointerdown handler runs.
+renderer.domElement.addEventListener('pointerdown', e => {
+  const mod = e.ctrlKey || e.metaKey || e.shiftKey;
+  controls.mouseButtons.LEFT = mod ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+  controls.mouseButtons.RIGHT = mod ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
+}, {capture: true});
+
+// Everything below is rebuilt by load(): hiding a project re-lays-out the whole
+// overview on the server, so positions, edges and indices all change.
+let D = null, N = 0, P = 0, pcol = [], R = 1;
+let stars = null, calls = null, grpc = null, hl = null;
+let out = [], inn = [];
+let labels = [];
+let focus = null; // {node: i} or {edge: {s, t, via}}
+// added: projects the user synced into the overview; hidden: added but unchecked.
+const added = new Set(JSON.parse(localStorage.getItem('dw.added') || '[]'));
+const hidden = new Set(JSON.parse(localStorage.getItem('dw.hidden') || '[]'));
+const shownProjects = () => [...added].filter(p => !hidden.has(p));
+const showQS = () => shownProjects().map(p => 'show=' + encodeURIComponent(p)).join('&');
+let detected = [], workspace = '';
+const syncing = new Set(), syncErr = new Map(), syncNote = new Map(); // note: short-lived "up to date" / "synced"
+const m4 = new THREE.Matrix4(), v = new THREE.Vector3(), q4 = new THREE.Quaternion(), s3 = new THREE.Vector3();
+const where = i => `${D.projects[D.proj[i]]}:${D.files[D.file[i]]}:${D.line[i]}`;
+const swatch = i => `<span class="sw" style="background:#${pcol[D.proj[i]].getHexString()}"></span>`;
+
+function segments(pairs, colorOf, opacity) {
+  const pos = new Float32Array(pairs.length * 3), col = new Float32Array(pairs.length * 3);
+  for (let k = 0; k < pairs.length; k++) {
+    const i = pairs[k];
+    pos.set([D.pos[3*i], D.pos[3*i+1], D.pos[3*i+2]], 3*k);
+    const c = colorOf(k); col.set([c.r, c.g, c.b], 3*k);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return new THREE.LineSegments(g, new THREE.LineBasicMaterial({vertexColors: true, transparent: true, opacity,
+    blending: THREE.AdditiveBlending, depthWrite: false}));
+}
+function drop(o) { if (o) { scene.remove(o); o.geometry.dispose(); o.material.dispose(); } return null; }
+
+let loadSeq = 0, dataBytes = 0;
+// What this page allocated itself: every vertex, index and instance buffer in the
+// scene (uploaded to the GPU, and kept in JS too) plus the layout JSON it parsed.
+// The browser's own overhead (JS engine, DOM, textures, canvas) is not counted.
+function pageBytes() {
+  const seen = new Set();
+  let gpu = 0;
+  const add = a => {
+    const arr = a && (a.isInterleavedBufferAttribute ? a.data.array : a.array);
+    if (arr && !seen.has(arr)) { seen.add(arr); gpu += arr.byteLength; }
+  };
+  scene.traverse(o => {
+    const g = o.geometry;
+    if (!g) return;
+    for (const k in g.attributes) add(g.attributes[k]);
+    add(g.index);
+    if (o.isInstancedMesh) { add(o.instanceMatrix); add(o.instanceColor); }
+  });
+  return {gpu, data: dataBytes, pick: sx.byteLength * 3};
+}
+const mb = b => (b / 2**20).toFixed(1) + ' MB';
+async function load(refit) {
+  const seq = ++loadSeq;
+  $('pp').classList.add('busy');
+  const t0 = performance.now();
+  let data, det;
+  try {
+    let text;
+    [text, det] = await Promise.all([fetch('/data.json?' + showQS()).then(r => r.text()), fetch('/projects').then(r => r.json())]);
+    dataBytes = text.length; // ASCII JSON: characters = bytes
+    data = JSON.parse(text);
+  } finally {
+    if (seq === loadSeq) $('pp').classList.remove('busy');
+  }
+  if (seq !== loadSeq) return; // a newer toggle already asked for another layout
+  detected = det.projects || []; workspace = det.workspace;
+  const tFetch = performance.now() - t0;
+  D = data; N = D.name.length; P = D.projects.length;
+  pcol = D.projects.map(color); // by name, so a project keeps its colour whatever else is added
+
+  stars = drop(stars); calls = drop(calls); grpc = drop(grpc); hl = drop(hl);
+  stars = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshBasicMaterial(), Math.max(N, 1));
+  stars.count = N;
+  for (let i = 0; i < N; i++) {
+    v.set(D.pos[3*i], D.pos[3*i+1], D.pos[3*i+2]);
+    stars.setMatrixAt(i, m4.compose(v, q4, s3.setScalar(0.35 + 0.3 * Math.log2(1 + D.deg[i]))));
+    stars.setColorAt(i, pcol[D.proj[i]]);
+  }
+  calls = segments(D.edges, k => pcol[D.proj[D.edges[k]]], CALL_OPACITY);
+  grpc = segments(D.grpc, () => GRPC, GRPC_OPACITY);
+  calls.visible = $('showCalls').checked; grpc.visible = $('showGrpc').checked;
+  scene.add(stars, calls, grpc);
+
+  out = Array.from({length: N}, () => []); inn = Array.from({length: N}, () => []);
+  for (let k = 0; k < D.edges.length; k += 2) { out[D.edges[k]].push([D.edges[k+1], 'call']); inn[D.edges[k+1]].push([D.edges[k], 'call']); }
+  for (let k = 0; k < D.grpc.length; k += 2) { const m = 'grpc ' + D.methods[k/2]; out[D.grpc[k]].push([D.grpc[k+1], m]); inn[D.grpc[k+1]].push([D.grpc[k], m]); }
+
+  R = 1;
+  for (let i = 0; i < N; i++) R = Math.max(R, Math.hypot(D.pos[3*i], D.pos[3*i+1], D.pos[3*i+2]));
+  if (refit) { controls.target.set(0, 0, 0); camera.position.set(0, R * 0.6, R * 2.2); }
+  else flyTo(new THREE.Vector3(), R * 2.3);
+
+  $('labels').innerHTML = '';
+  labels = D.projects.map((p, i) => {
+    const el = document.createElement('div');
+    el.className = 'lbl'; el.textContent = p; el.style.color = '#' + pcol[i].getHexString();
+    $('labels').appendChild(el); return el;
+  });
+
+  renderProjects();
+  $('empty').style.display = N ? 'none' : 'block';
+  const cur = $('qp').value;
+  $('qp').innerHTML = '<option value="-1">in all projects</option>' + D.projects.map((p, i) => D.hidden[i] ? '' : `<option value="${i}">in ${esc(p)}</option>`).join('');
+  $('qp').value = cur >= 0 && !D.hidden[cur] ? cur : -1;
+
+  const shown = D.hidden.filter(h => !h).length;
+  $('stats').innerHTML = `${shown} project${shown === 1 ? '' : 's'} shown · ${added.size} added · ${detected.length} detected<br>`
+    + `${shown}/${P} indexed projects · ${N.toLocaleString()} functions${D.limit && D.total > N ? ` <span style="color:#ffa63d" title="the server keeps functions linked to another project first, then the most connected; the rest are never sent">(top ${N.toLocaleString()} of ${D.total.toLocaleString()})</span>` : ''}<br>${(D.edges.length/2).toLocaleString()} calls · ${(D.grpc.length/2).toLocaleString()} gRPC hops<br>
+    layout ${D.layoutMs} ms (Go) · fetch ${tFetch.toFixed(0)} ms · build ${(performance.now() - t0 - tFetch).toFixed(0)} ms<br>
+    <span class="muted">left-drag: orbit · right-drag: pan · wheel: zoom · f: fit · Esc: clear</span>`;
+  idOf = new Map(D.id.map((g, i) => [g, i]));
+  keyOf = new Map(D.name.map((_, i) => [nodeKey(i), i]));
+  hay = D.name.map((n, i) => (n + ' ' + D.projects[D.proj[i]]).toLowerCase());
+  closeMenu();
+  for (const f of ['a', 'b']) if (ends[f] !== null && !keyOf.has(ends[f])) ends[f] = null; // its project left the overview
+  focus = null;
+  projected = false; hover = -1; $('tip').style.display = 'none';
+  $('q').oninput();
+  findRoutes();
+}
+
+// Project panel (top right): every project detected in the workspace. Nothing is
+// in the overview until you press Sync, which re-indexes the project and adds it.
+// Added projects get a checkbox (show/hide), Sync again to re-index, × to remove.
+// The search box filters the list; all/none apply to added projects it matches.
+const ago = t => { const s = (Date.now() - Date.parse(t)) / 1000; return s < 90 ? 'just now' : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 129600 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`; };
+const matching = () => { const s = $('pq').value.toLowerCase(); return [...added].filter(p => p.toLowerCase().includes(s)); };
+let famOf = r => [r]; // project -> [project, ...its modules], rebuilt by renderProjects
+const openMods = new Set(JSON.parse(localStorage.getItem('dw.openMods') || '[]'));
+function renderProjects() {
+  const s = $('pq').value.toLowerCase();
+  const byName = new Map(detected.map(d => [d.name, d]));
+  // A module of a module belongs to the outermost project.
+  const rootOf = n => { let d = byName.get(n); while (d && d.parent && byName.has(d.parent)) d = byName.get(d.parent); return d ? d.name : n; };
+  const mods = new Map();
+  for (const d of detected) { const r = rootOf(d.name); if (r !== d.name) { if (!mods.has(r)) mods.set(r, []); mods.get(r).push(d); } }
+  famOf = r => [r, ...(mods.get(r) || []).map(d => d.name)];
+  const k = n => n >= 10000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n);
+  const cnt = d => `<span class="cnt" title="${d.nodes.toLocaleString()} functions · ${d.edges.toLocaleString()} edges${d.grpc ? ` (${d.grpc} outgoing gRPC hops)` : ''}${d.built ? ' · indexed ' + ago(d.built) : ''}">${k(d.nodes)} n · ${k(d.edges)} e${d.grpc ? ` · <span class="g">${d.grpc} gRPC</span>` : ''}</span>`;
+  const status = (d, own) => own && syncing.has(d.name) ? 'syncing…'
+    : own && syncNote.has(d.name) ? `<span class="ok">${esc(syncNote.get(d.name))}</span>`
+    : own && syncErr.has(d.name) ? `<span class="err" title="${esc(syncErr.get(d.name))}">sync failed</span>`
+    : d.indexed ? cnt(d) : 'not indexed';
+  const match = n => n.toLowerCase().includes(s);
+  const sw = n => `<span class="sw" style="background:#${color(n).getHexString()}"></span>`;
+  const box = (n, root) => added.has(n) ? `<input type="checkbox" data-c="${esc(n)}"${root ? ' data-root="1"' : ''}${hidden.has(n) ? '' : ' checked'}>` : '';
+  const rootRow = d => {
+    const p = d.name, a = esc(p), ms = mods.get(p) || [], isAdded = added.has(p);
+    const msShown = ms.filter(m => match(m.name) || match(p));
+    if (!match(p) && !msShown.length) return '';
+    const act = isAdded
+      ? `<span class="dots" data-menu="${a}" title="actions">⋯</span>`
+      : `<span class="sb go${syncing.has(p) ? ' wait' : ''}" data-sync="${a}" title="index${ms.length ? ` with its ${ms.length} module${ms.length > 1 ? 's' : ''}` : ''} and add to the overview">${syncing.has(p) ? '…' : 'Sync'}</span>`;
+    let h = `<div class="row${isAdded && hidden.has(p) ? ' off' : ''}" data-p="${a}" title="${a}">${box(p, true)}${sw(p)}<span class="nm">${a}</span><span class="st">${status(d, true)}</span>${act}</div>`;
+    if (ms.length) {
+      const open = openMods.has(p) || (s && !match(p)); // a filter that only matches modules opens them
+      h += `<div class="modline" data-mods="${a}">${open ? '▾' : '▸'} ${ms.length} module${ms.length > 1 ? 's' : ''}</div>`;
+      if (open) h += msShown.map(m => `<div class="row mod${added.has(m.name) && hidden.has(m.name) ? ' off' : ''}" title="${esc(m.name)}">${box(m.name, false)}${sw(m.name)}<span class="nm">${esc(m.name.slice(p.length + 1))}</span><span class="st">${status(m, false)}</span></div>`).join('');
+    }
+    return h;
+  };
+  const roots = detected.filter(d => rootOf(d.name) === d.name);
+  const inOverview = roots.filter(d => added.has(d.name)), rest = roots.filter(d => !added.has(d.name));
+  const sec = (id, title, list, empty) => {
+    const open = !collapsed.has(id);
+    return `<div class="sec" data-sec="${id}" title="click to ${open ? 'collapse' : 'expand'}"><span class="tw">${open ? '▾' : '▸'}</span>${title} (${list.length})</div>`
+      + (open ? list.map(rootRow).join('') || `<div class="muted">${empty}</div>` : '');
+  };
+  $('ws').textContent = workspace;
+  $('projects').innerHTML = sec('added', 'IN OVERVIEW', inOverview, 'none yet') + sec('detected', 'PROJECTS DETECTED', rest, 'all added');
+}
+$('pq').oninput = () => renderProjects();
+const collapsed = new Set(JSON.parse(localStorage.getItem('dw.collapsed') || '[]'));
+// Resizable project panel: it is pinned top-right, so the grip sits bottom-left and
+// grows the panel leftwards and downwards. Double-click toggles a large size.
+(() => {
+  const pp = $('pp'), grip = $('ppGrip');
+  const apply = ([w, h]) => { pp.style.width = w + 'px'; pp.style.height = h ? h + 'px' : ''; pp.style.maxHeight = h ? 'none' : ''; };
+  const save = () => localStorage.setItem('dw.ppSize', JSON.stringify([pp.offsetWidth, pp.style.height ? pp.offsetHeight : 0]));
+  const saved = JSON.parse(localStorage.getItem('dw.ppSize') || 'null');
+  if (saved) apply(saved);
+  grip.addEventListener('pointerdown', e => {
+    e.preventDefault(); grip.setPointerCapture(e.pointerId);
+    const x0 = e.clientX, y0 = e.clientY, w0 = pp.offsetWidth, h0 = pp.offsetHeight;
+    const move = ev => apply([Math.max(260, Math.min(innerWidth - 360, w0 + x0 - ev.clientX)), Math.max(160, Math.min(innerHeight - 20, h0 + ev.clientY - y0))]);
+    const up = () => { grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', up); save(); };
+    grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', up);
+  });
+  grip.addEventListener('dblclick', () => { apply(pp.offsetWidth > 600 ? [340, 0] : [Math.min(innerWidth - 360, 760), innerHeight - 20]); save(); });
+})();
+function saveSets() { localStorage.setItem('dw.added', JSON.stringify([...added])); localStorage.setItem('dw.hidden', JSON.stringify([...hidden])); }
+function saveHidden() { saveSets(); load(false); }
+const post = async (what, p) => {
+  const r = await fetch(`/${what}?project=` + encodeURIComponent(p), {method: 'POST', headers: {'X-Dotweavier': '1'}});
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+};
+const note = (p, text) => { syncNote.set(p, text); setTimeout(() => { if (syncNote.get(p) === text) { syncNote.delete(p); renderProjects(); } }, 4000); };
+// Sync: the server re-indexes only if a Go source file changed since the index was built.
+async function sync(p) {
+  const wasAdded = famOf(p).every(n => added.has(n));
+  syncing.add(p); syncErr.delete(p); syncNote.delete(p); renderProjects();
+  let res = null;
+  try {
+    res = (await post('sync', p)).results;
+    for (const r of res) if (!r.error) { added.add(r.project); hidden.delete(r.project); }
+    saveSets();
+    const failed = res.filter(r => r.error), redone = res.filter(r => !r.upToDate && !r.error).length;
+    if (failed.length) syncErr.set(p, failed.map(r => `${r.project}: ${r.error}`).join('\n'));
+    note(p, res.every(r => r.upToDate) ? 'up to date' : res.length > 1 ? `synced ${redone} of ${res.length}` : 'synced');
+  } catch (err) {
+    syncErr.set(p, String(err.message || err));
+  } finally {
+    syncing.delete(p);
+  }
+  if (res && res.every(r => r.upToDate) && wasAdded) return renderProjects(); // nothing changed: keep the layout as it is
+  load(false); // re-indexed or newly added: node ids changed, relayout and re-resolve everything
+}
+// Remove: deletes the project's index from ~/.dotweavier and takes it out of the overview.
+async function removeIndex(p) {
+  const fam = famOf(p), n = fam.length - 1;
+  if (!confirm(`Remove the index of ${p}${n ? ` and its ${n} module${n > 1 ? 's' : ''}` : ''}?\n\nThe index files are deleted from ~/.dotweavier and leave the overview. Sync rebuilds them.`)) return;
+  syncing.add(p); renderProjects();
+  try {
+    const j = await post('remove', p);
+    for (const x of j.removed || fam) { added.delete(x); hidden.delete(x); }
+    saveSets();
+  } catch (err) {
+    syncErr.set(p, String(err.message || err));
+  } finally {
+    syncing.delete(p);
+  }
+  load(false);
+}
+let pmenuFor = null;
+function openProjectMenu(p, anchor) {
+  pmenuFor = p;
+  const m = $('pmenu'), r = anchor.getBoundingClientRect();
+  m.innerHTML = `<div class="it" data-pa="sync">⟳ Sync</div><div class="it danger" data-pa="remove">🗑 Remove index</div>`;
+  m.style.display = 'block';
+  m.style.left = Math.max(8, r.right - m.offsetWidth) + 'px';
+  m.style.top = Math.min(innerHeight - m.offsetHeight - 8, r.bottom + 4) + 'px';
+}
+function closeProjectMenu() { pmenuFor = null; $('pmenu').style.display = 'none'; }
+$('pmenu').onclick = e => {
+  const a = e.target.closest('[data-pa]'); if (!a) return;
+  const p = pmenuFor; closeProjectMenu();
+  if (a.dataset.pa === 'sync') sync(p); else removeIndex(p);
+};
+addEventListener('pointerdown', e => { if (pmenuFor !== null && !e.target.closest('#pmenu') && !e.target.closest('[data-menu]')) closeProjectMenu(); }, {capture: true});
+$('pp').addEventListener('scroll', closeProjectMenu);
+$('projects').onclick = e => {
+  const t = e.target;
+  if (t.dataset.c !== undefined) return; // checkbox: handled by onchange
+  const mt = t.closest('[data-mods]');
+  if (mt) { const r = mt.dataset.mods; openMods.has(r) ? openMods.delete(r) : openMods.add(r); localStorage.setItem('dw.openMods', JSON.stringify([...openMods])); return renderProjects(); }
+  const sh = t.closest('[data-sec]');
+  if (sh) { const id = sh.dataset.sec; collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id); localStorage.setItem('dw.collapsed', JSON.stringify([...collapsed])); return renderProjects(); }
+  if (t.dataset.sync !== undefined) return sync(t.dataset.sync);
+  if (t.dataset.menu !== undefined) return pmenuFor === t.dataset.menu ? closeProjectMenu() : openProjectMenu(t.dataset.menu, t);
+  const r = t.closest('[data-p]');
+  const i = r ? D.projects.indexOf(r.dataset.p) : -1;
+  if (i >= 0 && !D.hidden[i]) flyToProject(i);
+};
+$('projects').onchange = e => {
+  // A project's checkbox shows or hides it with its modules; a module's only itself.
+  const p = e.target.dataset.c, names = e.target.dataset.root ? famOf(p).filter(n => added.has(n)) : [p];
+  for (const n of names) e.target.checked ? hidden.delete(n) : hidden.add(n);
+  saveHidden();
+};
+$('ppAll').onclick = () => { matching().forEach(p => hidden.delete(p)); saveHidden(); };
+$('ppNone').onclick = () => { matching().forEach(p => hidden.add(p)); saveHidden(); };
+
+let anim = null;
+function flyTo(target, dist) {
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  anim = {t: 0, fromT: controls.target.clone(), toT: target.clone(), fromP: camera.position.clone(), toP: target.clone().add(dir.multiplyScalar(dist))};
+}
+function flyToProject(i) { flyTo(new THREE.Vector3(D.centers[3*i], D.centers[3*i+1], D.centers[3*i+2]), 30 * Math.cbrt(D.sizes[i]) + 40); }
+const nodePos = i => new THREE.Vector3(D.pos[3*i], D.pos[3*i+1], D.pos[3*i+2]);
+
+// Focus: a node (it, its callers and callees stay lit, the rest dims; incoming
+// edges cyan, outgoing orange) or an edge (its two ends stay lit, the edge white).
+function setFocus(f) {
+  focus = f;
+  hl = drop(hl);
+  const lit = new Set(), ends = new Set(), pairs = [], cols = []; // ends: this focus's own nodes
+  if (f && f.node !== undefined) {
+    const i = f.node; lit.add(i); ends.add(i);
+    for (const [t] of out[i]) { lit.add(t); pairs.push(i, t); cols.push(OUT, OUT); }
+    for (const [s] of inn[i]) { lit.add(s); pairs.push(s, i); cols.push(IN, IN); }
+  } else if (f && f.edge) {
+    for (const j of [f.edge.s, f.edge.t]) { lit.add(j); ends.add(j); }
+    pairs.push(f.edge.s, f.edge.t); cols.push(WHITE, WHITE);
+  }
+  // A shown route keeps its nodes lit too, so selecting a star never hides the route.
+  const onRoute = routeNodes();
+  const dim = f || onRoute.size;
+  const c = new THREE.Color();
+  for (let i = 0; i < N; i++) {
+    c.copy(pcol[D.proj[i]]);
+    if (dim && !lit.has(i) && !onRoute.has(i)) c.multiplyScalar(DIM);
+    if (ends.has(i)) c.lerp(WHITE, 0.5);
+    stars.setColorAt(i, c);
+  }
+  if (stars.instanceColor) stars.instanceColor.needsUpdate = true;
+  calls.material.opacity = dim ? CALL_OPACITY * 0.25 : CALL_OPACITY;
+  grpc.material.opacity = dim ? 0.15 : GRPC_OPACITY;
+  if (pairs.length) { hl = segments(pairs, k => cols[k], 0.95); scene.add(hl); }
+  renderFocus();
+  renderCounts(dim ? new Set([...lit, ...onRoute]).size : 0, pairs.length / 2);
+}
+function nodeRow(j, prefix, note) {
+  return `<div class="row" data-n="${j}" title="${esc(where(j))}">${swatch(j)}${prefix} ${esc(D.name[j])} <span class="k">${esc(note || '')}</span></div>`;
+}
+function renderFocus() {
+  const f = focus;
+  if (!f) { $('sel').className = 'muted'; $('sel').innerHTML = 'click a star or an edge'; return; }
+  $('sel').className = '';
+  if (f.edge) {
+    const {s, t, via} = f.edge;
+    $('sel').innerHTML = `<b style="color:#fff">${esc(via)}</b><div><span class="dbtn" data-dir="a" data-g="${s}">route from caller</span><span class="dbtn" data-dir="b" data-g="${t}">route to callee</span></div><h2>FROM</h2>${nodeRow(s, '')}<div class="muted">${esc(where(s))}</div><h2>TO</h2>${nodeRow(t, '')}<div class="muted">${esc(where(t))}</div>`;
+    return;
+  }
+  const i = f.node;
+  const list = (xs, arrow) => xs.slice(0, 40).map(([j, k]) => nodeRow(j, arrow, k === 'call' ? '' : k)).join('')
+    + (xs.length > 40 ? `<div class="muted">… ${xs.length - 40} more</div>` : '');
+  $('sel').innerHTML = `<b style="color:#fff">${esc(D.name[i])}</b><div class="muted">${esc(where(i))}</div>
+    <div><span class="dbtn" data-dir="a" data-g="${i}">directions from here</span><span class="dbtn" data-dir="b" data-g="${i}">directions to here</span></div>
+    <h2><span class="in">■</span> CALLERS ${inn[i].length}</h2>${list(inn[i], '←')}<h2><span class="out">■</span> CALLEES ${out[i].length}</h2>${list(out[i], '→')}`;
+}
+$('sel').onclick = e => {
+  if (e.target.dataset.dir) return setEnd(e.target.dataset.dir, +e.target.dataset.g);
+  const r = e.target.closest('[data-n]');
+  if (r) { const j = +r.dataset.n; setFocus({node: j}); flyTo(nodePos(j), 60); } };
+
+// Function search: substring on name, case-insensitive, optionally in one project.
+$('qp').onchange = () => $('q').oninput();
+$('q').oninput = () => {
+  const s = $('q').value.toLowerCase(), only = +$('qp').value;
+  if (s.length < 2 || !D) { $('hits').innerHTML = ''; return; }
+  const hits = [];
+  for (let i = 0; i < N && hits.length < 30; i++)
+    if ((only < 0 || D.proj[i] === only) && D.name[i].toLowerCase().includes(s)) hits.push(i);
+  $('hits').innerHTML = hits.length ? hits.map(i => `<div class="row" data-n="${i}" title="${esc(where(i))}">${swatch(i)}${esc(D.name[i])}<span class="n" data-qp="${D.proj[i]}" title="search only in this project">${esc(D.projects[D.proj[i]])}</span></div>`).join('')
+    : '<div class="muted">no match</div>';
+};
+$('q').onkeydown = e => { if (e.key === 'Enter') { const r = $('hits').querySelector('[data-n]'); if (r) r.click(); } };
+$('hits').onclick = e => {
+  const p = e.target.dataset.qp;
+  if (p !== undefined) { $('qp').value = p; $('q').oninput(); return; }
+  $('sel').onclick(e);
+};
+
+// Bottom right: what is drawn right now; with a selection or route, how much of it is lit.
+function renderCounts(litNodes, litEdges) {
+  const ec = calls.visible ? D.edges.length / 2 : 0, eg = grpc.visible ? D.grpc.length / 2 : 0;
+  const r = routes[routeSel];
+  let t = `${N.toLocaleString()}${D.total > N ? ' of ' + D.total.toLocaleString() : ''} nodes · ${(ec + eg).toLocaleString()} edges (${ec.toLocaleString()} calls + ${eg.toLocaleString()} gRPC)`;
+  if (litNodes) t += ` · lit ${litNodes.toLocaleString()} nodes, ${(litEdges + (r ? r.via.length : 0)).toLocaleString()} edges`;
+  $('counts').textContent = t;
+}
+const recount = () => setFocus(focus);
+$('showCalls').onchange = e => { calls.visible = e.target.checked; recount(); };
+$('showGrpc').onchange = e => { grpc.visible = e.target.checked; recount(); };
+$('showLabels').onchange = e => $('labels').style.display = e.target.checked ? '' : 'none';
+
+// Picking in screen space: project every star once per camera move.
+let sx = new Float32Array(0), sy = sx, sz = sx;
+let projected = false, mouse = null, hover = -1;
+function project() {
+  if (sx.length !== N) { sx = new Float32Array(N); sy = new Float32Array(N); sz = new Float32Array(N); }
+  const e = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).elements;
+  const w2 = innerWidth / 2, h2 = innerHeight / 2;
+  for (let i = 0; i < N; i++) {
+    const x = D.pos[3*i], y = D.pos[3*i+1], z = D.pos[3*i+2];
+    const w = e[3]*x + e[7]*y + e[11]*z + e[15];
+    sz[i] = w;
+    sx[i] = (e[0]*x + e[4]*y + e[8]*z + e[12]) / w * w2 + w2;
+    sy[i] = -(e[1]*x + e[5]*y + e[9]*z + e[13]) / w * h2 + h2;
+  }
+  projected = true;
+}
+function pickNode(mx, my) {
+  if (!projected) project();
+  let best = -1, bd = 64; // 8px
+  for (let i = 0; i < N; i++) {
+    if (sz[i] <= 0) continue;
+    const dx = sx[i] - mx, dy = sy[i] - my, d = dx*dx + dy*dy;
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
+// Nearest edge within 5px. With a node focused only its lit edges count, so a
+// click near the selection picks a caller/callee edge, not a dimmed one behind it.
+function pickEdge(mx, my) {
+  if (!projected) project();
+  let best = null, bd = 25;
+  const seg = (s, t, via) => {
+    if (sz[s] <= 0 || sz[t] <= 0) return;
+    const ax = sx[s], ay = sy[s], dx = sx[t] - ax, dy = sy[t] - ay, L = dx*dx + dy*dy;
+    const u = L ? Math.max(0, Math.min(1, ((mx - ax)*dx + (my - ay)*dy) / L)) : 0;
+    const ex = ax + u*dx - mx, ey = ay + u*dy - my, d = ex*ex + ey*ey;
+    if (d < bd) { bd = d; best = {s, t, via}; }
+  };
+  if (focus && focus.node !== undefined) {
+    const i = focus.node;
+    for (const [t, k] of out[i]) seg(i, t, k);
+    for (const [s, k] of inn[i]) seg(s, i, k);
+    return best;
+  }
+  if (grpc.visible) for (let k = 0; k < D.grpc.length; k += 2) seg(D.grpc[k], D.grpc[k+1], 'grpc ' + D.methods[k/2]);
+  if (calls.visible) for (let k = 0; k < D.edges.length; k += 2) seg(D.edges[k], D.edges[k+1], 'call');
+  return best;
+}
+renderer.domElement.addEventListener('pointermove', e => mouse = [e.clientX, e.clientY]);
+renderer.domElement.addEventListener('pointerleave', () => { mouse = null; $('tip').style.display = 'none'; });
+let down = null;
+renderer.domElement.addEventListener('pointerdown', e => down = e.button === 0 && !e.ctrlKey ? [e.clientX, e.clientY] : null); // only a plain left click selects
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!D || !down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) return; // drag, not click
+  const i = pickNode(e.clientX, e.clientY);
+  if (i >= 0) return openMenu(i, e.clientX, e.clientY);
+  closeMenu();
+  const r = pickRoute(e.clientX, e.clientY);
+  if (r >= 0) return selectRoute(r);
+  const ed = pickEdge(e.clientX, e.clientY);
+  setFocus(ed ? {edge: ed} : null);
+});
+addEventListener('keydown', e => { if (e.key === 'Escape') { if (pmenuFor !== null) closeProjectMenu(); else if (menuNode >= 0) closeMenu(); else setFocus(null); } if (e.key === 'f' && e.target === document.body) flyTo(new THREE.Vector3(), R * 2.3); });
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); projected = false;
+  for (const o of routeObjs) o.material.resolution.set(innerWidth, innerHeight);
+});
+controls.addEventListener('change', () => projected = false);
+
+// Directions, map-style: A and B fields, ranked alternative routes, the chosen
+// route drawn on top coloured by certainty (blue sure, orange guess, magenta gRPC)
+// and listed step by step. Ends are graph ids, so they survive a relayout.
+// Ends are stored as project:file:name keys: node ids change when a sync re-merges the indexes.
+let idOf = new Map(), keyOf = new Map();
+const nodeKey = i => `${D.projects[D.proj[i]]}:${D.files[D.file[i]]}:${D.name[i]}`;
+const ends = {a: null, b: null};
+let routes = [], routeSel = 0, routeObjs = [], routeSeq = 0;
+const markers = {};
+for (const [f, col] of [['a', '#3ddc84'], ['b', '#ff5a5a']]) {
+  const el = document.createElement('div'); el.className = 'mk'; el.style.background = col; el.style.display = 'none';
+  el.innerHTML = `<span>${f.toUpperCase()}</span>`; $('markers').appendChild(el); markers[f] = el;
+}
+const HOP = {call: ['→', 'call', 'call'], 'iface:sure': ['⇢', 'sure', 'interface call, sure'], 'iface:guess': ['?', 'guess', 'interface call, guess'], grpc: ['✈', 'grpc', 'gRPC']};
+const HOPCOL = {call: new THREE.Color('#4c8dff'), 'iface:sure': new THREE.Color('#4c8dff'), 'iface:guess': new THREE.Color('#ffa63d'), grpc: new THREE.Color('#ff4fe8')};
+const ALT = new THREE.Color('#7d8fb8'), CASING = new THREE.Color('#0b1f4d');
+
+const endIdx = f => ends[f] === null ? undefined : keyOf.get(ends[f]);
+function renderEnds() {
+  for (const f of ['a', 'b']) {
+    const inp = $('f' + f).querySelector('input'), i = endIdx(f);
+    if (document.activeElement !== inp) inp.value = i === undefined ? '' : D.name[i];
+    inp.title = i === undefined ? '' : where(i);
+  }
+}
+function setEnd(f, i) {
+  ends[f] = nodeKey(i);
+  findRoutes();
+}
+
+// A/B typeahead: every whitespace-separated word must appear in the function name
+// or its project ("scoring-system score" finds score* in scoring-system only).
+// Exact names first, then Type.name suffix matches, then the most connected.
+let hay = [];
+function matchNodes(q, limit) {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const last = words[words.length - 1], hits = [];
+  for (let i = 0; i < N; i++) if (words.every(w => hay[i].includes(w))) hits.push(i);
+  const rank = i => { const n = D.name[i].toLowerCase(); return n === last ? 0 : n.endsWith('.' + last) ? 1 : n.includes(last) ? 2 : 3; };
+  hits.sort((x, y) => rank(x) - rank(y) || D.deg[y] - D.deg[x]);
+  return hits.slice(0, limit);
+}
+for (const f of ['a', 'b']) {
+  const inp = $('f' + f).querySelector('input'), dd = $('dd' + f);
+  let opts = [], hi = 0;
+  const show = () => {
+    dd.innerHTML = opts.length ? opts.map((i, k) => `<div class="row${k === hi ? ' hi' : ''}" data-k="${k}" title="${esc(where(i))}">${swatch(i)}${esc(D.name[i])}<span class="n">${esc(D.projects[D.proj[i]])}</span></div>`).join('')
+      : '<div class="row muted">no match</div>';
+    dd.style.display = inp.value.trim() ? 'block' : 'none';
+  };
+  const choose = k => {
+    const i = opts[k]; if (i === undefined) return;
+    dd.style.display = 'none';
+    inp.value = D.name[i];
+    setEnd(f, i);
+    if (f === 'a' && ends.b === null) $('fb').querySelector('input').focus(); // like maps: then ask for the destination
+    else inp.blur();
+  };
+  inp.oninput = () => { opts = D ? matchNodes(inp.value, 12) : []; hi = 0; show(); };
+  inp.onfocus = () => inp.select();
+  inp.onblur = () => setTimeout(() => { dd.style.display = 'none'; renderEnds(); }, 150);
+  inp.onkeydown = e => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); hi = Math.max(0, Math.min(opts.length - 1, hi + (e.key === 'ArrowDown' ? 1 : -1))); show(); }
+    else if (e.key === 'Enter') choose(hi);
+    else if (e.key === 'Escape') inp.blur();
+  };
+  dd.onmousedown = e => { e.preventDefault(); const r = e.target.closest('[data-k]'); if (r) choose(+r.dataset.k); }; // mousedown: before blur closes the list
+  $('f' + f).querySelector('.x').onclick = () => { ends[f] = null; inp.value = ''; findRoutes(); inp.focus(); };
+}
+
+// Star context menu: opens left of the cursor on a click.
+let menuNode = -1;
+function openMenu(i, x, y) {
+  menuNode = i;
+  const p = D.projects[D.proj[i]], pi = D.proj[i];
+  const it = (act, ic, label) => `<div class="it" data-act="${act}"><span class="ic">${ic}</span>${label}</div>`;
+  const m = $('ctx');
+  m.innerHTML = `<div class="hd">${swatch(i)} <b>${esc(D.name[i])}</b><div class="muted">${esc(where(i))}</div><div class="muted">${inn[i].length} callers · ${out[i].length} callees</div></div>`
+    + it('focus', '◎', 'Show callers and callees')
+    + it('from', '<span class="pin a" style="display:inline-flex;width:13px;height:13px;font-size:9px">A</span>', 'Directions from here')
+    + it('to', '<span class="pin b" style="display:inline-flex;width:13px;height:13px;font-size:9px">B</span>', 'Directions to here')
+    + it('fly', '⌖', 'Fly here')
+    + it('search', '⌕', `Search in ${esc(p)}`)
+    + it('hide', '⊘', `Hide project ${esc(p)}`);
+  m.style.display = 'block';
+  const w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.max(8, x - w - 14) + 'px';
+  m.style.top = Math.max(8, Math.min(innerHeight - h - 8, y - 20)) + 'px';
+  $('tip').style.display = 'none';
+}
+function closeMenu() { menuNode = -1; $('ctx').style.display = 'none'; }
+$('ctx').onclick = e => {
+  const a = e.target.closest('[data-act]'); if (!a) return;
+  const i = menuNode; closeMenu();
+  const p = D.projects[D.proj[i]];
+  switch (a.dataset.act) {
+    case 'focus': return setFocus({node: i});
+    case 'from': return setEnd('a', i);
+    case 'to': return setEnd('b', i);
+    case 'fly': return flyTo(nodePos(i), 60);
+    case 'search': $('qp').value = D.proj[i]; $('q').focus(); return $('q').oninput();
+    case 'hide': hidden.add(p); return saveHidden();
+  }
+};
+$('swap').onclick = () => { [ends.a, ends.b] = [ends.b, ends.a]; findRoutes(); };
+
+function routeNodes() {
+  const s = new Set();
+  for (const r of routes) for (const i of r.idx) s.add(i);
+  return s;
+}
+async function findRoutes() {
+  const seq = ++routeSeq;
+  renderEnds();
+  routes = []; routeSel = 0; drawRoutes();
+  if (ends.a === null || ends.b === null) { $('routes').innerHTML = ''; return setFocus(focus); }
+  if (ends.a === ends.b) { $('routes').innerHTML = '<div class="muted">start and destination are the same function</div>'; return setFocus(focus); }
+  $('routes').innerHTML = '<div class="muted">finding routes…</div>';
+  const res = await (await fetch(`/route?a=${D.id[endIdx('a')]}&b=${D.id[endIdx('b')]}&k=5&${showQS()}`)).json();
+  if (seq !== routeSeq) return;
+  routes = (res.routes || []).map(r => ({...r, idx: r.nodes.map(g => idOf.get(g))}));
+  if (!routes.length) {
+    $('routes').innerHTML = `<div class="muted">no route found${res.exhausted ? '' : ' (search limit hit: a route may still exist)'}</div>`;
+    return setFocus(focus);
+  }
+  $('routes').dataset.ms = res.ms;
+  selectRoute(0);
+}
+function selectRoute(k) {
+  routeSel = k;
+  drawRoutes();
+  renderRoutes();
+  setFocus(focus);
+  const r = routes[k], box = new THREE.Box3();
+  for (const i of r.idx) box.expandByPoint(nodePos(i));
+  const sph = box.getBoundingSphere(new THREE.Sphere());
+  flyTo(sph.center, Math.max(60, sph.radius * 2.6));
+}
+function lineObj(segs, colors, width, order) {
+  const g = new LineSegmentsGeometry();
+  g.setPositions(segs); g.setColors(colors);
+  const m = new LineMaterial({linewidth: width, vertexColors: true, transparent: true, depthTest: false});
+  m.resolution.set(innerWidth, innerHeight);
+  const o = new LineSegments2(g, m); o.renderOrder = order;
+  scene.add(o); routeObjs.push(o);
+  return o;
+}
+function drawRoutes() {
+  for (const o of routeObjs) { scene.remove(o); o.geometry.dispose(); o.material.dispose(); }
+  routeObjs = [];
+  const build = (r, colorOf) => {
+    const segs = [], cols = [];
+    for (let h = 0; h < r.via.length; h++) {
+      const s = r.idx[h], t = r.idx[h+1], c = colorOf(h);
+      segs.push(D.pos[3*s], D.pos[3*s+1], D.pos[3*s+2], D.pos[3*t], D.pos[3*t+1], D.pos[3*t+2]);
+      cols.push(c.r, c.g, c.b, c.r, c.g, c.b);
+    }
+    return [segs, cols];
+  };
+  routes.forEach((r, k) => {
+    if (k === routeSel) return;
+    const [segs, cols] = build(r, () => ALT);
+    lineObj(segs, cols, 4, 10).material.opacity = 0.75;
+  });
+  if (routes[routeSel]) {
+    const r = routes[routeSel];
+    const [segs, casing] = build(r, () => CASING);
+    lineObj(segs, casing, 10, 11); // dark casing under the coloured line, as on a map
+    lineObj(segs, build(r, h => HOPCOL[r.via[h]])[1], 6, 12);
+  }
+}
+function routeSummary(r) {
+  const grpcN = r.via.filter(v => v === 'grpc').length, guesses = r.via.filter(v => v === 'iface:guess').length;
+  const projs = [];
+  for (const i of r.idx) { const p = D.projects[D.proj[i]]; if (projs[projs.length - 1] !== p) projs.push(p); }
+  return {hops: r.via.length, grpcN, guesses, projs};
+}
+function renderRoutes() {
+  $('routes').innerHTML = routes.map((r, k) => {
+    const s = routeSummary(r);
+    const head = `<div class="t">${k === 0 ? 'Best route' : 'Route ' + (k + 1)} · ${s.hops} hops</div>
+      <div class="m">${s.guesses ? `<span style="color:#ffa63d">${s.guesses} guess${s.guesses > 1 ? 'es' : ''}</span>` : 'no guesses'} · ${r.sure}/${r.iface} iface sure${s.grpcN ? ` · <span style="color:#ff4fe8">${s.grpcN} gRPC</span>` : ''}</div>
+      <div class="m">${s.projs.map(esc).join(' → ')}</div>`;
+    if (k !== routeSel) return `<div class="rt" data-r="${k}">${head}</div>`;
+    const steps = r.idx.map((i, h) => {
+      const hop = h === 0 ? '' : (() => { const [ic, cl, title] = HOP[r.via[h-1]]; return `<div class="step"><span class="ic ${cl}" title="${title}">${ic}</span><span class="m">${esc(title)}${r.methods[h-1] ? ' ' + esc(r.methods[h-1]) : ''}</span></div>`; })();
+      const pin = h === 0 ? '<span class="pin a">A</span>' : h === r.idx.length - 1 ? '<span class="pin b">B</span>' : '<span class="ic">·</span>';
+      return hop + `<div class="step">${pin}${nodeRow(i, '', '')}</div>`;
+    }).join('');
+    return `<div class="rt sel" data-r="${k}">${head}<div style="margin-top:6px">${steps}</div></div>`;
+  }).join('') + `<div class="muted">${routes.length} route${routes.length > 1 ? 's' : ''} in ${$('routes').dataset.ms} ms · fewest guesses first, then fewest hops</div>`;
+}
+$('routes').onclick = e => {
+  const n = e.target.closest('[data-n]');
+  if (n) { const j = +n.dataset.n; setFocus({node: j}); flyTo(nodePos(j), 60); return; }
+  const r = e.target.closest('[data-r]'); if (r && +r.dataset.r !== routeSel) selectRoute(+r.dataset.r);
+};
+// Clicking near an alternative route's line selects it (within 6px, screen space).
+function pickRoute(mx, my) {
+  if (!projected) project();
+  let best = -1, bd = 36;
+  routes.forEach((r, k) => {
+    if (k === routeSel) return;
+    for (let h = 0; h < r.via.length; h++) {
+      const s = r.idx[h], t = r.idx[h+1];
+      if (sz[s] <= 0 || sz[t] <= 0) continue;
+      const ax = sx[s], ay = sy[s], dx = sx[t] - ax, dy = sy[t] - ay, L = dx*dx + dy*dy;
+      const u = L ? Math.max(0, Math.min(1, ((mx - ax)*dx + (my - ay)*dy) / L)) : 0;
+      const ex = ax + u*dx - mx, ey = ay + u*dy - my, d = ex*ex + ey*ey;
+      if (d < bd) { bd = d; best = k; }
+    }
+  });
+  return best;
+}
+
+$('reset').onclick = () => {
+  ends.a = ends.b = null; closeMenu();
+  $('q').value = ''; $('qp').value = -1; $('pq').value = '';
+  for (const id of ['showCalls', 'showGrpc', 'showLabels']) $(id).checked = true;
+  $('labels').style.display = '';
+  focus = null;
+  hidden.clear(); saveSets();
+  load(true); // relayout with every added project, fit the camera, re-run (now empty) directions
+};
+
+let frames = 0, last = performance.now(), worst = 0, prev = last;
+const pv = new THREE.Vector3();
+function frame(now) {
+  requestAnimationFrame(frame);
+  worst = Math.max(worst, now - prev); prev = now;
+  if (anim) {
+    anim.t = Math.min(1, anim.t + 0.04);
+    const k = 1 - Math.pow(1 - anim.t, 3);
+    controls.target.lerpVectors(anim.fromT, anim.toT, k);
+    camera.position.lerpVectors(anim.fromP, anim.toP, k);
+    projected = false;
+    if (anim.t === 1) anim = null;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  if (!D) return;
+  if ($('labels').style.display !== 'none') {
+    for (let i = 0; i < P; i++) {
+      pv.set(D.centers[3*i], D.centers[3*i+1], D.centers[3*i+2]).project(camera);
+      const el = labels[i];
+      if (D.hidden[i] || pv.z > 1 || Math.abs(pv.x) > 1.1 || Math.abs(pv.y) > 1.1) { el.style.display = 'none'; continue; }
+      el.style.display = '';
+      el.style.left = ((pv.x + 1) / 2 * innerWidth) + 'px';
+      el.style.top = ((1 - pv.y) / 2 * innerHeight) + 'px';
+    }
+  }
+  for (const f of ['a', 'b']) {
+    const el = markers[f], i = endIdx(f);
+    if (i === undefined) { el.style.display = 'none'; continue; }
+    pv.set(D.pos[3*i], D.pos[3*i+1], D.pos[3*i+2]).project(camera);
+    if (pv.z > 1) { el.style.display = 'none'; continue; }
+    el.style.display = ''; el.style.left = ((pv.x + 1) / 2 * innerWidth) + 'px'; el.style.top = ((1 - pv.y) / 2 * innerHeight) + 'px';
+  }
+  if (mouse) {
+    const i = pickNode(mouse[0], mouse[1]);
+    if (i !== hover) {
+      hover = i;
+      const tip = $('tip');
+      if (i < 0) tip.style.display = 'none';
+      else { tip.innerHTML = `<b>${esc(D.name[i])}</b><br>${esc(where(i))}<br><span class="muted">${out[i].length} callees · ${inn[i].length} callers</span>`; tip.style.display = 'block'; }
+    }
+    if (hover >= 0) { $('tip').style.left = (mouse[0] + 14) + 'px'; $('tip').style.top = (mouse[1] + 14) + 'px'; }
+  }
+  frames++;
+  if (now - last > 1000) { // Only Chromium exposes the tab's JS heap; Safari and Firefox expose no memory figure at all.
+    const own = pageBytes();
+    const heap = performance.memory ? `JS heap ${(performance.memory.usedJSHeapSize / 2**20).toFixed(0)} MB` : '<span title="not exposed by this browser" style="cursor:help">RAM: N/A</span>';
+    const mem = `${heap} · <span title="ERAM: estimated RAM, what this page allocated itself, not the whole tab&#10;geometry buffers (GPU + JS copy): ${mb(own.gpu)}&#10;layout JSON: ${mb(own.data)}&#10;picking arrays: ${mb(own.pick)}" style="cursor:help">ERAM ${mb(own.gpu + own.data + own.pick)}</span>`;
+    $('rate').innerHTML = `${frames} fps · worst frame ${worst.toFixed(0)} ms · ${mem}`; frames = 0; last = now; worst = 0; }
+}
+requestAnimationFrame(frame);
+load(true);
+</script>
+</body></html>

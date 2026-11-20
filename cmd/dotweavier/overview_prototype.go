@@ -26,7 +26,7 @@ var overviewAssets embed.FS
 func runOverview(args []string) {
 	fl := flag.NewFlagSet("overview", flag.ExitOnError)
 	addr := fl.String("addr", "127.0.0.1:7357", "listen address")
-	ws := fl.String("workspace", defaultWorkspace(), "workspace whose projects the page lists and can sync")
+	ws := fl.String("project", defaultProjectDir(), "project folder whose projects the page lists and can sync")
 	maxNodes := fl.Int("max-nodes", 20000, "draw at most N functions: cross-project ones first, then the most connected (0: no cap)")
 	_ = fl.Parse(args)
 
@@ -79,7 +79,7 @@ func runOverview(args []string) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{"routes": routes, "exhausted": exhausted, "ms": ms})
 	})
-	// Projects detected under the workspace, with whether and when each was indexed.
+	// Projects detected under the project folder, with whether and when each was indexed.
 	mux.HandleFunc("GET /projects", func(w http.ResponseWriter, _ *http.Request) {
 		ps, err := src.Detect()
 		if err != nil {
@@ -87,7 +87,7 @@ func runOverview(args []string) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"workspace": *ws, "projects": ps})
+		json.NewEncoder(w).Encode(map[string]any{"root": *ws, "projects": ps})
 	})
 	// A custom header forces a CORS preflight, which this server never answers,
 	// so other sites open in the browser cannot trigger indexing or delete indexes.
@@ -121,9 +121,61 @@ func runOverview(args []string) {
 		return map[string]any{"removed": removed}, err
 	})
 	mux.Handle("GET /overview_prototype_assets/", http.FileServerFS(overviewAssets))
+	// Field trace page, served so it can continue a trace: GET /ui/trace-field.html?t=RUN
+	// (the same static page the CLI writes), GET /trace-field-history/RUN.js, and
+	// POST /trace-field?addr=ADDR, which traces like the CLI, saves the run and returns its name.
+	mux.HandleFunc("GET /ui/trace-field.html", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(fieldUITemplate))
+	})
+	mux.Handle("GET /trace-field-history/", http.StripPrefix("/trace-field-history/", http.FileServer(http.Dir(historyDir()))))
+	// GET /source?loc=[project:]rel/path[:LINE]: a whole file of an indexed project, for the
+	// field page's viewer. The header guard keeps other sites from reading it (no CORS reply).
+	mux.HandleFunc("GET /source", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Dotweavier") != "1" {
+			http.Error(w, "missing X-Dotweavier header", http.StatusForbidden)
+			return
+		}
+		f, err := domain.Source(*ws, r.URL.Query().Get("loc"))
+		w.Header().Set("Content-Type", "application/json")
+		if err != nil {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			json.NewEncoder(w).Encode(map[string]any{"error": err.Error()})
+			return
+		}
+		json.NewEncoder(w).Encode(f)
+	})
+	mux.HandleFunc("POST /trace-field", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Dotweavier") != "1" { // same CSRF guard as sync and remove
+			http.Error(w, "missing X-Dotweavier header", http.StatusForbidden)
+			return
+		}
+		a := r.URL.Query().Get("addr")
+		t0 := time.Now()
+		reply := func(code int, v map[string]any) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(code)
+			json.NewEncoder(w).Encode(v)
+		}
+		tr, err := domain.TraceField(*ws, a, false, 10)
+		var name string
+		if err == nil {
+			var data []byte
+			if data, err = fieldData(tr, a, 0); err == nil {
+				name, err = saveFieldRun(data, a)
+			}
+		}
+		fmt.Fprintf(os.Stderr, "trace field %s: run=%s err=%v (%s)\n", a, name, err, time.Since(t0).Round(time.Millisecond))
+		if err != nil {
+			reply(http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
+			return
+		}
+		reply(http.StatusOK, map[string]any{"run": name})
+	})
 
 	ln, err := net.Listen("tcp", *addr) // loopback by default: the page exposes source names
 	must(err)
 	fmt.Printf("overview -> http://%s/\n", ln.Addr())
+	fmt.Printf("field traces -> http://%s/ui/trace-field.html\n", ln.Addr())
 	must(http.Serve(ln, mux))
 }

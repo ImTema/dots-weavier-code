@@ -76,7 +76,7 @@ type hit struct {
 type tracker struct {
 	fset       *token.FileSet
 	tests      bool
-	modules    []string // workspace module paths: their structs' fields are shared locations
+	modules    []string // module paths of the loaded projects: their structs' fields are shared locations
 	own        map[*types.Package]bool
 	fields     map[fieldKey]*types.Var  // for the field's type and package name
 	fieldUses  map[fieldKey][]ssa.Value // *ssa.FieldAddr, *ssa.Field and getter *ssa.Call
@@ -251,7 +251,7 @@ func (t *tracker) getter(c *ssa.CallCommon) (fieldKey, *types.Var, bool) {
 }
 
 // fieldOf names the field selected from a struct or pointer to struct. Only named
-// structs declared in the workspace are shared locations (ok); a field of a library
+// structs declared in the projects are shared locations (ok); a field of a library
 // struct (uuid.NullUUID.UUID, ...) or an anonymous one stays part of its object,
 // otherwise every UUID in a project would meet in uuid.NullUUID.UUID.
 func (t *tracker) fieldOf(typ types.Type, i int) (k fieldKey, v *types.Var, ok bool) {
@@ -1138,7 +1138,7 @@ func traceField(projects []project, home project, file string, line int, tests b
 		}
 		return progs
 	}
-	// The workspace import scan only matters once fields are reached; run it meanwhile.
+	// The import scan of every project only matters once fields are reached; run it meanwhile.
 	impsC := make(chan map[string][]project, 1)
 	go func() { impsC <- importers(projects) }()
 	prog := loadAll([]project{home})[0]

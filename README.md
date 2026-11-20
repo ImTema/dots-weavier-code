@@ -16,10 +16,10 @@ go build -o dotweavier ./cmd/dotweavier
 
 ### 1. Index
 
-Run it from a workspace directory, or pass `--workspace DIR`. dotweavier treats every directory under the workspace that contains a `go.mod`, `pom.xml`, `build.gradle(.kts)` or `settings.gradle(.kts)` as a project. Java and Kotlin projects are read from source, without building them (`docs/adr/0007-jvm-extractor-from-source.md`). A project's name is its path relative to the workspace.
+Run it from a project folder, or pass `--project DIR`. dotweavier treats every directory under it that contains a `go.mod`, `pom.xml`, `build.gradle(.kts)` or `settings.gradle(.kts)` as a project. Java and Kotlin projects are read from source, without building them (`docs/adr/0007-jvm-extractor-from-source.md`). A project's name is its path relative to that folder.
 
 ```sh
-dotweavier index                    # every project under the workspace
+dotweavier index                    # every project under the current folder
 dotweavier index orders pricing     # only these projects
 ```
 

@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- PROTOTYPE, throwaway (branch prototype/overview): whole-workspace galaxy overview. -->
+<!-- PROTOTYPE, throwaway (branch prototype/overview): galaxy overview of every indexed project. -->
 <html><head><meta charset="utf-8"><title>dotweavier overview (prototype)</title>
 <style>
 html,body{margin:0;height:100%;background:#02030a;color:#cdd5ff;font:12px/1.45 ui-monospace,Menlo,monospace;overflow:hidden}
@@ -179,7 +179,7 @@ const added = new Set(JSON.parse(localStorage.getItem('dw.added') || '[]'));
 const hidden = new Set(JSON.parse(localStorage.getItem('dw.hidden') || '[]'));
 const shownProjects = () => [...added].filter(p => !hidden.has(p));
 const showQS = () => shownProjects().map(p => 'show=' + encodeURIComponent(p)).join('&');
-let detected = [], workspace = '';
+let detected = [], root = '';
 const syncing = new Set(), syncErr = new Map(), syncNote = new Map(); // note: short-lived "up to date" / "synced"
 const m4 = new THREE.Matrix4(), v = new THREE.Vector3(), q4 = new THREE.Quaternion(), s3 = new THREE.Vector3();
 const where = i => `${D.projects[D.proj[i]]}:${D.files[D.file[i]]}:${D.line[i]}`;
@@ -267,7 +267,7 @@ async function load(refit) {
     if (seq === loadSeq) $('pp').classList.remove('busy');
   }
   if (seq !== loadSeq) return; // a newer toggle already asked for another layout
-  detected = det.projects || []; workspace = det.workspace;
+  detected = det.projects || []; root = det.root;
   // In overview = indexed, however it was indexed (Sync here or the CLI); Remove deletes the index.
   // Only show/hide is a per-browser choice. A changed set needs a layout for the new set.
   const indexed = new Set(detected.filter(d => d.indexed).map(d => d.name));
@@ -339,7 +339,7 @@ async function load(refit) {
   findRoutes();
 }
 
-// Project panel (top right): every project detected in the workspace. Nothing is
+// Project panel (top right): every project detected under the project folder. Nothing is
 // in the overview until you press Sync, which re-indexes the project and adds it.
 // Added projects get a checkbox (show/hide), Sync again to re-index, × to remove.
 // The search box filters the list; all/none apply to added projects it matches.
@@ -387,7 +387,7 @@ function renderProjects() {
     return `<div class="sec" data-sec="${id}" title="click to ${open ? 'collapse' : 'expand'}"><span class="tw">${open ? '▾' : '▸'}</span>${title} (${list.length})</div>`
       + (open ? list.map(rootRow).join('') || `<div class="muted">${empty}</div>` : '');
   };
-  $('ws').textContent = workspace;
+  $('ws').textContent = root;
   $('projects').innerHTML = sec('added', 'IN OVERVIEW', inOverview, 'none yet') + sec('detected', 'PROJECTS DETECTED', rest, 'all added');
 }
 $('pq').oninput = () => renderProjects();

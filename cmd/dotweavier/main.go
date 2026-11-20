@@ -1,7 +1,7 @@
 // The dotweavier CLI: parses flags, calls internal/domain and renders its
 // results as text or as a self-contained HTML page.
 //
-//	dotweavier index [--workspace DIR] [project ...]
+//	dotweavier index [--project DIR] [project ...]
 //	dotweavier trace path -A <addr> -B <addr> [--max-paths 10] [--include-tests]
 //	dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--depth N] [--include-tests] [--format text|ui]
 //
@@ -26,9 +26,9 @@ import (
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
-  dotweavier index [--workspace DIR] [project ...]   (no projects: every go.mod under the workspace)
+  dotweavier index [--project DIR] [project ...]   (no names: every project under DIR)
   dotweavier trace path -A <addr> -B <addr> [--max-paths N] [--include-tests] [--format text|ui]
-  dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--workspace DIR] [--depth N] [--include-tests] [--max-projects N] [--format text|ui]`)
+  dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--project DIR] [--depth N] [--include-tests] [--max-projects N] [--format text|ui]`)
 	os.Exit(2)
 }
 
@@ -62,15 +62,15 @@ func main() {
 	fmt.Fprintf(os.Stderr, "wall=%s maxRSS=%dMB\n", time.Since(start).Round(time.Millisecond), ru.Maxrss>>20) // darwin: bytes
 }
 
-// defaultWorkspace is the current directory, made absolute so stored file paths stay relative to projects.
-func defaultWorkspace() string {
+// defaultProjectDir is the current directory, made absolute so stored file paths stay relative to projects.
+func defaultProjectDir() string {
 	wd, _ := os.Getwd()
 	return wd
 }
 
 func runIndex(args []string) {
 	fl := flag.NewFlagSet("index", flag.ExitOnError)
-	ws := fl.String("workspace", defaultWorkspace(), "workspace root")
+	ws := fl.String("project", defaultProjectDir(), "project folder; projects (and modules) under it are found by their manifest")
 	_ = fl.Parse(args)
 	must(domain.Index(*ws, fl.Args(), func(project, stats string, err error) {
 		if err != nil {
@@ -115,7 +115,7 @@ func runTrace(args []string) {
 
 func runTraceField(args []string) {
 	fl := flag.NewFlagSet("trace field", flag.ExitOnError)
-	ws := fl.String("workspace", defaultWorkspace(), "workspace root")
+	ws := fl.String("project", defaultProjectDir(), "project folder; projects (and modules) under it are found by their manifest")
 	depth := fl.Int("depth", 0, "text: print at most N levels of each tree (0: all); ui: levels open at first (0: 6)")
 	tests := fl.Bool("include-tests", false, "include test code (_test.go, mock/fake packages)")
 	maxProjects := fl.Int("max-projects", 10, "load at most N projects when following fields shared across projects")
@@ -140,7 +140,8 @@ func runTraceField(args []string) {
 		data, err := fieldData(r, pos[0], *depth)
 		must(err)
 		page := writeUI("trace-field.html", []byte(fieldUITemplate))
-		name := saveFieldRun(data, pos[0])
+		name, err := saveFieldRun(data, pos[0])
+		must(err)
 		fmt.Printf("lifecycle of %s -> file://%s?t=%s\n", pos[0], page, name)
 	default:
 		fmt.Fprintf(os.Stderr, "%d steps\n", lifecycle(os.Stdout, r, *depth))
@@ -321,13 +322,17 @@ func fieldData(r *domain.FieldTrace, addr string, open int) ([]byte, error) {
 // <time>_<address>.js, plus latest.js, and rewrites index.js (window.HISTORY, newest
 // first) so the page can list past runs. It returns the run's name for ?t=.
 // ponytail: history is never pruned; add a cap when the folder grows large.
-func saveFieldRun(data []byte, addr string) string {
-	home, _ := os.UserHomeDir()
-	dir := filepath.Join(home, ".dotweavier", "trace-field-history")
-	must(os.MkdirAll(dir, 0o755))
+func saveFieldRun(data []byte, addr string) (string, error) {
+	dir := historyDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
 	name := time.Now().Format("20060102-150405") + "_" + traceName(addr)
-	must(os.WriteFile(filepath.Join(dir, name+".js"), data, 0o644))
-	must(os.WriteFile(filepath.Join(dir, "latest.js"), data, 0o644))
+	for _, f := range []string{name + ".js", "latest.js"} {
+		if err := os.WriteFile(filepath.Join(dir, f), data, 0o644); err != nil {
+			return "", err
+		}
+	}
 
 	type run struct {
 		Name string `json:"name"`
@@ -350,9 +355,15 @@ func saveFieldRun(data []byte, addr string) string {
 		runs = append(runs, run{n, head.Addr, t.Format("2006-01-02 15:04:05")})
 	}
 	js, err := json.Marshal(runs)
-	must(err)
-	must(os.WriteFile(filepath.Join(dir, "index.js"), append(append([]byte("window.HISTORY = "), js...), ";\n"...), 0o644))
-	return name
+	if err != nil {
+		return "", err
+	}
+	return name, os.WriteFile(filepath.Join(dir, "index.js"), append(append([]byte("window.HISTORY = "), js...), ";\n"...), 0o644)
+}
+
+func historyDir() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".dotweavier", "trace-field-history")
 }
 
 // traceName turns an address into a file name: golang/orders:a/b.go:45 -> golang_orders_a_b.go_45.

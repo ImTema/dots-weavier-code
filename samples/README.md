@@ -112,7 +112,7 @@ library's in-process fake (`pstest`).
 directory, the project names are their paths, such as `golang/orders`:
 
 ```sh
-dotweavier index --workspace samples
+dotweavier index --project samples
 dotweavier trace path -A golang/orders::Handler.placeOrder -B golang/pricing::TierRule.Discount
 # 1. Handler.placeOrder -call-> Service.Place -iface:sure-> Client.Price
 #    -grpc /pricing.v1.PricingService/Quote-> Server.Quote -call-> Calculate

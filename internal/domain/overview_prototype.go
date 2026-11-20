@@ -1,5 +1,5 @@
 // PROTOTYPE, throwaway (branch prototype/overview): data and layout for a
-// whole-workspace galaxy overview. Answers "is a galaxy of every indexed function
+// galaxy overview of every indexed project. Answers "is a galaxy of every indexed function
 // readable and fast?" before the real `dotweavier serve` Overview tab is designed.
 package domain
 
@@ -45,7 +45,7 @@ type OverviewGraph struct {
 }
 
 // OverviewSource is every index merged once; Build lays it out per request and
-// Sync re-indexes one project of the workspace, then merges again.
+// Sync re-indexes one project, then merges again.
 type OverviewSource struct {
 	ws   string
 	mu   sync.RWMutex // guards g: Sync swaps it while requests read it
@@ -71,7 +71,7 @@ func mergedGraph() (*graph, error) {
 	return g, nil
 }
 
-// DetectedProject is one go.mod under the workspace and the state of its index.
+// DetectedProject is one project under the project folder and the state of its index.
 type DetectedProject struct {
 	Name    string    `json:"name"`
 	Indexed bool      `json:"indexed"`
@@ -82,7 +82,7 @@ type DetectedProject struct {
 	Links   map[string]int `json:"links,omitempty"` // outgoing link hops by kind
 }
 
-// Detect lists the workspace's projects; it reads only each index's meta row.
+// Detect lists the projects under the project folder; it reads only each index's meta row.
 func (src *OverviewSource) Detect() ([]DetectedProject, error) {
 	ps, err := discover(src.ws)
 	if err != nil {
@@ -151,7 +151,7 @@ func indexBuilt(project string) (time.Time, bool) {
 	return t, err == nil
 }
 
-// detected returns the workspace project with this name. Request input is only
+// detected returns the detected project with this name. Request input is only
 // ever turned into a store path through a name discover produced.
 func (src *OverviewSource) family(name string) ([]project, error) {
 	ps, err := discover(src.ws)

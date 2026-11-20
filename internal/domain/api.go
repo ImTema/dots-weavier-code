@@ -197,6 +197,7 @@ type FieldStep struct {
 	Via    string       `json:"via,omitempty"` // call site, for parameters
 	Kids   []*FieldStep `json:"kids,omitempty"`
 	Call   *Path        `json:"call,omitempty"` // best indexed call path between the seed's function and this step's
+	Hops   []Hop        `json:"hops,omitempty"` // calls from this step's function into other projects
 }
 
 type FieldTrace struct {
@@ -235,6 +236,12 @@ func TraceField(ws, addr string, tests bool, maxProjects int) (*FieldTrace, erro
 	if err != nil {
 		return nil, err
 	}
+	return fieldTrace(t, home, projects, file, line), nil
+}
+
+// fieldTrace turns a Go tracker's walks into the two trees, with call paths and hops.
+func fieldTrace(t *tracker, home project, projects []project, file string, line int) *FieldTrace {
+	projects = slices.Clone(projects)
 	slices.SortFunc(projects, func(a, b project) int { return cmp.Compare(len(b.dir), len(a.dir)) })
 	p := &printer{t: t, home: home, projects: projects, src: map[string][]string{}}
 	r := &FieldTrace{}
@@ -245,7 +252,7 @@ func TraceField(ws, addr string, tests bool, maxProjects int) (*FieldTrace, erro
 		r.Uses = append(r.Uses, p.step(n))
 	}
 	attachCalls(r, home.Name, p.rel(file), line)
-	return r, nil
+	return r
 }
 
 // step converts a tnode; kids are ordered by location, overwrites come last.

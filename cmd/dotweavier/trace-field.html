@@ -70,11 +70,19 @@ function buildMenu(){const H=window.HISTORY||[], m=document.getElementById('hist
   addEventListener('mousedown',e=>{if(!m.contains(e.target)&&e.target!==btn)m.classList.remove('open');});
   addEventListener('keydown',e=>{if(e.key==='Escape')m.classList.remove('open');});}
 const escH=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-loadScript(HIST+'index.js',()=>{buildMenu(); loadScript(HIST+encodeURIComponent(traceName)+'.js',()=>start(window.TRACE),noData);});
+// An exported page (--export, or the export button) carries its run inline: no history, no server.
+if(window.EXPORTED){document.getElementById('menuBtn').remove(); start(window.TRACE);}
+else loadScript(HIST+'index.js',()=>{buildMenu(); loadScript(HIST+encodeURIComponent(traceName)+'.js',()=>start(window.TRACE),noData);});
 function noData(){document.body.insertAdjacentHTML('beforeend',`<div style="position:absolute;inset:40% 0 auto;text-align:center;color:#ff7a7a">no trace data at trace-field-history/${traceName.replace(/[<>&]/g,'')}.js<br><span style="color:#8b93c4">run: dotweavier trace field ADDR --format ui</span></div>`);}
 function start(D){
+// Served by `dotweavier overview` (http), the page can ask the server to run traces;
+// from file:// it can only show them.
+const served=location.protocol.startsWith('http')&&!window.EXPORTED;
+const home=(D.addr.match(/^([^:]+):[^:]+\.(go|java|kt):\d+$/)||[])[1]||'';
 const KIND = {seed:'#ffffff',assign:'#6878b8',convert:'#6be4ff',transform:'#ffd06b',arg:'#7aa2ff',return:'#b88bff',
-  store:'#ff9b6b',read:'#6dffc6',field:'#ff7ad9',container:'#c4ff6b',capture:'#9aa2d0','callback?':'#ffb35c',overwritten:'#ff5c5c'};
+  store:'#ff9b6b',read:'#6dffc6',field:'#ff7ad9',container:'#c4ff6b',capture:'#9aa2d0','callback?':'#ffb35c',overwritten:'#ff5c5c',
+  grpc:'#ff4fe8',http:'#ff8c4f',pubsub:'#c88bff','pubsub:guess':'#a77bd6'};
+const mk=k=>'a'+k.replace(/[^a-z]/g,''); // marker id per kind
 const NW=300, NH=40, COL=360, ROW=52;
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const cut=(s,n)=>s&&s.length>n?s.slice(0,n-1)+'…':(s||'');
@@ -82,12 +90,14 @@ const cut=(s,n)=>s&&s.length>n?s.slice(0,n-1)+'…':(s||'');
 // ---- model: center = seed; origin kids grow left (side -1), uses kids grow right (side 1) ----
 let all=[];
 // Open the first levels; a step with one way on stays open so chains read through.
-function wrap(d,side,depth,parent){const n={d,side,depth,parent,open:depth<(D.open||6)||(d.kids||[]).length<=1,kids:[]}; all.push(n);
-  n.kids=(d.kids||[]).map(k=>wrap(k,side,depth+1,n)); return n;}
+function wrap(d,side,depth,parent,j){const n={d,side,depth,parent,path:parent.path.concat(j),open:depth<(D.open||6)||(d.kids||[]).length<=1||isHop(d),kids:[]}; all.push(n);
+  n.kids=(d.kids||[]).map((k,j)=>wrap(k,side,depth+1,n,j)); return n;}
+const isHop=d=>/^(grpc|http|pubsub)/.test(d.kind);
+const openHops=d=>(d.hops||[]).filter(h=>!h.followed).length;
 const centers=[];
 (D.uses||[]).forEach((u,i)=>{const o=(D.origin||[]).find(o=>o.loc===u.loc)||{kids:[]};
-  const c={d:u,side:0,depth:0,parent:null,open:true,kids:[]}; all.push(c);
-  c.left=(o.kids||[]).map(k=>wrap(k,-1,1,c)); c.right=(u.kids||[]).map(k=>wrap(k,1,1,c)); centers.push(c);});
+  const c={d:u,side:0,depth:0,parent:null,path:[i],open:true,kids:[]}; all.push(c);
+  c.left=(o.kids||[]).map((k,j)=>wrap(k,-1,1,{path:[]},j)); c.left.forEach(k=>k.parent=c); c.right=(u.kids||[]).map((k,j)=>wrap(k,1,1,c,j)); centers.push(c);});
 const nOrigin=all.filter(n=>n.side<0).length, nUses=all.filter(n=>n.side>0).length;
 
 // ---- layout: tidy tree per side, leaves stacked, parents centered on their children ----
@@ -117,17 +127,17 @@ function draw(){layout(); const vs=visible(); const q=document.getElementById('q
     // origin edges run child -> parent, lifecycle edges parent -> child
     let x1,x2; if(n.side<0){x1=n.x+NW/2; x2=p.x-NW/2;} else {x1=p.x+NW/2; x2=n.x-NW/2;}
     const [y1,y2]=n.side<0?[n.y,p.y]:[p.y,n.y], mx=(x1+x2)/2;
-    h+=`<path class="edge" stroke="${c}" ${n.d.kind==='overwritten'||n.d.kind==='callback?'?'stroke-dasharray="5 4"':''} d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" marker-end="url(#a${n.d.kind.replace('?','')})"/>`;}
+    h+=`<path class="edge" stroke="${c}" ${n.d.kind==='overwritten'||n.d.kind==='callback?'?'stroke-dasharray="5 4"':''} d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" marker-end="url(#${mk(n.d.kind)})"/>`;}
   vs.forEach((n,i)=>{const d=n.d, c=KIND[d.kind]||'#888', match=q&&(JSON.stringify(d.kids?{...d,kids:0}:d).toLowerCase().includes(q));
     const more=!n.open&&n.kids.length?` ▸${count(n)}`:'';
     const line2=d.kind==='field'?(d.type||''):cut(d.code,44);
     h+=`<g class="node ${q&&!match?'dim':''} ${match?'hit':''} ${sel===n?'sel':''}" data-i="${i}" transform="translate(${n.x-NW/2},${n.y-NH/2})">
       <rect width="${NW}" height="${NH}" fill="${d.kind==='field'?'#2a0f2d':'#0b0f2a'}" stroke="${c}" ${d.kind==='overwritten'?'stroke-dasharray="4 3"':''}/>
       <rect width="5" height="${NH}" fill="${c}" stroke="none" rx="2"/>
-      <text class="t1" x="12" y="16"><tspan fill="${c}">${esc(d.kind)}</tspan> ${esc(cut(title(n),36))}<tspan fill="#ff7ad9">${more}</tspan></text>
+      <text class="t1" x="12" y="16"><tspan fill="${c}">${esc(d.kind)}</tspan> ${esc(cut(title(n),36))}<tspan fill="#ff7ad9">${more}</tspan>${n.side>=0&&openHops(d)?`<tspan fill="#ff4fe8"> ⇢${openHops(d)}</tspan>`:''}</text>
       <text class="t2" x="12" y="31">${esc(line2)}</text></g>`;});
   g.innerHTML=h; window._vs=vs;
-  svg.querySelector('defs').innerHTML=Object.entries(KIND).map(([k,c])=>`<marker id="a${k.replace('?','')}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="${c}"/></marker>`).join('');
+  svg.querySelector('defs').innerHTML=Object.entries(KIND).map(([k,c])=>`<marker id="${mk(k)}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="${c}"/></marker>`).join('');
   apply();}
 function count(n){return n.kids.reduce((s,k)=>s+1+count(k),0);}
 // focus: fit the anchor (the selected box, else the seed) and up to 2 columns of boxes
@@ -179,7 +189,7 @@ const side=document.getElementById('side');
 side.innerHTML=`<div class="ctl"><h1>DOTWEAVIER · LIFECYCLE</h1><div class="ep">${esc(D.addr)}</div>
  <div class="hint">${nOrigin} origin steps ◀ seed ▶ ${nUses} lifecycle steps</div>
  <input id="q" placeholder="search: file, code, field, type…"><div class="hint" id="hits"></div>
- <button id="ea">expand all</button><button id="ca">collapse all</button><button id="fi">fit</button><button id="fo">focus</button>
+ <button id="ea">expand all</button><button id="ca">collapse all</button><button id="fi">fit</button><button id="fo">focus</button>${served?`<a href="/trace-field/export?run=${encodeURIComponent(traceName)}" download><button>export html</button></a>`:''}${served&&all.some(n=>n.side>=0&&openHops(n.d))?`<br><button id="fa">follow all hops</button> <select id="fd"><option>1</option><option selected>2</option><option>3</option></select> services deep <span class="hint" id="faMsg"></span>`:''}
 
  </div><div id="det"></div>`;
 document.getElementById('legend').innerHTML=Object.entries(KIND).map(([k,c])=>`<span class="lg"><i style="background:${c}"></i>${k}</span>`).join('');
@@ -188,16 +198,25 @@ document.getElementById('ea').onclick=()=>setAll(true);
 document.getElementById('ca').onclick=()=>setAll(false);
 document.getElementById('fi').onclick=()=>fit();
 document.getElementById('fo').onclick=focusView;
+document.getElementById('fa')?.addEventListener('click',()=>follow({depth:document.getElementById('fd').value}));
 function details(){calls(); const el=document.getElementById('det'); if(!sel){el.innerHTML='<div class="hint">select a node for details</div>';return;}
   const d=sel.d, ln=+(d.loc||'').split(':').pop()||0, c=KIND[d.kind]||'#888', dir=d.kind==='overwritten'?'another value written into the field on its left; not traced here':
     sel.side<0?'flows into the step on its right':sel.side>0?'flows from the step on its left':'the traced value';
   el.innerHTML=`<span class="k" style="background:${c}">${esc(d.kind)}</span> <span class="hint">${dir}</span>`+
     (d.name?`<div class="row">field <b>${esc(d.name)}</b></div>`:'')+(d.loc?`<div class="row">at <b>${esc(d.loc)}</b>${served?' <button id="vf">view file</button>':''}</div>`:'')+
     (d.fn?`<div class="row">in <b>${esc(d.fn)}</b></div>`:'')+(d.type?`<div class="row">type <b>${esc(d.type)}</b></div>`:'')+
-    (d.via?`<div class="row">called at <b>${esc(d.via)}</b></div>`:'')+(d.code?`<pre>${d.before?`<span class="ctx"><span class="ln">${ln-1}</span>${esc(d.before)}</span>\n`:''}<span class="ln">${ln}</span><b>${esc(d.code)}</b>${d.after?`\n<span class="ctx"><span class="ln">${ln+1}</span>${esc(d.after)}</span>`:''}</pre>`:'')+
+    (d.via?`<div class="row">called at <b>${esc(d.via)}</b></div>`:'')+
+    ((d.hops||[]).length&&sel.side>=0?`<div class="row">calls other services:</div>`+d.hops.map((h,k)=>`<div class="row"><span class="k" style="background:${KIND[h.kind]||'#888'}">${esc(h.kind)}</span> ${esc(h.method)} → <b>${esc(h.project)}</b> ${esc(h.fn)} ${h.followed?'<span class="hint">followed</span>':served?`<button class="fh" data-k="${k}">follow ⇢</button>`:''}</div>`).join('')+'<div class="hint" id="fhMsg"></div>':'')+(d.code?`<pre>${d.before?`<span class="ctx"><span class="ln">${ln-1}</span>${esc(d.before)}</span>\n`:''}<span class="ln">${ln}</span><b>${esc(d.code)}</b>${d.after?`\n<span class="ctx"><span class="ln">${ln+1}</span>${esc(d.after)}</span>`:''}</pre>`:'')+
     (sel.kids.length?`<div class="row">${count(sel)} steps ${sel.side<0?'further back':'further on'}</div>`:'')+
     '';
-  document.getElementById('vf')?.addEventListener('click',()=>viewFile(qualify(d.loc)));}
+  document.getElementById('vf')?.addEventListener('click',()=>viewFile(qualify(d.loc)));
+  document.querySelectorAll('#det .fh').forEach(b=>b.onclick=()=>follow({path:sel.path.join('.'),hop:b.dataset.k},sel.path));}
+// Following a hop: the server traces the handler's request in its project, grafts it under
+// the step and saves a new run; the page opens that run with the step selected again.
+async function follow(q,keep){const msg=document.getElementById('fhMsg')||document.getElementById('faMsg'); msg.textContent='following…';
+  try{const r=await fetch('/trace-field/follow?'+new URLSearchParams({run:traceName,...q}),{method:'POST',headers:{'X-Dotweavier':'1'}}); const j=await r.json();
+    if(!r.ok)throw new Error(j.error||r.statusText); location.search='?'+new URLSearchParams({t:j.run,...(keep?{sel:keep.join('.')}:{})});}
+  catch(e){msg.textContent=String(e.message||e);}}
 // Whole-file viewer (served pages only): line numbers, the step's line highlighted and scrolled to.
 async function viewFile(loc){const v=document.getElementById('viewer'), body=document.getElementById('vBody'), t=document.getElementById('vTitle');
   t.textContent=loc; body.textContent='loading…'; v.classList.add('open');
@@ -213,13 +232,12 @@ addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('view
 // Served by `dotweavier overview` (http), the page can ask the server to run a trace;
 // from file:// it can only show the command. Step locations of the home project carry
 // no project prefix ("rel.go:LINE"); the server needs the full address.
-const served=location.protocol.startsWith('http');
-const home=(D.addr.match(/^([^:]+):[^:]+\.go:\d+$/)||[])[1]||'';
 function qualify(loc){return home&&loc.split(':').length===2?home+':'+loc:loc;}
 async function traceFrom(addr){const msg=document.getElementById('vMsg'); msg.textContent='tracing '+addr+'…';
   try{const r=await fetch('/trace-field?addr='+encodeURIComponent(addr),{method:'POST',headers:{'X-Dotweavier':'1'}}); const j=await r.json();
     if(!r.ok)throw new Error(j.error||r.statusText); location.search='?t='+encodeURIComponent(j.run);}
   catch(e){msg.textContent=String(e.message||e);}}
+const want=new URLSearchParams(location.search).get('sel'); if(want){sel=all.find(n=>n.side>=0&&n.path.join('.')===want)||null; for(let p=sel?.parent;p;p=p.parent)p.open=true; if(sel)sel.open=true;}
 details(); draw(); focusView(); addEventListener('resize',focusView);
 }
 </script>

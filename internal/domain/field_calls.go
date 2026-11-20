@@ -45,8 +45,11 @@ func attachCalls(r *FieldTrace, home, seedFile string, seedLine int) {
 	walk = func(ss []*FieldStep) {
 		for _, s := range ss {
 			if a, ok := stepAddr(s.Loc, home); ok {
-				if n, err := g.resolve(a, false); err == nil && n != seed {
-					s.Call = best(n)
+				if n, err := g.resolve(a, false); err == nil {
+					s.Hops = hopsOf(g, n)
+					if n != seed {
+						s.Call = best(n)
+					}
 				}
 			}
 			walk(s.Kids)

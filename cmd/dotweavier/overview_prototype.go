@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"dotweavier/internal/domain"
@@ -145,6 +146,80 @@ func runOverview(args []string) {
 		}
 		json.NewEncoder(w).Encode(f)
 	})
+	// POST /trace-field/follow?run=RUN&path=I.J.K&hop=N follows hop N of the lifecycle step at
+	// path (indexes from the run's uses down through kids) into its handler's project.
+	// Without path it follows every hop, depth=D services deep. Either way the result is
+	// saved as a new run, whose name it returns.
+	// GET /trace-field/export?run=RUN: the run as one self-contained HTML file, for download.
+	mux.HandleFunc("GET /trace-field/export", func(w http.ResponseWriter, r *http.Request) {
+		name := r.URL.Query().Get("run")
+		run, err := loadFieldRun(name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+		data, err := fieldData(&domain.FieldTrace{Origin: run.Origin, Uses: run.Uses}, run.Addr, run.Open)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="trace-field_`+traceName(run.Addr)+`.html"`)
+		w.Write(exportField(data))
+	})
+	mux.HandleFunc("POST /trace-field/follow", func(w http.ResponseWriter, r *http.Request) {
+		reply := func(code int, v map[string]any) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(code)
+			json.NewEncoder(w).Encode(v)
+		}
+		if r.Header.Get("X-Dotweavier") != "1" {
+			reply(http.StatusForbidden, map[string]any{"error": "missing X-Dotweavier header"})
+			return
+		}
+		q := r.URL.Query()
+		run, err := loadFieldRun(q.Get("run"))
+		if err != nil {
+			reply(http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
+			return
+		}
+		tr := &domain.FieldTrace{Origin: run.Origin, Uses: run.Uses}
+		t0 := time.Now()
+		if q.Get("path") == "" {
+			depth, _ := strconv.Atoi(q.Get("depth"))
+			n, errs := domain.FollowHops(*ws, tr, max(depth, 1), maxFollow, false, 10)
+			if n == 0 && len(errs) > 0 {
+				err = errs[0]
+			}
+		} else {
+			var path []int
+			for _, p := range strings.Split(q.Get("path"), ".") {
+				i, perr := strconv.Atoi(p)
+				if perr != nil {
+					err = fmt.Errorf("bad path %q", q.Get("path"))
+					break
+				}
+				path = append(path, i)
+			}
+			if err == nil {
+				k, _ := strconv.Atoi(q.Get("hop"))
+				err = domain.FollowHop(*ws, tr, path, k, false, 10)
+			}
+		}
+		var name string
+		if err == nil {
+			var data []byte
+			if data, err = fieldData(tr, run.Addr, run.Open); err == nil {
+				name, err = saveFieldRun(data, run.Addr)
+			}
+		}
+		fmt.Fprintf(os.Stderr, "follow %s path=%s hop=%s: run=%s err=%v (%s)\n", q.Get("run"), q.Get("path"), q.Get("hop"), name, err, time.Since(t0).Round(time.Millisecond))
+		if err != nil {
+			reply(http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
+			return
+		}
+		reply(http.StatusOK, map[string]any{"run": name})
+	})
 	mux.HandleFunc("POST /trace-field", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("X-Dotweavier") != "1" { // same CSRF guard as sync and remove
 			http.Error(w, "missing X-Dotweavier header", http.StatusForbidden)
@@ -158,6 +233,9 @@ func runOverview(args []string) {
 			json.NewEncoder(w).Encode(v)
 		}
 		tr, err := domain.TraceField(*ws, a, false, 10)
+		if n, _ := strconv.Atoi(r.URL.Query().Get("follow")); err == nil && n > 0 {
+			domain.FollowHops(*ws, tr, n, maxFollow, false, 10) // a hop that fails stays unfollowed
+		}
 		var name string
 		if err == nil {
 			var data []byte

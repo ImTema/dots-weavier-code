@@ -85,6 +85,7 @@ type tracker struct {
 	callees    map[ssa.CallInstruction][]*ssa.Function
 	callers    map[*ssa.Function][]ssa.CallInstruction
 	fwd, back  *walk
+	seedOK     func(ssa.Value) bool // nil: every value on the line is a seed
 }
 
 func newTracker(fset *token.FileSet, tests bool, modules []string) *tracker {
@@ -855,7 +856,7 @@ func (t *tracker) seeds(prog *ssa.Program, file string, line int) []ssa.Value {
 				derived = derived || cand[*op]
 			}
 		}
-		if !derived {
+		if !derived && (t.seedOK == nil || t.seedOK(v)) {
 			out = append(out, v)
 		}
 	}
@@ -1104,6 +1105,11 @@ func importers(projects []project) map[string][]project {
 // traceField runs both walks from file:line in home, loading further projects that
 // import a reached field's package, up to maxProjects in total.
 func traceField(projects []project, home project, file string, line int, tests bool, maxProjects int) (*tracker, error) {
+	return traceFieldSeeded(projects, home, file, line, tests, maxProjects, nil)
+}
+
+// traceFieldSeeded is traceField with only the line's values that seedOK accepts as seeds.
+func traceFieldSeeded(projects []project, home project, file string, line int, tests bool, maxProjects int, seedOK func(ssa.Value) bool) (*tracker, error) {
 	var modules []string
 	moduleOf := map[string]string{} // project name -> module path
 	for _, p := range projects {
@@ -1119,6 +1125,7 @@ func traceField(projects []project, home project, file string, line int, tests b
 		}
 	}
 	t := newTracker(token.NewFileSet(), tests, modules)
+	t.seedOK = seedOK
 	loaded := map[string]bool{home.Name: true}
 	// Loads run one after another: concurrent loads measured slower (12.1s vs 11.4s),
 	// go list contends on the go command's locks and is mostly system time.

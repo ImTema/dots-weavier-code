@@ -69,8 +69,8 @@ func (n Node) String() string {
 // Step is one node of a path and the edge that led to it; Via is empty on the first.
 type Step struct {
 	Node   Node
-	Via    string // call, iface:sure, iface:guess or grpc
-	Method string // gRPC full method name, for grpc
+	Via    string // call, iface:sure, iface:guess, grpc, pubsub or pubsub:guess
+	Method string // gRPC full method name, or pubsub "topic X" / "type X"
 }
 
 type Path struct {
@@ -101,7 +101,7 @@ type PathTrace struct {
 	Paths     []Path // best first: fewest guesses, then fewest hops
 	Exhausted bool   // false: search hit its limit, more paths may exist
 	// What the search ran over.
-	Indexes, Nodes, Edges, GRPCHops, GRPCCalls, ServedMethods int
+	Indexes, Nodes, Edges, GRPCHops, PubsubHops, GRPCCalls, ServedMethods int
 }
 
 // TracePath finds up to maxPaths call paths from address a to address b over
@@ -135,6 +135,9 @@ func TracePath(a, b string, maxPaths int, tests bool) (*PathTrace, error) {
 		for _, e := range es {
 			if e.Kind == grpcHop {
 				r.GRPCHops++
+			}
+			if e.Kind == pubsubHop || e.Kind == pubsubGuess {
+				r.PubsubHops++
 			}
 		}
 	}

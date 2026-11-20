@@ -91,8 +91,8 @@ func runTrace(args []string) {
 
 	r, err := domain.TracePath(*aFlag, *bFlag, *maxPaths, *tests)
 	must(err)
-	fmt.Fprintf(os.Stderr, "loaded %d indexes: nodes=%d edges=%d grpcHops=%d grpcClientCalls=%d servedMethods=%d\n",
-		r.Indexes, r.Nodes, r.Edges, r.GRPCHops, r.GRPCCalls, r.ServedMethods)
+	fmt.Fprintf(os.Stderr, "loaded %d indexes: nodes=%d edges=%d grpcHops=%d pubsubHops=%d grpcClientCalls=%d servedMethods=%d\n",
+		r.Indexes, r.Nodes, r.Edges, r.GRPCHops, r.PubsubHops, r.GRPCCalls, r.ServedMethods)
 	fmt.Fprintf(os.Stderr, "A = %s\nB = %s\n", r.A, r.B)
 	switch *format {
 	case "ui":

@@ -32,20 +32,22 @@ const maxDepth = 25
 type kind uint8
 
 const (
-	direct  kind = iota // static call, always sure
-	sure                // interface hop confirmed by VTA
-	guess               // interface hop linked by CHA only (or a closure assumed to run)
-	grpcHop             // client call joined to a server handler on the full method name
+	direct      kind = iota // static call, always sure
+	sure                    // interface hop confirmed by VTA
+	guess                   // interface hop linked by CHA only (or a closure assumed to run)
+	grpcHop                 // client call joined to a server handler on the full method name
+	pubsubHop               // publish joined to a subscriber handler on the topic
+	pubsubGuess             // publish joined to a subscriber on the proto message type only
 )
 
 func (k kind) String() string {
-	return [...]string{"call", "iface:sure", "iface:guess", "grpc"}[k]
+	return [...]string{"call", "iface:sure", "iface:guess", "grpc", "pubsub", "pubsub:guess"}[k]
 }
 
 type edge struct {
 	To     int32
 	Kind   kind
-	Method string // gRPC full method name, for grpcHop
+	Method string // gRPC full method name, or pubsub topic/type key (pubsub.go)
 }
 
 type node struct {
@@ -348,6 +350,7 @@ func extract(g *graph, p project, tests bool) (st loadStats, err error) {
 			}
 		}
 	}
+	pubsubEnds(g, fns, nodeOf, keep)
 	st.analyze = time.Since(t1)
 	return st, nil
 }
@@ -504,15 +507,25 @@ func stubBroken(pk *packages.Package) (n int) {
 	return n
 }
 
-// join turns gRPC client calls into grpc hops to every indexed handler of the method.
+// join turns gRPC client calls and pubsub publishes into hops to every indexed
+// handler of the method, topic or message type.
 func (g *graph) join() {
 	for _, c := range g.Calls {
+		k := grpcHop
+		switch {
+		case strings.HasPrefix(c.Method, topicKey):
+			k = pubsubHop
+		case strings.HasPrefix(c.Method, typeKey):
+			k = pubsubGuess
+		}
 		hs := g.Impls[c.Method]
-		if len(hs) == 0 {
+		if len(hs) == 0 && k != pubsubGuess { // an unmatched type says nothing: no external node
 			g.link(c.From, g.external(c.Ext+" ["+c.Method+"]"), guess, "")
 		}
 		for _, h := range hs {
-			g.link(c.From, h, grpcHop, c.Method)
+			if h != c.From {
+				g.link(c.From, h, k, c.Method)
+			}
 		}
 	}
 }
@@ -578,7 +591,7 @@ func (c cost) less(d cost) bool {
 }
 
 func (k kind) cost() cost {
-	if k == guess {
+	if k == guess || k == pubsubGuess {
 		return cost{1, 1}
 	}
 	return cost{0, 1}

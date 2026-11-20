@@ -47,3 +47,31 @@ func TestParseAddr(t *testing.T) {
 		t.Errorf("want bad address error, got %v", err)
 	}
 }
+
+func TestJoinPubsub(t *testing.T) {
+	g := &graph{ids: map[string]int32{}, Impls: map[string][]int32{}}
+	n := func(p, name string) int32 { return g.add(p+name, node{Project: p, File: "f.go", Name: name}) }
+	pub, h, dec := n("a", "Pub"), n("b", "Run$1"), n("b", "Handle")
+	g.link(h, dec, direct, "")
+	g.Calls = []grpcCall{{pub, topicKey + "t", "pubsub"}, {pub, typeKey + "M", "pubsub"}, {pub, typeKey + "N", "pubsub"}}
+	g.Impls[topicKey+"t"] = []int32{h}
+	g.Impls[typeKey+"M"] = []int32{dec}
+	g.join()
+
+	paths, _ := g.trace(pub, dec, 10)
+	want := []string{
+		"a:f.go:Pub -pubsub topic t-> b:f.go:Run$1 -call-> b:f.go:Handle",
+		"a:f.go:Pub -pubsub:guess type M-> b:f.go:Handle",
+	}
+	if len(paths) != len(want) {
+		t.Fatalf("got %d paths, want %d", len(paths), len(want))
+	}
+	for i, p := range paths {
+		if got := g.path(p).String(); got != want[i] {
+			t.Errorf("path %d:\n got %s\nwant %s", i, got, want[i])
+		}
+	}
+	if len(g.Out[pub]) != 2 { // unmatched type N adds no external node
+		t.Errorf("edges from Pub = %v", g.Out[pub])
+	}
+}

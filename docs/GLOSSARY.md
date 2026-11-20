@@ -7,7 +7,7 @@ dotweavier is a CLI that indexes many code projects into one typed graph and tra
 ### Sources
 
 **Project**:
-A single folder that is indexed on its own, recognised by its module manifest (Go: a directory containing `go.mod`). A folder with its own manifest inside a project is not part of that project's index: it is a **Module** of it.
+A single folder that is indexed on its own, recognised by its manifest: `go.mod` for Go; `pom.xml`, `build.gradle(.kts)` or `settings.gradle(.kts)` for Java and Kotlin. A folder with its own manifest inside a project is not part of that project's index: it is a **Module** of it.
 _Avoid_: workspace, repo, service, monorepo
 
 **Module**:
@@ -56,7 +56,7 @@ An edge that crosses from one project to another.
 _Avoid_: cross-edge, bridge
 
 **Test node**:
-A node that comes from test code. In Go, that means `_test.go` files and configured mock packages. Test nodes are excluded from traces unless `--include-tests` is given.
+A node that comes from test code. In Go, that means `_test.go` files and configured mock packages. In Java and Kotlin, files under a `src/test*` source set. Test nodes are excluded from traces unless `--include-tests` is given.
 
 ### Querying
 

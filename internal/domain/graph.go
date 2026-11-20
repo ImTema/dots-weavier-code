@@ -105,10 +105,29 @@ func (g *graph) external(name string) int32 {
 	return g.add("external|"+name, node{Name: "external: " + name})
 }
 
-type project struct{ Name, dir string }
+type project struct{ Name, dir, lang string }
+
+// manifests recognise a project folder by its build file (GLOSSARY: Project),
+// in order of precedence when a folder has several.
+var manifests = []struct{ file, lang string }{
+	{"go.mod", "go"},
+	{"pom.xml", "jvm"}, {"build.gradle.kts", "jvm"}, {"build.gradle", "jvm"},
+	{"settings.gradle.kts", "jvm"}, {"settings.gradle", "jvm"},
+}
+
+// langOf is the language of the project rooted at dir, or "" if dir is none.
+func langOf(dir string) string {
+	for _, m := range manifests {
+		if _, err := os.Stat(filepath.Join(dir, m.file)); err == nil {
+			return m.lang
+		}
+	}
+	return ""
+}
 
 func discover(ws string) ([]project, error) {
 	var ps []project
+	seen := map[string]bool{}
 	err := filepath.WalkDir(ws, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -116,10 +135,10 @@ func discover(ws string) ([]project, error) {
 		if d.IsDir() && p != ws && (strings.HasPrefix(d.Name(), ".") || d.Name() == "vendor" || d.Name() == "testdata" || d.Name() == "node_modules") {
 			return filepath.SkipDir
 		}
-		if !d.IsDir() && d.Name() == "go.mod" {
-			dir := filepath.Dir(p)
+		if dir := filepath.Dir(p); !d.IsDir() && !seen[dir] && slices.ContainsFunc(manifests, func(m struct{ file, lang string }) bool { return m.file == d.Name() }) {
+			seen[dir] = true
 			rel, _ := filepath.Rel(ws, dir)
-			ps = append(ps, project{filepath.ToSlash(rel), dir})
+			ps = append(ps, project{filepath.ToSlash(rel), dir, langOf(dir)})
 		}
 		return nil
 	})
@@ -182,6 +201,9 @@ type loadStats struct {
 // and gRPC handlers to g. Only the project's own packages get bodies; dependencies
 // come from export data (type info only), which is the analysis boundary of ticket 10.
 func extract(g *graph, p project, tests bool) (st loadStats, err error) {
+	if p.lang == "jvm" {
+		return extractJVM(g, p)
+	}
 	prog, own, err := loadSSA(p, tests, &st, nil)
 	if err != nil {
 		return st, err
@@ -543,11 +565,12 @@ func parseAddr(s string) (address, error) {
 	if !ok {
 		return address{}, fmt.Errorf("bad address %q", s)
 	}
-	file, tail, ok := strings.Cut(rest, ".go:")
-	if !ok {
+	i := strings.LastIndex(rest, ":")
+	if i < 0 {
 		return address{}, fmt.Errorf("bad address %q", s)
 	}
-	a := address{Project: proj, File: file + ".go"}
+	file, tail := rest[:i], rest[i+1:]
+	a := address{Project: proj, File: file}
 	if n, err := strconv.Atoi(tail); err == nil {
 		a.Line = n
 	} else {

@@ -16,7 +16,7 @@ go build -o dotweavier ./cmd/dotweavier
 
 ### 1. Index
 
-Run it from a workspace directory, or pass `--workspace DIR`. dotweavier treats every directory under the workspace that contains a `go.mod` as a project. A project's name is its path relative to the workspace.
+Run it from a workspace directory, or pass `--workspace DIR`. dotweavier treats every directory under the workspace that contains a `go.mod`, `pom.xml`, `build.gradle(.kts)` or `settings.gradle(.kts)` as a project. Java and Kotlin projects are read from source, without building them (`docs/adr/0007-jvm-extractor-from-source.md`). A project's name is its path relative to the workspace.
 
 ```sh
 dotweavier index                    # every project under the workspace
@@ -64,13 +64,13 @@ Flags:
 
 ## Try it
 
-`samples/` holds small services in Go, Java and Kotlin that call each other over gRPC, HTTP and Pub/Sub. `samples/golang/README.md` lists every expected hop, so you can check a trace against it. Only the Go projects are indexed today.
+`samples/` holds small services in Go, Java and Kotlin that call each other over gRPC, HTTP and Pub/Sub. `samples/golang/README.md` lists every expected hop, so you can check a trace against it. All of them are indexed; the Go client of `inventory` links to its Java gRPC handler.
 
 ```sh
 cd samples/golang && dotweavier index
 ```
 
-dotweavier loads projects with the Go toolchain. A project whose modules cannot be downloaded fails with `no packages`. Run `go mod download` in that project first.
+dotweavier loads Go projects with the Go toolchain. A project whose modules cannot be downloaded fails with `no packages`. Run `go mod download` in that project first.
 
 ## Docs
 

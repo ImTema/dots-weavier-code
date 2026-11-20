@@ -212,6 +212,7 @@ func TraceField(ws, addr string, tests bool, maxProjects int) (*FieldTrace, erro
 	if err != nil {
 		return nil, err
 	}
+	projects = slices.DeleteFunc(projects, func(p project) bool { return p.lang != "go" }) // field traces are Go only
 	home, file, err := resolveFile(projects, addr[:i])
 	if err != nil {
 		return nil, err

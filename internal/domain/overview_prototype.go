@@ -180,12 +180,15 @@ func parentOf(name string, names map[string]bool) string {
 
 var errChanged = errors.New("changed")
 
-// changedSince reports whether any Go source of the project (.go, go.mod, go.sum,
+var sourceExt = map[string]bool{".go": true, ".java": true, ".kt": true, ".kts": true, ".proto": true}
+
+// changedSince reports whether any source of the project (.go, .java, .kt, .proto, a manifest, go.sum,
 // or a directory, whose mtime moves when a file is added, removed or renamed)
 // is newer than t. Nested modules, vendor, testdata and dot-dirs are other
 // projects or not analyzed, the same skips as discover.
 // shortcut: mtimes only, so a checkout that restores old mtimes looks unchanged; hash contents if that bites.
 func changedSince(dir string, t time.Time) bool {
+	jvm := langOf(dir) == "jvm"
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -195,11 +198,11 @@ func changedSince(dir string, t time.Time) bool {
 			if strings.HasPrefix(n, ".") || n == "vendor" || n == "testdata" || n == "node_modules" {
 				return filepath.SkipDir
 			}
-			if _, err := os.Stat(filepath.Join(p, "go.mod")); err == nil {
+			if langOf(p) != "" || jvm && jvmSkip(n) {
 				return filepath.SkipDir
 			}
 		}
-		if !d.IsDir() && !strings.HasSuffix(p, ".go") && d.Name() != "go.mod" && d.Name() != "go.sum" {
+		if !d.IsDir() && !sourceExt[filepath.Ext(p)] && !slices.ContainsFunc(manifests, func(m struct{ file, lang string }) bool { return m.file == d.Name() }) && d.Name() != "go.sum" {
 			return nil
 		}
 		if info, err := d.Info(); err == nil && info.ModTime().After(t) {
@@ -393,8 +396,9 @@ func (o *OverviewGraph) layout() {
 		radius[i] = spread * math.Cbrt(float64(n))
 		sum += radius[i] * radius[i]
 	}
-	// Sphere surface ~ 4πR² must hold every cluster's disc πr² with room to spare.
-	R := 1.4 * math.Sqrt(sum)
+	// Sphere surface ~ 4πR² must hold every cluster's disc πr²; R >= 0.5*sqrt(sum)
+	// fits them exactly, 0.55 keeps projects nearly touching.
+	R := 0.55 * math.Sqrt(sum)
 	centers := make([]vec, len(o.Projects))
 	golden := math.Pi * (3 - math.Sqrt(5))
 	for k, i := range shown {

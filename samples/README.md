@@ -107,9 +107,9 @@ library's in-process fake (`pstest`).
 
 ## Tracing with dotweavier
 
-dotweavier indexes Go only, so `index` picks up the Go projects (the two
-services and the emulator tool). Indexed from this directory, the project
-names are `golang/orders` and `golang/pricing`:
+`index` picks up every project: the Go ones by `go.mod`, `java/inventory` by
+`pom.xml` and `kotlin/shipping` by `build.gradle.kts`. Indexed from this
+directory, the project names are their paths, such as `golang/orders`:
 
 ```sh
 dotweavier index --workspace samples
@@ -121,12 +121,16 @@ dotweavier trace path -A golang/orders::Service.Place -B golang/orders::Client.R
 # 1. Service.Place -iface:sure-> Client.Reserve  (1/1 sure)
 dotweavier trace path -A golang/pricing::Server.Quote -B golang/pricing::Client.Rate
 # 1. Server.Quote -iface:sure-> Client.Rate  (1/1 sure)
+dotweavier trace path -A golang/orders::Service.Place -B java/inventory::StockLedger.reserve
+# 1. Service.Place -iface:sure-> Client.Reserve
+#    -grpc /inventory.v1.InventoryService/Reserve-> InventoryGrpcService.reserve
+#    -call-> ReservationService.reserve -call-> StockLedger.reserve  (1/1 sure)
 ```
 
-The gRPC calls into `inventory` and the HTTP calls into `shipping` end at the
-Go client, because no Java or Kotlin extractor exists yet. Reaching
-`InventoryGrpcService.reserve` or the `/rates` route from Go is the test for
-those extractors.
+The gRPC call into `inventory` reaches the Java handler: the JVM extractor
+reads `inventory.proto` and finds `InventoryGrpcService` by its supertype.
+HTTP is not linked in any language yet, so calls into `shipping` and the
+`GET /customers/{id}` calls end at their clients.
 
 dotweavier does not link Pub/Sub yet either: a trace from
 `golang/orders::Service.Place` to `golang/pricing::Subscriber.Handle` prints

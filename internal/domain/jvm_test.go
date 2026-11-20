@@ -3,6 +3,7 @@ package domain
 import (
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -54,5 +55,60 @@ func TestExtractJVM(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("no http hop from OrdersCustomerDirectory.find to Handler.getCustomer; calls = %v", g.Calls)
+	}
+}
+
+// TestTraceJVMField traces values through the Java and Kotlin samples: into a
+// resolved call's parameter, into a record or data class field, and back from
+// a field to where it is stored.
+func TestTraceJVMField(t *testing.T) {
+	flat := func(r *FieldTrace) []string {
+		var out []string
+		var walk func(ss []*FieldStep, tree string)
+		walk = func(ss []*FieldStep, tree string) {
+			for _, s := range ss {
+				out = append(out, tree+" "+s.Kind+" "+s.Name+s.Loc)
+				walk(s.Kids, tree)
+			}
+		}
+		walk(r.Origin, "origin")
+		walk(r.Uses, "uses")
+		return out
+	}
+	for _, c := range []struct {
+		dir, file string
+		line      int
+		want      []string
+	}{
+		{"java/inventory", "src/main/java/com/example/inventory/reservation/ReservationService.java", 24, []string{ // reserve(customerId, lines)
+			"origin arg src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:38",
+			"origin field ReserveRequest.customerId",
+			"uses arg src/main/java/com/example/inventory/customers/OrdersCustomerDirectory.java:20",
+		}},
+		{"java/inventory", "src/main/java/com/example/inventory/reservation/ReservationService.java", 21, []string{ // record Line(sku, qty)
+			"origin store src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:35",
+			"uses read src/main/java/com/example/inventory/reservation/ReservationService.java:35",
+		}},
+		{"kotlin/shipping", "src/main/kotlin/com/example/shipping/http/Routes.kt", 47, []string{ // val customerId = ...
+			"uses arg src/main/kotlin/com/example/shipping/rates/ShippingRates.kt:9",
+			"uses arg src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:26",
+			"uses field RateResponse.customerId",
+		}},
+		{"kotlin/shipping", "src/main/kotlin/com/example/shipping/rates/RateCalculator.kt", 13, []string{ // val base = ...
+			"origin store src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:5",
+			"uses return src/main/kotlin/com/example/shipping/rates/ShippingRates.kt:14",
+		}},
+	} {
+		dir, _ := filepath.Abs(filepath.Join("..", "..", "samples", c.dir))
+		r, _, err := traceJVMField(project{c.dir, dir, "jvm"}, filepath.Join(dir, c.file), c.line, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := flat(r)
+		for _, w := range c.want {
+			if !slices.Contains(got, w) {
+				t.Errorf("%s:%d: missing %q in\n%s", c.file, c.line, w, strings.Join(got, "\n"))
+			}
+		}
 	}
 }

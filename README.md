@@ -51,9 +51,11 @@ Flags:
 
 ```sh
 dotweavier trace field orders:internal/order/order.go:94
+dotweavier trace field java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:24
+dotweavier trace field kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:47
 ```
 
-The line must compute a value. The output is two trees: where the value comes from, and where it goes.
+The line must compute a value, declare a parameter, or declare a field. The output is two trees: where the value comes from, and where it goes. Java and Kotlin files are traced from source within their own project (ADR 0007).
 
 Flags:
 

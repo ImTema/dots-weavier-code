@@ -68,7 +68,7 @@ _Avoid_: selector, locator
 A query for the directed paths from symbol A to symbol B (`dotweavier trace path`).
 
 **Field trace**:
-A query for the full lifecycle of one value (`dotweavier trace field [project:]relative/path.go:LINE`), printed as two trees: its origin (where it comes from) and its uses (every variable, conversion, struct field, call and return it may flow into). A field of a struct declared in any loaded project stands for that field in every object of the type, across projects, so a protobuf field written by a client in one project meets its server's reads in another. The trees show where the value may come from and go, not where it must. Unlike a trace, it analyses projects live and needs no index.
+A query for the full lifecycle of one value (`dotweavier trace field [project:]relative/path.{go,java,kt}:LINE`), printed as two trees: its origin (where it comes from) and its uses (every variable, conversion, struct field, call and return it may flow into). A field of a struct declared in any loaded project stands for that field in every object of the type, across projects, so a protobuf field written by a client in one project meets its server's reads in another. The trees show where the value may come from and go, not where it must. Unlike a trace, it analyses projects live and needs no index. A Java or Kotlin field trace stays inside its own project.
 _Avoid_: variable trace, taint trace
 
 **Path**:

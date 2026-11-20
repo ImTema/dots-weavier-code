@@ -3,7 +3,7 @@
 //
 //	dotweavier index [--workspace DIR] [project ...]
 //	dotweavier trace path -A <addr> -B <addr> [--max-paths 10] [--include-tests]
-//	dotweavier trace field [project:]rel/path.go:LINE [--depth N] [--include-tests] [--format text|ui]
+//	dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--depth N] [--include-tests] [--format text|ui]
 //
 // Addresses: project::Type.Method, project:rel/path.go:Type.Method, project:rel/path.go:LINE.
 package main
@@ -28,7 +28,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
   dotweavier index [--workspace DIR] [project ...]   (no projects: every go.mod under the workspace)
   dotweavier trace path -A <addr> -B <addr> [--max-paths N] [--include-tests] [--format text|ui]
-  dotweavier trace field [project:]rel/path.go:LINE [--workspace DIR] [--depth N] [--include-tests] [--max-projects N] [--format text|ui]`)
+  dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--workspace DIR] [--depth N] [--include-tests] [--max-projects N] [--format text|ui]`)
 	os.Exit(2)
 }
 
@@ -170,6 +170,9 @@ type treePrinter struct {
 func label(s, parent *domain.FieldStep) string {
 	switch s.Kind {
 	case "field":
+		if s.Type == "" { // a JVM field of a type outside the project
+			return "[field] " + s.Name
+		}
 		return fmt.Sprintf("[field] %s : %s", s.Name, s.Type)
 	case "overwritten":
 		return fmt.Sprintf("[overwritten] %s  %s", s.Loc, s.Code)

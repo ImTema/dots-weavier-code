@@ -21,6 +21,19 @@ Servers are matched through the `.proto` files in the project: a class whose sup
 
 A Ktor `HttpClient.get/post/...` call with a string URL is an HTTP call: interpolations become `{}`, and a leading base URL (an interpolation, or a scheme and host) is dropped. The Go extractor registers `net/http` `Handle`/`HandleFunc` routes with a constant pattern. Both sides are keyed by method and path with path parameters reduced to `{}`, and `join` links them as `http` hops; a route without a method serves every method. Ktor server routes and other JVM clients (MicroProfile REST, Spring) are not read yet.
 
+## Field traces
+
+`trace field` on a `.java` or `.kt` line runs the same two walks as the Go trace, over the tree-sitter syntax (`internal/domain/jvm_field.go`). The keys are expressions, locals and parameters (by name, in one flat scope per function), function results, and fields keyed `pkg.Type.field`. Calls follow the extractor's resolution. A Java record or a Kotlin primary constructor fills its components, and a getter or record accessor reads its field. A `getX()` on a type outside the project (a protobuf message) reads the field `Type.x`.
+
+With no types:
+
+- Values that only describe the datum are dropped by their shape: comparisons, `!`, predicate calls (`isBlank`, `equals`, ...), and plain reads that lead nowhere.
+- A library call derives its result from its receiver, or from its one data argument.
+- A library call on a local (`add`, `put`, `merge`, ...) stores its arguments into that local.
+- A lambda passed to a library call receives the receiver's elements (`callback?`).
+
+A JVM trace stays inside its project. A return flows to every caller, with no call-site matching. A project method's `this` is not tracked, so a field it reads is reached only through that field.
+
 ## Consequences
 
 - JVM indexing takes milliseconds and works on projects that do not build.

@@ -33,9 +33,11 @@ type jvmType struct {
 	iface     bool
 	supers    []string          // simple names as written; may be types outside the project
 	fields    map[string]string // field or property -> simple type name
+	comps     []string          // record components or Kotlin primary constructor parameters, in order; "" for a parameter that is no property
 	methods   map[string][]*jvmFunc
 	outer     *jvmType
 	file      *jvmFile
+	decl      *sitter.Node // its declaration, for field traces
 }
 
 type jvmFunc struct {
@@ -44,6 +46,7 @@ type jvmFunc struct {
 	owner  *jvmType // nil: Kotlin top-level function
 	file   *jvmFile
 	params *sitter.Node
+	names  []string // parameter names, in order
 	body   *sitter.Node
 	vars   map[string]string // parameter or local -> simple type name
 }
@@ -55,6 +58,23 @@ type jvmProject struct {
 	subs  map[string][]*jvmType // by the simple name of a declared supertype
 	top   map[string][]*jvmFunc // Kotlin top-level functions by name
 	funcs []*jvmFunc
+	// Call sites, for field traces: what each call node resolves to, and back.
+	callees map[nkey][]*jvmFunc
+	callers map[*jvmFunc][]jcall
+}
+
+// nkey identifies a syntax node across lookups.
+type nkey struct {
+	f          *jvmFile
+	start, end uint32
+	typ        string
+}
+
+func keyOf(f *jvmFile, n *sitter.Node) nkey { return nkey{f, n.StartByte(), n.EndByte(), n.Type()} }
+
+type jcall struct {
+	fn   *jvmFunc
+	node *sitter.Node
 }
 
 // jvmSkip names folders that hold build output or tool state, not sources.
@@ -62,9 +82,16 @@ func jvmSkip(name string) bool {
 	return strings.HasPrefix(name, ".") || name == "target" || name == "build" || name == "out" || name == "node_modules"
 }
 
-func extractJVM(g *graph, p project) (st loadStats, err error) {
+func extractJVM(g *graph, p project) (loadStats, error) {
+	_, st, err := loadJVM(g, p)
+	return st, err
+}
+
+// loadJVM parses the project and resolves its calls into g.
+func loadJVM(g *graph, p project) (jp *jvmProject, st loadStats, err error) {
 	t0 := time.Now()
-	jp := &jvmProject{g: g, p: p, types: map[string][]*jvmType{}, subs: map[string][]*jvmType{}, top: map[string][]*jvmFunc{}}
+	jp = &jvmProject{g: g, p: p, types: map[string][]*jvmType{}, subs: map[string][]*jvmType{}, top: map[string][]*jvmFunc{},
+		callees: map[nkey][]*jvmFunc{}, callers: map[*jvmFunc][]jcall{}}
 	jparser, kparser := sitter.NewParser(), sitter.NewParser()
 	jparser.SetLanguage(java.GetLanguage())
 	kparser.SetLanguage(kotlin.GetLanguage())
@@ -117,7 +144,7 @@ func extractJVM(g *graph, p project) (st loadStats, err error) {
 		return nil
 	})
 	if err != nil {
-		return st, err
+		return nil, st, err
 	}
 	st.pkgs, st.funcs, st.load = len(pkgs), len(jp.funcs), time.Since(t0)
 	t1 := time.Now()
@@ -126,7 +153,7 @@ func extractJVM(g *graph, p project) (st loadStats, err error) {
 	}
 	jp.grpcHandlers(protos)
 	st.analyze = time.Since(t1)
-	return st, nil
+	return jp, st, nil
 }
 
 func (jp *jvmProject) text(f *jvmFile, n *sitter.Node) string { return n.Content(f.src) }
@@ -190,6 +217,18 @@ func (jp *jvmProject) addFunc(f *jvmFile, owner *jvmType, name string, decl, par
 		for _, c := range children(params) {
 			if c.Type() == "formal_parameter" || c.Type() == "spread_parameter" || c.Type() == "parameter" || c.Type() == "class_parameter" {
 				fn.arity++
+				nm := c.ChildByFieldName("name")
+				if f.kotlin {
+					nm = childOf(c, "simple_identifier")
+				}
+				if nm == nil {
+					nm = childOf(c, "identifier") // spread_parameter: String... xs
+				}
+				name := ""
+				if nm != nil {
+					name = nm.Content(f.src)
+				}
+				fn.names = append(fn.names, name)
 			}
 		}
 	}
@@ -241,6 +280,7 @@ func (jp *jvmProject) javaDecl(f *jvmFile, n *sitter.Node, outer *jvmType) {
 		return
 	}
 	t := jp.addType(f, jp.text(f, name), outer)
+	t.decl = n
 	t.iface = n.Type() == "interface_declaration" || n.Type() == "annotation_type_declaration"
 	for _, c := range children(n) {
 		switch c.Type() {
@@ -260,6 +300,7 @@ func (jp *jvmProject) javaDecl(f *jvmFile, n *sitter.Node, outer *jvmType) {
 		for _, p := range children(ps) {
 			if ty, nm := p.ChildByFieldName("type"), p.ChildByFieldName("name"); ty != nil && nm != nil {
 				t.fields[jp.text(f, nm)] = simpleType(jp.text(f, ty))
+				t.comps = append(t.comps, jp.text(f, nm))
 			}
 		}
 	}
@@ -329,6 +370,7 @@ func (jp *jvmProject) kotlinMember(f *jvmFile, n *sitter.Node, owner *jvmType) {
 			return
 		}
 		t := jp.addType(f, jp.text(f, name), owner)
+		t.decl = n
 		for i := 0; i < int(n.ChildCount()); i++ {
 			if n.Child(i).Type() == "interface" {
 				t.iface = true
@@ -342,11 +384,15 @@ func (jp *jvmProject) kotlinMember(f *jvmFile, n *sitter.Node, owner *jvmType) {
 				}
 			case "primary_constructor":
 				for _, p := range children(c) {
-					if p.Type() == "class_parameter" && childOf(p, "binding_pattern_kind") != nil {
-						if nm, ty := childOf(p, "simple_identifier"), typeChild(p); nm != nil && ty != nil {
-							t.fields[jp.text(f, nm)] = simpleType(jp.text(f, ty))
-						}
+					if p.Type() != "class_parameter" {
+						continue
 					}
+					comp := ""
+					if nm, ty := childOf(p, "simple_identifier"), typeChild(p); nm != nil && ty != nil && childOf(p, "binding_pattern_kind") != nil {
+						comp = jp.text(f, nm)
+						t.fields[comp] = simpleType(jp.text(f, ty))
+					}
+					t.comps = append(t.comps, comp)
 				}
 			case "class_body", "enum_class_body":
 				for _, m := range children(c) {
@@ -378,9 +424,7 @@ func (jp *jvmProject) kotlinMember(f *jvmFile, n *sitter.Node, owner *jvmType) {
 		if owner != nil {
 			if v := childOf(n, "variable_declaration"); v != nil {
 				if nm := childOf(v, "simple_identifier"); nm != nil {
-					if ty := kotlinVarType(f, v, n); ty != "" {
-						owner.fields[jp.text(f, nm)] = ty
-					}
+					owner.fields[jp.text(f, nm)] = kotlinVarType(f, v, n) // "": a property whose type is not written
 				}
 			}
 		}
@@ -470,7 +514,7 @@ func (jp *jvmProject) calls(fn *jvmFunc) {
 				}
 			}
 		case "enhanced_for_statement":
-			if nm, ty := n.ChildByFieldName("name"), n.ChildByFieldName("type"); nm != nil && ty != nil {
+			if nm, ty := n.ChildByFieldName("name"), n.ChildByFieldName("type"); nm != nil && ty != nil && jp.text(f, ty) != "var" {
 				fn.vars[jp.text(f, nm)] = simpleType(jp.text(f, ty))
 			}
 		case "property_declaration":
@@ -485,13 +529,13 @@ func (jp *jvmProject) calls(fn *jvmFunc) {
 			name := jp.text(f, n.ChildByFieldName("name"))
 			arity := len(children(n.ChildByFieldName("arguments")))
 			if obj := n.ChildByFieldName("object"); obj != nil {
-				jp.linkMember(fn, jp.typeOf(fn, obj), name, arity)
+				jp.linkMember(fn, n, jp.typeOf(fn, obj), name, arity)
 			} else {
-				jp.linkLocal(fn, name, arity)
+				jp.linkLocal(fn, n, name, arity)
 			}
 		case "object_creation_expression":
 			if ty := n.ChildByFieldName("type"); ty != nil {
-				jp.linkMember(fn, simpleType(jp.text(f, ty)), "<init>", len(children(n.ChildByFieldName("arguments"))))
+				jp.linkMember(fn, n, simpleType(jp.text(f, ty)), "<init>", len(children(n.ChildByFieldName("arguments"))))
 			}
 		case "call_expression":
 			callee, suffix := n.NamedChild(0), childOf(n, "call_suffix")
@@ -509,15 +553,15 @@ func (jp *jvmProject) calls(fn *jvmFunc) {
 			case callee.Type() == "simple_identifier":
 				name := jp.text(f, callee)
 				if isUpper(name) && len(jp.types[name]) > 0 {
-					jp.linkMember(fn, name, "<init>", arity)
+					jp.linkMember(fn, n, name, "<init>", arity)
 				} else {
-					jp.linkLocal(fn, name, arity)
+					jp.linkLocal(fn, n, name, arity)
 				}
 			case callee.Type() == "navigation_expression":
 				if sfx := childOf(callee, "navigation_suffix"); sfx != nil {
 					if nm := childOf(sfx, "simple_identifier"); nm != nil {
 						recv := jp.typeOf(fn, callee.NamedChild(0))
-						jp.linkMember(fn, recv, jp.text(f, nm), arity)
+						jp.linkMember(fn, n, recv, jp.text(f, nm), arity)
 						jp.ktorRequest(fn, recv, jp.text(f, nm), suffix)
 					}
 				}
@@ -560,20 +604,28 @@ func (jp *jvmProject) typeOf(fn *jvmFunc, n *sitter.Node) string {
 
 // field finds a field's type on t, its project supertypes or its outer classes.
 func (jp *jvmProject) field(t *jvmType, name string) string {
+	if o := jp.fieldOwner(t, name); o != nil {
+		return o.fields[name]
+	}
+	return ""
+}
+
+// fieldOwner is the type declaring field name: t, a project supertype or an outer class.
+func (jp *jvmProject) fieldOwner(t *jvmType, name string) *jvmType {
 	seen := map[*jvmType]bool{}
-	var find func(t *jvmType) string
-	find = func(t *jvmType) string {
+	var find func(t *jvmType) *jvmType
+	find = func(t *jvmType) *jvmType {
 		if t == nil || seen[t] {
-			return ""
+			return nil
 		}
 		seen[t] = true
-		if ty, ok := t.fields[name]; ok {
-			return ty
+		if _, ok := t.fields[name]; ok {
+			return t
 		}
 		for _, s := range t.supers {
 			for _, st := range jp.pick(t.file, s) {
-				if ty := find(st); ty != "" {
-					return ty
+				if o := find(st); o != nil {
+					return o
 				}
 			}
 		}
@@ -658,7 +710,7 @@ func (jp *jvmProject) overrides(simple, name string, seen map[*jvmType]bool, out
 // on a class is a direct call; anything that may run instead of it, every
 // override in a subtype and every implementation behind an interface, is a guess:
 // no value tracking says which concrete type reaches the call (ADR 0005).
-func (jp *jvmProject) linkMember(fn *jvmFunc, simple, name string, arity int) {
+func (jp *jvmProject) linkMember(fn *jvmFunc, at *sitter.Node, simple, name string, arity int) {
 	if simple == "" {
 		return
 	}
@@ -670,6 +722,7 @@ func (jp *jvmProject) linkMember(fn *jvmFunc, simple, name string, arity int) {
 		for _, m := range byArity(jp.inherited(t, name, map[*jvmType]bool{}), arity) {
 			hit[m] = true
 			jp.g.link(fn.id, m.id, direct, "")
+			jp.called(fn, at, m)
 		}
 	}
 	if name == "<init>" {
@@ -680,16 +733,17 @@ func (jp *jvmProject) linkMember(fn *jvmFunc, simple, name string, arity int) {
 	for _, m := range byArity(subs, arity) {
 		if !hit[m] {
 			jp.g.link(fn.id, m.id, guess, "")
+			jp.called(fn, at, m)
 		}
 	}
 }
 
 // linkLocal links an unqualified call: a method of the enclosing class chain,
 // else a Kotlin top-level function in the same package or imported.
-func (jp *jvmProject) linkLocal(fn *jvmFunc, name string, arity int) {
+func (jp *jvmProject) linkLocal(fn *jvmFunc, at *sitter.Node, name string, arity int) {
 	for t := fn.owner; t != nil; t = t.outer {
 		if ms := jp.inherited(t, name, map[*jvmType]bool{}); len(ms) > 0 {
-			jp.linkMember(fn, t.simple, name, arity)
+			jp.linkMember(fn, at, t.simple, name, arity)
 			return
 		}
 	}
@@ -701,7 +755,14 @@ func (jp *jvmProject) linkLocal(fn *jvmFunc, name string, arity int) {
 	}
 	for _, m := range byArity(hits, arity) {
 		jp.g.link(fn.id, m.id, direct, "")
+		jp.called(fn, at, m)
 	}
+}
+
+func (jp *jvmProject) called(fn *jvmFunc, at *sitter.Node, m *jvmFunc) {
+	k := keyOf(fn.file, at)
+	jp.callees[k] = append(jp.callees[k], m)
+	jp.callers[m] = append(jp.callers[m], jcall{fn, at})
 }
 
 var (

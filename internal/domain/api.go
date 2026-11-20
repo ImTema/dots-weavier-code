@@ -8,6 +8,7 @@ import (
 	"cmp"
 	"fmt"
 	"go/types"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -204,21 +205,31 @@ type FieldTrace struct {
 }
 
 // TraceField traces the value computed at [project:]rel/path.go:LINE in both
-// directions, live over SSA of the projects under ws.
+// directions, live over SSA of the projects under ws. A .java or .kt file is
+// traced from its project's syntax instead (jvm_field.go).
 func TraceField(ws, addr string, tests bool, maxProjects int) (*FieldTrace, error) {
 	i := strings.LastIndex(addr, ":")
 	line, err := strconv.Atoi(addr[i+1:])
-	if i < 0 || err != nil || !strings.HasSuffix(addr[:i], ".go") {
-		return nil, fmt.Errorf("bad address %q, want [project:]rel/path.go:LINE", addr)
+	lang := map[string]string{".go": "go", ".java": "jvm", ".kt": "jvm"}[filepath.Ext(addr[:max(i, 0)])]
+	if i < 0 || err != nil || lang == "" {
+		return nil, fmt.Errorf("bad address %q, want [project:]rel/path.{go,java,kt}:LINE", addr)
 	}
 	projects, err := discover(ws)
 	if err != nil {
 		return nil, err
 	}
-	projects = slices.DeleteFunc(projects, func(p project) bool { return p.lang != "go" }) // field traces are Go only
+	projects = slices.DeleteFunc(projects, func(p project) bool { return p.lang != lang })
 	home, file, err := resolveFile(projects, addr[:i])
 	if err != nil {
 		return nil, err
+	}
+	if lang == "jvm" {
+		r, rel, err := traceJVMField(home, file, line, tests)
+		if err != nil {
+			return nil, err
+		}
+		attachCalls(r, home.Name, rel, line)
+		return r, nil
 	}
 	t, err := traceField(projects, home, file, line, tests, maxProjects)
 	if err != nil {

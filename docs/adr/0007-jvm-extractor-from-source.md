@@ -15,7 +15,11 @@ With no classpath, a call is resolved only from declarations in the project:
 
 ## gRPC
 
-Servers are matched through the `.proto` files in the project: a class whose supertype is `X` (Quarkus, Mutiny), `XImplBase` (grpc-java) or `XCoroutineImplBase` (grpc-kotlin), for a service `X`, serves each rpc `M` through its method `m`. JVM gRPC clients, HTTP and Pub/Sub are not extracted yet.
+Servers are matched through the `.proto` files in the project: a class whose supertype is `X` (Quarkus, Mutiny), `XImplBase` (grpc-java) or `XCoroutineImplBase` (grpc-kotlin), for a service `X`, serves each rpc `M` through its method `m`. JVM gRPC clients and Pub/Sub are not extracted yet.
+
+## HTTP
+
+A Ktor `HttpClient.get/post/...` call with a string URL is an HTTP call: interpolations become `{}`, and a leading base URL (an interpolation, or a scheme and host) is dropped. The Go extractor registers `net/http` `Handle`/`HandleFunc` routes with a constant pattern. Both sides are keyed by method and path with path parameters reduced to `{}`, and `join` links them as `http` hops; a route without a method serves every method. Ktor server routes and other JVM clients (MicroProfile REST, Spring) are not read yet.
 
 ## Consequences
 

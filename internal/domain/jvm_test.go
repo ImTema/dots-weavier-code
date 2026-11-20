@@ -41,4 +41,18 @@ func TestExtractJVM(t *testing.T) {
 	if len(hs) != 1 || g.Nodes[hs[0]].Name != "InventoryGrpcService.reserve" {
 		t.Errorf("Reserve handlers = %v", hs)
 	}
+
+	// The Ktor request joins a Go route that serves every method.
+	h := g.add("orders|getCustomer", node{Project: "golang/orders", File: "h.go", Name: "Handler.getCustomer"})
+	g.Impls[httpKey+"* /customers/{}"] = []int32{h}
+	g.join()
+	found := false
+	for from, es := range g.Out {
+		for _, e := range es {
+			found = found || g.Nodes[from].Name == "OrdersCustomerDirectory.find" && e.To == h && e.Kind == httpHop && e.Method == "GET /customers/{}"
+		}
+	}
+	if !found {
+		t.Errorf("no http hop from OrdersCustomerDirectory.find to Handler.getCustomer; calls = %v", g.Calls)
+	}
 }

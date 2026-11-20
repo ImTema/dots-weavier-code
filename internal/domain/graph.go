@@ -38,10 +38,15 @@ const (
 	grpcHop                 // client call joined to a server handler on the full method name
 	pubsubHop               // publish joined to a subscriber handler on the topic
 	pubsubGuess             // publish joined to a subscriber on the proto message type only
+	httpHop                 // HTTP request joined to the handler of its method and path (http.go)
 )
 
+// link reports whether k joins two ends by a contract (method, route, topic)
+// rather than by a call, which is what makes a hop between projects.
+func (k kind) link() bool { return k >= grpcHop }
+
 func (k kind) String() string {
-	return [...]string{"call", "iface:sure", "iface:guess", "grpc", "pubsub", "pubsub:guess"}[k]
+	return [...]string{"call", "iface:sure", "iface:guess", "grpc", "pubsub", "pubsub:guess", "http"}[k]
 }
 
 type edge struct {
@@ -126,9 +131,15 @@ func langOf(dir string) string {
 }
 
 func discover(ws string) ([]project, error) {
+	// Absolute, because loaded packages report absolute file names: a relative project
+	// dir makes filepath.Rel fail and leaves nodes without a file (path:LINE never resolves).
+	ws, err := filepath.Abs(ws)
+	if err != nil {
+		return nil, err
+	}
 	var ps []project
 	seen := map[string]bool{}
-	err := filepath.WalkDir(ws, func(p string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(ws, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -337,6 +348,7 @@ func extract(g *graph, p project, tests bool) (st loadStats, err error) {
 					}
 				} else if sc := c.StaticCallee(); sc != nil {
 					name = sc.Name()
+					httpServes(g, prog, c, nodeOf, keep)
 				}
 				switch {
 				case name == "Invoke" || name == "NewStream":
@@ -539,14 +551,24 @@ func (g *graph) join() {
 			k = pubsubHop
 		case strings.HasPrefix(c.Method, typeKey):
 			k = pubsubGuess
+		case strings.HasPrefix(c.Method, httpKey):
+			k = httpHop
 		}
 		hs := g.Impls[c.Method]
+		if k == httpHop { // a route without a method serves them all
+			_, path, _ := strings.Cut(strings.TrimPrefix(c.Method, httpKey), " ")
+			hs = append(slices.Clip(hs), g.Impls[httpKey+"* "+path]...)
+		}
 		if len(hs) == 0 && k != pubsubGuess { // an unmatched type says nothing: no external node
 			g.link(c.From, g.external(c.Ext+" ["+c.Method+"]"), guess, "")
 		}
+		method := c.Method
+		if k == httpHop {
+			method = strings.TrimPrefix(method, httpKey) // the kind already says http
+		}
 		for _, h := range hs {
 			if h != c.From {
-				g.link(c.From, h, k, c.Method)
+				g.link(c.From, h, k, method)
 			}
 		}
 	}

@@ -516,7 +516,9 @@ func (jp *jvmProject) calls(fn *jvmFunc) {
 			case callee.Type() == "navigation_expression":
 				if sfx := childOf(callee, "navigation_suffix"); sfx != nil {
 					if nm := childOf(sfx, "simple_identifier"); nm != nil {
-						jp.linkMember(fn, jp.typeOf(fn, callee.NamedChild(0)), jp.text(f, nm), arity)
+						recv := jp.typeOf(fn, callee.NamedChild(0))
+						jp.linkMember(fn, recv, jp.text(f, nm), arity)
+						jp.ktorRequest(fn, recv, jp.text(f, nm), suffix)
 					}
 				}
 			}

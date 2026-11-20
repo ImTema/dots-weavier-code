@@ -54,8 +54,8 @@ func runOverview(args []string) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		fmt.Fprintf(os.Stderr, "overview: %d shown, %d nodes, %d call edges, %d grpc hops, layout %dms, %d KB json\n",
-			len(shown), len(o.Name), len(o.Edges)/2, len(o.GRPC)/2, o.LayoutMs, len(data)>>10)
+		fmt.Fprintf(os.Stderr, "overview: %d shown, %d nodes, %d call edges, %d link hops, layout %dms, %d KB json\n",
+			len(shown), len(o.Name), len(o.Edges)/2, len(o.Links)/2, o.LayoutMs, len(data)>>10)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(data)
 	})

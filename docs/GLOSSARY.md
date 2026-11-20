@@ -33,7 +33,7 @@ A typed element of the graph, such as a function, method or type. Its identity i
 _Avoid_: vertex, entity
 
 **Edge**:
-A typed, directed relation between two nodes, such as `call`, `grpc` or `pubsub`.
+A typed, directed relation between two nodes, such as `call`, `grpc`, `http` or `pubsub`.
 _Avoid_: link (reserved), relation
 
 **Hop**:

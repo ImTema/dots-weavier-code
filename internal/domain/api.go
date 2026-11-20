@@ -185,14 +185,17 @@ func (g *graph) path(s *state) Path {
 
 // FieldStep is one source line (or struct field) in a value's lifecycle.
 type FieldStep struct {
-	Kind string       `json:"kind"`           // flow into this step; "field" or "overwritten" are special
-	Name string       `json:"name,omitempty"` // field, as pkg.Type.Field
-	Loc  string       `json:"loc,omitempty"`  // [project:]rel/path.go:LINE
-	Code string       `json:"code,omitempty"` // the source line
-	Type string       `json:"type,omitempty"`
-	Fn   string       `json:"fn,omitempty"`
-	Via  string       `json:"via,omitempty"` // call site, for parameters
-	Kids []*FieldStep `json:"kids,omitempty"`
+	Kind   string       `json:"kind"`             // flow into this step; "field" or "overwritten" are special
+	Name   string       `json:"name,omitempty"`   // field, as pkg.Type.Field
+	Loc    string       `json:"loc,omitempty"`    // [project:]rel/path.go:LINE
+	Code   string       `json:"code,omitempty"`   // the source line
+	Before string       `json:"before,omitempty"` // the line above, for context
+	After  string       `json:"after,omitempty"`  // the line below
+	Type   string       `json:"type,omitempty"`
+	Fn     string       `json:"fn,omitempty"`
+	Via    string       `json:"via,omitempty"` // call site, for parameters
+	Kids   []*FieldStep `json:"kids,omitempty"`
+	Call   *Path        `json:"call,omitempty"` // best indexed call path between the seed's function and this step's
 }
 
 type FieldTrace struct {
@@ -230,6 +233,7 @@ func TraceField(ws, addr string, tests bool, maxProjects int) (*FieldTrace, erro
 	for _, n := range t.fwd.tree() {
 		r.Uses = append(r.Uses, p.step(n))
 	}
+	attachCalls(r, home.Name, p.rel(file), line)
 	return r, nil
 }
 
@@ -240,6 +244,7 @@ func (p *printer) step(n *tnode) *FieldStep {
 		s.Kind, s.Name = "field", p.fieldName(n.field)
 	} else {
 		s.Loc, s.Code = p.rel(n.file)+":"+strconv.Itoa(n.line), p.text(n.file, n.line)
+		s.Before, s.After = p.text(n.file, n.line-1), p.text(n.file, n.line+1) // one line of context each side
 		if n.fn != nil {
 			s.Fn = display(n.fn)
 		}

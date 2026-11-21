@@ -140,9 +140,9 @@ function draw(){layout(); const vs=visible(); const q=document.getElementById('q
   svg.querySelector('defs').innerHTML=Object.entries(KIND).map(([k,c])=>`<marker id="${mk(k)}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="${c}"/></marker>`).join('');
   apply();}
 function count(n){return n.kids.reduce((s,k)=>s+1+count(k),0);}
-// focus: fit the anchor (the selected box, else the seed) and up to 2 columns of boxes
+// focus: fit the origin seed (never the selected box) and up to 2 columns of boxes
 // on each side of it, so the first steps read at a useful size; fit shows everything.
-function focusView(){const a=sel||centers[0]; if(!a)return fit();
+function focusView(){const a=centers[0]; if(!a)return fit();
   fit(visible().filter(n=>Math.abs(n.x-a.x)<=2*COL+1));}
 function fit(only){const vs=Array.isArray(only)&&only.length?only:visible(); let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
   vs.forEach(n=>{x0=Math.min(x0,n.x-NW/2);x1=Math.max(x1,n.x+NW/2);y0=Math.min(y0,n.y-NH);y1=Math.max(y1,n.y+NH);});

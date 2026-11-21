@@ -1,0 +1,72 @@
+{
+ "Origin": [
+  {
+   "kind": "field",
+   "name": "Box.id",
+   "type": "String",
+   "kids": [
+    {
+     "kind": "store",
+     "loc": "src/main/kotlin/cases/Cases.kt:7",
+     "code": "var id: String = \"init\"",
+     "before": "class Box {",
+     "after": "val tags = mutableListOf\u003cString\u003e()",
+     "fn": "Box"
+    },
+    {
+     "kind": "store",
+     "loc": "src/main/kotlin/cases/Cases.kt:45",
+     "code": "box.id = acc",
+     "before": "val box = Box()",
+     "after": "box.tags.add(box.id)",
+     "fn": "Cases.flow",
+     "kids": [
+      {
+       "kind": "assign",
+       "loc": "src/main/kotlin/cases/Cases.kt:41",
+       "code": "acc = acc + i",
+       "before": "for ((i, p) in listOf(a, b.toString()).withIndex()) {",
+       "after": "acc = acc + p",
+       "fn": "Cases.flow",
+       "kids": [
+        {
+         "kind": "container",
+         "loc": "src/main/kotlin/cases/Cases.kt:40",
+         "code": "for ((i, p) in listOf(a, b.toString()).withIndex()) {",
+         "before": "var acc = \"\"",
+         "after": "acc = acc + i",
+         "fn": "Cases.flow"
+        }
+       ]
+      },
+      {
+       "kind": "assign",
+       "loc": "src/main/kotlin/cases/Cases.kt:42",
+       "code": "acc = acc + p",
+       "before": "acc = acc + i",
+       "after": "}",
+       "fn": "Cases.flow"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "Uses": [
+  {
+   "kind": "field",
+   "name": "Box.id",
+   "type": "String",
+   "kids": [
+    {
+     "kind": "read",
+     "loc": "src/main/kotlin/cases/Cases.kt:46",
+     "code": "box.tags.add(box.id)",
+     "before": "box.id = acc",
+     "after": "last = box.tags[0]",
+     "fn": "Cases.flow"
+    }
+   ]
+  }
+ ]
+}

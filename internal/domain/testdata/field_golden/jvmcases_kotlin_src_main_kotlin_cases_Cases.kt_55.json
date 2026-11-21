@@ -1,0 +1,66 @@
+{
+ "Origin": [
+  {
+   "kind": "seed",
+   "loc": "src/main/kotlin/cases/Cases.kt:55",
+   "code": "return text.lowercase()",
+   "before": "if (text.isBlank()) return text",
+   "after": "}",
+   "fn": "Cases.flow",
+   "kids": [
+    {
+     "kind": "assign",
+     "loc": "src/main/kotlin/cases/Cases.kt:53",
+     "code": "val text = \"${all.first()}-${rate.cents}\"",
+     "before": "val all = listOf(*mapped.toTypedArray())",
+     "after": "if (text.isBlank()) return text",
+     "fn": "Cases.flow",
+     "kids": [
+      {
+       "kind": "field",
+       "name": "Rate.cents",
+       "type": "Long",
+       "kids": [
+        {
+         "kind": "store",
+         "loc": "src/main/kotlin/cases/Cases.kt:50",
+         "code": "val rate = Rate(slots[0], range.last.toLong())",
+         "before": "slots[0] = last",
+         "after": "val mapped = listOf(rate).map { r -\u003e r.customerId.uppercase() }",
+         "fn": "Cases.flow"
+        }
+       ]
+      },
+      {
+       "kind": "assign",
+       "loc": "src/main/kotlin/cases/Cases.kt:52",
+       "code": "val all = listOf(*mapped.toTypedArray())",
+       "before": "val mapped = listOf(rate).map { r -\u003e r.customerId.uppercase() }",
+       "after": "val text = \"${all.first()}-${rate.cents}\"",
+       "fn": "Cases.flow"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "Uses": [
+  {
+   "kind": "seed",
+   "loc": "src/main/kotlin/cases/Cases.kt:55",
+   "code": "return text.lowercase()",
+   "before": "if (text.isBlank()) return text",
+   "after": "}",
+   "fn": "Cases.flow",
+   "kids": [
+    {
+     "kind": "return",
+     "loc": "src/main/kotlin/cases/Cases.kt:58",
+     "code": "fun caller() = println(flow(\" 42 \", 3))",
+     "after": "}",
+     "fn": "Cases.caller"
+    }
+   ]
+  }
+ ]
+}

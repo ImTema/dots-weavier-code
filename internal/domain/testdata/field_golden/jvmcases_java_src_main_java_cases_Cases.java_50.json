@@ -1,0 +1,269 @@
+{
+ "Origin": [
+  {
+   "kind": "seed",
+   "loc": "src/main/java/cases/Cases.java:50",
+   "code": "return new Line(out, line.qty()).sku();",
+   "before": "}",
+   "after": "}",
+   "type": "String",
+   "fn": "Cases.flow",
+   "kids": [
+    {
+     "kind": "field",
+     "name": "Line.qty",
+     "type": "int",
+     "kids": [
+      {
+       "kind": "store",
+       "loc": "src/main/java/cases/Cases.java:35",
+       "code": "Line line = new Line(first, sum);",
+       "before": "this.last = h.id;",
+       "after": "List\u003cString\u003e ids = new ArrayList\u003c\u003e();",
+       "type": "int",
+       "fn": "Cases.flow",
+       "kids": [
+        {
+         "kind": "assign",
+         "loc": "src/main/java/cases/Cases.java:28",
+         "code": "int sum = neg * 2 + n % 3;",
+         "before": "int neg = -n;",
+         "after": "String[] arr = new String[] {pick};",
+         "type": "int",
+         "fn": "Cases.flow",
+         "kids": [
+          {
+           "kind": "assign",
+           "loc": "src/main/java/cases/Cases.java:22",
+           "code": "String flow(String raw, int n) {",
+           "after": "String id = clean(raw);",
+           "type": "int",
+           "fn": "Cases.flow",
+           "kids": [
+            {
+             "kind": "arg",
+             "loc": "src/main/java/cases/Cases.java:54",
+             "code": "System.out.println(flow(\" 42 \", 3));",
+             "before": "void caller() {",
+             "after": "}",
+             "fn": "Cases.caller"
+            }
+           ]
+          },
+          {
+           "kind": "assign",
+           "loc": "src/main/java/cases/Cases.java:27",
+           "code": "int neg = -n;",
+           "before": "String pick = n \u003e 0 ? (String) boxed : id;",
+           "after": "int sum = neg * 2 + n % 3;",
+           "fn": "Cases.flow"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "assign",
+     "loc": "src/main/java/cases/Cases.java:46",
+     "code": "String out = uuid.toString() + last + Integer.toString(h.slots[0]) + arr.length;",
+     "before": "UUID uuid = UUID.fromString(slots[0]);",
+     "after": "if (out.isBlank() || !out.equals(raw)) {",
+     "type": "String",
+     "fn": "Cases.flow",
+     "kids": [
+      {
+       "kind": "field",
+       "name": "Cases.last",
+       "type": "String",
+       "kids": [
+        {
+         "kind": "store",
+         "loc": "src/main/java/cases/Cases.java:16",
+         "code": "private String last = \"none\";",
+         "fn": "Cases"
+        },
+        {
+         "kind": "store",
+         "loc": "src/main/java/cases/Cases.java:34",
+         "code": "this.last = h.id;",
+         "before": "h.slots[0] = sum;",
+         "after": "Line line = new Line(first, sum);",
+         "fn": "Cases.flow",
+         "kids": [
+          {
+           "kind": "field",
+           "name": "Holder.id",
+           "type": "String",
+           "kids": [
+            {
+             "kind": "store",
+             "loc": "src/main/java/cases/Cases.java:12",
+             "code": "String id = \"init\";",
+             "before": "static class Holder {",
+             "after": "int[] slots = new int[2];",
+             "fn": "Cases.Holder"
+            },
+            {
+             "kind": "store",
+             "loc": "src/main/java/cases/Cases.java:32",
+             "code": "h.id = first;",
+             "before": "Holder h = new Holder();",
+             "after": "h.slots[0] = sum;",
+             "type": "String",
+             "fn": "Cases.flow",
+             "kids": [
+              {
+               "kind": "assign",
+               "loc": "src/main/java/cases/Cases.java:30",
+               "code": "String first = arr[0];",
+               "before": "String[] arr = new String[] {pick};",
+               "after": "Holder h = new Holder();",
+               "fn": "Cases.flow"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "field",
+       "name": "Holder.slots",
+       "type": "int",
+       "kids": [
+        {
+         "kind": "store",
+         "loc": "src/main/java/cases/Cases.java:13",
+         "code": "int[] slots = new int[2];",
+         "before": "String id = \"init\";",
+         "after": "}",
+         "fn": "Cases.Holder"
+        }
+       ]
+      },
+      {
+       "kind": "assign",
+       "loc": "src/main/java/cases/Cases.java:45",
+       "code": "UUID uuid = UUID.fromString(slots[0]);",
+       "before": "slots[0] = joined;",
+       "after": "String out = uuid.toString() + last + Integer.toString(h.slots[0]) + arr.length;",
+       "type": "String",
+       "fn": "Cases.flow"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "Uses": [
+  {
+   "kind": "seed",
+   "loc": "src/main/java/cases/Cases.java:50",
+   "code": "return new Line(out, line.qty()).sku();",
+   "before": "}",
+   "after": "}",
+   "fn": "Cases.flow",
+   "kids": [
+    {
+     "kind": "return",
+     "loc": "src/main/java/cases/Cases.java:54",
+     "code": "System.out.println(flow(\" 42 \", 3));",
+     "before": "void caller() {",
+     "after": "}",
+     "fn": "Cases.caller"
+    }
+   ]
+  },
+  {
+   "kind": "field",
+   "name": "Line.sku",
+   "type": "String",
+   "kids": [
+    {
+     "kind": "read",
+     "loc": "src/main/java/cases/Cases.java:37",
+     "code": "ids.add(line.sku());",
+     "before": "List\u003cString\u003e ids = new ArrayList\u003c\u003e();",
+     "after": "List\u003cString\u003e upper = ids.stream().map(s -\u003e s.toUpperCase()).toList();",
+     "type": "List",
+     "fn": "Cases.flow",
+     "kids": [
+      {
+       "kind": "assign",
+       "loc": "src/main/java/cases/Cases.java:38",
+       "code": "List\u003cString\u003e upper = ids.stream().map(s -\u003e s.toUpperCase()).toList();",
+       "before": "ids.add(line.sku());",
+       "after": "String joined = \"\";",
+       "type": "List",
+       "fn": "Cases.flow",
+       "kids": [
+        {
+         "kind": "assign",
+         "loc": "src/main/java/cases/Cases.java:40",
+         "code": "for (String u : upper) {",
+         "before": "String joined = \"\";",
+         "after": "joined = joined + u;",
+         "type": "String",
+         "fn": "Cases.flow",
+         "kids": [
+          {
+           "kind": "assign",
+           "loc": "src/main/java/cases/Cases.java:41",
+           "code": "joined = joined + u;",
+           "before": "for (String u : upper) {",
+           "after": "}",
+           "type": "String",
+           "fn": "Cases.flow",
+           "kids": [
+            {
+             "kind": "assign",
+             "loc": "src/main/java/cases/Cases.java:44",
+             "code": "slots[0] = joined;",
+             "before": "String[] slots = new String[1];",
+             "after": "UUID uuid = UUID.fromString(slots[0]);",
+             "type": "String",
+             "fn": "Cases.flow",
+             "kids": [
+              {
+               "kind": "assign",
+               "loc": "src/main/java/cases/Cases.java:45",
+               "code": "UUID uuid = UUID.fromString(slots[0]);",
+               "before": "slots[0] = joined;",
+               "after": "String out = uuid.toString() + last + Integer.toString(h.slots[0]) + arr.length;",
+               "type": "UUID",
+               "fn": "Cases.flow",
+               "kids": [
+                {
+                 "kind": "assign",
+                 "loc": "src/main/java/cases/Cases.java:46",
+                 "code": "String out = uuid.toString() + last + Integer.toString(h.slots[0]) + arr.length;",
+                 "before": "UUID uuid = UUID.fromString(slots[0]);",
+                 "after": "if (out.isBlank() || !out.equals(raw)) {",
+                 "type": "String",
+                 "fn": "Cases.flow"
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "field",
+   "name": "Line.qty",
+   "type": "int"
+  }
+ ]
+}

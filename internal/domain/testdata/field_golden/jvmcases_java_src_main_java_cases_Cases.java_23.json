@@ -1,0 +1,92 @@
+{
+ "Origin": [
+  {
+   "kind": "seed",
+   "loc": "src/main/java/cases/Cases.java:23",
+   "code": "String id = clean(raw);",
+   "before": "String flow(String raw, int n) {",
+   "after": "String quoted = (\"[\" + id + \"]\");",
+   "fn": "Cases.flow",
+   "kids": [
+    {
+     "kind": "return",
+     "loc": "src/main/java/cases/Cases.java:19",
+     "code": "return raw.trim();",
+     "before": "static String clean(String raw) {",
+     "after": "}",
+     "fn": "Cases.clean",
+     "kids": [
+      {
+       "kind": "assign",
+       "loc": "src/main/java/cases/Cases.java:18",
+       "code": "static String clean(String raw) {",
+       "after": "return raw.trim();",
+       "type": "String",
+       "fn": "Cases.clean"
+      }
+     ]
+    },
+    {
+     "kind": "assign",
+     "loc": "src/main/java/cases/Cases.java:22",
+     "code": "String flow(String raw, int n) {",
+     "after": "String id = clean(raw);",
+     "type": "String",
+     "fn": "Cases.flow",
+     "kids": [
+      {
+       "kind": "arg",
+       "loc": "src/main/java/cases/Cases.java:54",
+       "code": "System.out.println(flow(\" 42 \", 3));",
+       "before": "void caller() {",
+       "after": "}",
+       "fn": "Cases.caller"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "Uses": [
+  {
+   "kind": "seed",
+   "loc": "src/main/java/cases/Cases.java:23",
+   "code": "String id = clean(raw);",
+   "before": "String flow(String raw, int n) {",
+   "after": "String quoted = (\"[\" + id + \"]\");",
+   "type": "String",
+   "fn": "Cases.flow",
+   "kids": [
+    {
+     "kind": "assign",
+     "loc": "src/main/java/cases/Cases.java:24",
+     "code": "String quoted = (\"[\" + id + \"]\");",
+     "before": "String id = clean(raw);",
+     "after": "Object boxed = (Object) quoted;",
+     "type": "String",
+     "fn": "Cases.flow",
+     "kids": [
+      {
+       "kind": "assign",
+       "loc": "src/main/java/cases/Cases.java:25",
+       "code": "Object boxed = (Object) quoted;",
+       "before": "String quoted = (\"[\" + id + \"]\");",
+       "after": "String pick = n \u003e 0 ? (String) boxed : id;",
+       "type": "Object",
+       "fn": "Cases.flow"
+      }
+     ]
+    },
+    {
+     "kind": "assign",
+     "loc": "src/main/java/cases/Cases.java:26",
+     "code": "String pick = n \u003e 0 ? (String) boxed : id;",
+     "before": "Object boxed = (Object) quoted;",
+     "after": "int neg = -n;",
+     "type": "String",
+     "fn": "Cases.flow"
+    }
+   ]
+  }
+ ]
+}

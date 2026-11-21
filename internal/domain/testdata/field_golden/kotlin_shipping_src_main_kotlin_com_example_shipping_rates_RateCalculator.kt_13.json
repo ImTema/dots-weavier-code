@@ -1,0 +1,105 @@
+{
+ "Origin": [
+  {
+   "kind": "seed",
+   "loc": "src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:13",
+   "code": "val base = baseByRegion[region] ?: DEFAULT_BASE",
+   "before": "require(units \u003e 0) { \"units must be positive\" }",
+   "after": "val extra = if (units \u003e FREE_UNITS) (units - FREE_UNITS) * PER_EXTRA_UNIT else 0L",
+   "fn": "RateCalculator.cents",
+   "kids": [
+    {
+     "kind": "field",
+     "name": "RateCalculator.DEFAULT_BASE",
+     "kids": [
+      {
+       "kind": "store",
+       "loc": "src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:6",
+       "code": "private const val DEFAULT_BASE = 1_000L",
+       "before": "private val baseByRegion = mapOf(\"EU\" to 700L, \"UK\" to 900L, \"US\" to 500L)",
+       "after": "private const val FREE_UNITS = 5",
+       "fn": "RateCalculator"
+      }
+     ]
+    },
+    {
+     "kind": "field",
+     "name": "RateCalculator.baseByRegion",
+     "kids": [
+      {
+       "kind": "store",
+       "loc": "src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:5",
+       "code": "private val baseByRegion = mapOf(\"EU\" to 700L, \"UK\" to 900L, \"US\" to 500L)",
+       "before": "object RateCalculator {",
+       "after": "private const val DEFAULT_BASE = 1_000L",
+       "fn": "RateCalculator"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "Uses": [
+  {
+   "kind": "seed",
+   "loc": "src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:13",
+   "code": "val base = baseByRegion[region] ?: DEFAULT_BASE",
+   "before": "require(units \u003e 0) { \"units must be positive\" }",
+   "after": "val extra = if (units \u003e FREE_UNITS) (units - FREE_UNITS) * PER_EXTRA_UNIT else 0L",
+   "fn": "RateCalculator.cents",
+   "kids": [
+    {
+     "kind": "assign",
+     "loc": "src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:17",
+     "code": "\"silver\" -\u003e (base + extra) / 2",
+     "before": "\"gold\" -\u003e 0L",
+     "after": "else -\u003e base + extra",
+     "fn": "RateCalculator.cents"
+    },
+    {
+     "kind": "assign",
+     "loc": "src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:18",
+     "code": "else -\u003e base + extra",
+     "before": "\"silver\" -\u003e (base + extra) / 2",
+     "after": "}",
+     "fn": "RateCalculator.cents",
+     "kids": [
+      {
+       "kind": "assign",
+       "loc": "src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:15",
+       "code": "return when (tier) {",
+       "before": "val extra = if (units \u003e FREE_UNITS) (units - FREE_UNITS) * PER_EXTRA_UNIT else 0L",
+       "after": "\"gold\" -\u003e 0L",
+       "fn": "RateCalculator.cents",
+       "kids": [
+        {
+         "kind": "return",
+         "loc": "src/main/kotlin/com/example/shipping/rates/ShippingRates.kt:14",
+         "code": "RateQuote(region = \"\", cents = RateCalculator.cents(\"\", \"standard\", units))",
+         "before": "return if (customer == null) {",
+         "after": "} else {",
+         "fn": "ShippingRates.quote",
+         "kids": [
+          {
+           "kind": "field",
+           "name": "RateQuote.cents",
+           "type": "Long"
+          }
+         ]
+        },
+        {
+         "kind": "return",
+         "loc": "src/main/kotlin/com/example/shipping/rates/ShippingRates.kt:16",
+         "code": "RateQuote(customer.region, RateCalculator.cents(customer.region, customer.tier, units))",
+         "before": "} else {",
+         "after": "}",
+         "fn": "ShippingRates.quote"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

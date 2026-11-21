@@ -12,9 +12,10 @@ import (
 
 var update = flag.Bool("update", false, "rewrite testdata/field_golden/*.json")
 
-// TestTraceFieldGolden pins both trees of Go field traces, so refactors of field.go
-// can be checked byte for byte. Call paths and hops come from the user's index and
-// are left out. Run with -update after an intended change.
+// TestTraceFieldGolden pins both trees of Go, Java and Kotlin field traces, so
+// refactors of field*.go and jvm_field.go can be checked byte for byte. Call paths
+// and hops come from the user's index and are left out. Run with -update after an
+// intended change.
 func TestTraceFieldGolden(t *testing.T) {
 	for _, c := range []struct{ ws, addr string }{
 		{"../../cmd/dotweavier/testdata", "fieldproj:main.go:16"},
@@ -26,6 +27,28 @@ func TestTraceFieldGolden(t *testing.T) {
 		{"../../samples/golang", "orders:internal/pricer/pricer.go:23"},
 		{"../../samples/golang", "orders:internal/pricer/pricer.go:34"},
 		{"../../samples/golang", "pricing:internal/server/server.go:47"},
+		{"../../samples", "java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:21"},
+		{"../../samples", "java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:24"},
+		{"../../samples", "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:47"},
+		{"../../samples", "kotlin/shipping:src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:13"},
+		{"testdata", "jvmcases/java:src/main/java/cases/Cases.java:9"},
+		{"testdata", "jvmcases/java:src/main/java/cases/Cases.java:12"},
+		{"testdata", "jvmcases/java:src/main/java/cases/Cases.java:23"},
+		{"testdata", "jvmcases/java:src/main/java/cases/Cases.java:46"},
+		{"testdata", "jvmcases/java:src/main/java/cases/Cases.java:50"},
+		{"testdata", "jvmcases/kotlin:src/main/kotlin/cases/Cases.kt:4"},
+		{"testdata", "jvmcases/kotlin:src/main/kotlin/cases/Cases.kt:7"},
+		{"testdata", "jvmcases/kotlin:src/main/kotlin/cases/Cases.kt:17"},
+		{"testdata", "jvmcases/kotlin:src/main/kotlin/cases/Cases.kt:30"},
+		{"testdata", "jvmcases/kotlin:src/main/kotlin/cases/Cases.kt:53"},
+		{"testdata", "jvmcases/kotlin:src/main/kotlin/cases/Cases.kt:55"},
+		{"testdata", "jvmcases/java:src/main/java/cases/Cases.java:22"},
+		{"testdata", "jvmcases/java:src/main/java/cases/Cases.java:26"},
+		{"testdata", "jvmcases/kotlin:src/main/kotlin/cases/Cases.kt:18"},
+		{"testdata", "jvmcases/kotlin:src/main/kotlin/cases/Cases.kt:23"},
+		{"testdata", "jvmcases/kotlin:src/main/kotlin/cases/Cases.kt:29"},
+		{"testdata", "jvmcases/kotlin:src/main/kotlin/cases/Cases.kt:33"},
+		{"testdata", "jvmcases/kotlin:src/main/kotlin/cases/Cases.kt:42"},
 	} {
 		name := strings.NewReplacer("/", "_", ":", "_").Replace(c.addr)
 		t.Run(name, func(t *testing.T) {

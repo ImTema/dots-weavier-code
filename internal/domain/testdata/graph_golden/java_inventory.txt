@@ -1,0 +1,66 @@
+edge java/inventory:src/main/java/com/example/inventory/customers/OrdersCustomerDirectory.java:OrdersCustomerDirectory.tier -call -> java/inventory:src/main/java/com/example/inventory/customers/CustomerLookupException.java:CustomerLookupException.<init>
+edge java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.release -call -> java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:ReservationService.release
+edge java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.reserve -call -> java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.fail
+edge java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.reserve -call -> java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:ReservationService.reserve
+edge java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:ReservationService.release -call -> java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.release
+edge java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:ReservationService.reserve -call -> java/inventory:src/main/java/com/example/inventory/reservation/LimitExceededException.java:LimitExceededException.<init>
+edge java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:ReservationService.reserve -call -> java/inventory:src/main/java/com/example/inventory/reservation/TierLimits.java:TierLimits.perSku
+edge java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:ReservationService.reserve -call -> java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.reserve
+edge java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:ReservationService.reserve -iface:guess -> java/inventory:src/main/java/com/example/inventory/customers/OrdersCustomerDirectory.java:OrdersCustomerDirectory.tier
+edge java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:ReservationService.reserve -iface:guess -> java/inventory:src/test/java/com/example/inventory/grpc/StubCustomerDirectory.java:StubCustomerDirectory.tier
+edge java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.reserve -call -> java/inventory:src/main/java/com/example/inventory/stock/OutOfStockException.java:OutOfStockException.<init>
+edge java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.reserve -call -> java/inventory:src/main/java/com/example/inventory/stock/UnknownSkuException.java:UnknownSkuException.<init>
+edge java/inventory:src/main/java/com/example/inventory/stock/StockLedgerProducer.java:StockLedgerProducer.stockLedger -call -> java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.<init>
+edge java/inventory:src/test/java/com/example/inventory/grpc/InventoryGrpcServiceTest.java:InventoryGrpcServiceTest.assertCode -iface:guess -> java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.reserve
+edge java/inventory:src/test/java/com/example/inventory/grpc/InventoryGrpcServiceTest.java:InventoryGrpcServiceTest.errorsMapToStatusCodes -call -> java/inventory:src/test/java/com/example/inventory/grpc/InventoryGrpcServiceTest.java:InventoryGrpcServiceTest.assertCode
+edge java/inventory:src/test/java/com/example/inventory/grpc/InventoryGrpcServiceTest.java:InventoryGrpcServiceTest.errorsMapToStatusCodes -call -> java/inventory:src/test/java/com/example/inventory/grpc/InventoryGrpcServiceTest.java:InventoryGrpcServiceTest.request
+edge java/inventory:src/test/java/com/example/inventory/grpc/InventoryGrpcServiceTest.java:InventoryGrpcServiceTest.reserveThenRelease -call -> java/inventory:src/test/java/com/example/inventory/grpc/InventoryGrpcServiceTest.java:InventoryGrpcServiceTest.request
+edge java/inventory:src/test/java/com/example/inventory/grpc/InventoryGrpcServiceTest.java:InventoryGrpcServiceTest.reserveThenRelease -iface:guess -> java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.release
+edge java/inventory:src/test/java/com/example/inventory/grpc/InventoryGrpcServiceTest.java:InventoryGrpcServiceTest.reserveThenRelease -iface:guess -> java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.reserve
+edge java/inventory:src/test/java/com/example/inventory/reservation/ReservationServiceTest.java:ReservationServiceTest.invalidLinesAreRejected -call -> java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:ReservationService.<init>
+edge java/inventory:src/test/java/com/example/inventory/reservation/ReservationServiceTest.java:ReservationServiceTest.invalidLinesAreRejected -call -> java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:ReservationService.reserve
+edge java/inventory:src/test/java/com/example/inventory/reservation/ReservationServiceTest.java:ReservationServiceTest.invalidLinesAreRejected -call -> java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.<init>
+edge java/inventory:src/test/java/com/example/inventory/reservation/ReservationServiceTest.java:ReservationServiceTest.tierLimitsApplyPerSku -call -> java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:ReservationService.<init>
+edge java/inventory:src/test/java/com/example/inventory/reservation/ReservationServiceTest.java:ReservationServiceTest.tierLimitsApplyPerSku -call -> java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:ReservationService.reserve
+edge java/inventory:src/test/java/com/example/inventory/reservation/ReservationServiceTest.java:ReservationServiceTest.tierLimitsApplyPerSku -call -> java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.<init>
+edge java/inventory:src/test/java/com/example/inventory/stock/StockLedgerTest.java:StockLedgerTest.reserveAndReleaseRestoresStock -call -> java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.<init>
+edge java/inventory:src/test/java/com/example/inventory/stock/StockLedgerTest.java:StockLedgerTest.reserveAndReleaseRestoresStock -call -> java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.available
+edge java/inventory:src/test/java/com/example/inventory/stock/StockLedgerTest.java:StockLedgerTest.reserveAndReleaseRestoresStock -call -> java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.release
+edge java/inventory:src/test/java/com/example/inventory/stock/StockLedgerTest.java:StockLedgerTest.reserveAndReleaseRestoresStock -call -> java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.reserve
+edge java/inventory:src/test/java/com/example/inventory/stock/StockLedgerTest.java:StockLedgerTest.reserveIsAllOrNothing -call -> java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.<init>
+edge java/inventory:src/test/java/com/example/inventory/stock/StockLedgerTest.java:StockLedgerTest.reserveIsAllOrNothing -call -> java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.available
+edge java/inventory:src/test/java/com/example/inventory/stock/StockLedgerTest.java:StockLedgerTest.reserveIsAllOrNothing -call -> java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.reserve
+edge java/inventory:src/test/java/com/example/inventory/stock/StockLedgerTest.java:StockLedgerTest.unknownSkuIsRejected -call -> java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.<init>
+edge java/inventory:src/test/java/com/example/inventory/stock/StockLedgerTest.java:StockLedgerTest.unknownSkuIsRejected -call -> java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.reserve
+impl /inventory.v1.InventoryService/Release <- java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.release
+impl /inventory.v1.InventoryService/Reserve <- java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.reserve
+node java/inventory:src/main/java/com/example/inventory/customers/CustomerLookupException.java:CustomerLookupException.<init> 4-6 test=false
+node java/inventory:src/main/java/com/example/inventory/customers/OrdersCustomerDirectory.java:OrdersCustomerDirectory.<init> 15-17 test=false
+node java/inventory:src/main/java/com/example/inventory/customers/OrdersCustomerDirectory.java:OrdersCustomerDirectory.tier 19-35 test=false
+node java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.<init> 26-28 test=false
+node java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.fail 58-60 test=false
+node java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.release 52-56 test=false
+node java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.reserve 31-50 test=false
+node java/inventory:src/main/java/com/example/inventory/reservation/LimitExceededException.java:LimitExceededException.<init> 4-6 test=false
+node java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:ReservationService.<init> 16-19 test=false
+node java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:ReservationService.release 48-53 test=false
+node java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:ReservationService.reserve 24-46 test=false
+node java/inventory:src/main/java/com/example/inventory/reservation/TierLimits.java:TierLimits.<init> 5-5 test=false
+node java/inventory:src/main/java/com/example/inventory/reservation/TierLimits.java:TierLimits.perSku 7-14 test=false
+node java/inventory:src/main/java/com/example/inventory/stock/OutOfStockException.java:OutOfStockException.<init> 4-6 test=false
+node java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.<init> 12-14 test=false
+node java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.available 46-48 test=false
+node java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.release 37-44 test=false
+node java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.reserve 21-34 test=false
+node java/inventory:src/main/java/com/example/inventory/stock/StockLedgerProducer.java:StockLedgerProducer.stockLedger 7-11 test=false
+node java/inventory:src/main/java/com/example/inventory/stock/UnknownSkuException.java:UnknownSkuException.<init> 4-6 test=false
+node java/inventory:src/test/java/com/example/inventory/grpc/InventoryGrpcServiceTest.java:InventoryGrpcServiceTest.assertCode 49-52 test=true
+node java/inventory:src/test/java/com/example/inventory/grpc/InventoryGrpcServiceTest.java:InventoryGrpcServiceTest.errorsMapToStatusCodes 41-47 test=true
+node java/inventory:src/test/java/com/example/inventory/grpc/InventoryGrpcServiceTest.java:InventoryGrpcServiceTest.request 26-31 test=true
+node java/inventory:src/test/java/com/example/inventory/grpc/InventoryGrpcServiceTest.java:InventoryGrpcServiceTest.reserveThenRelease 33-39 test=true
+node java/inventory:src/test/java/com/example/inventory/grpc/StubCustomerDirectory.java:StubCustomerDirectory.tier 9-12 test=true
+node java/inventory:src/test/java/com/example/inventory/reservation/ReservationServiceTest.java:ReservationServiceTest.invalidLinesAreRejected 31-37 test=true
+node java/inventory:src/test/java/com/example/inventory/reservation/ReservationServiceTest.java:ReservationServiceTest.tierLimitsApplyPerSku 13-29 test=true
+node java/inventory:src/test/java/com/example/inventory/stock/StockLedgerTest.java:StockLedgerTest.reserveAndReleaseRestoresStock 12-20 test=true
+node java/inventory:src/test/java/com/example/inventory/stock/StockLedgerTest.java:StockLedgerTest.reserveIsAllOrNothing 22-28 test=true
+node java/inventory:src/test/java/com/example/inventory/stock/StockLedgerTest.java:StockLedgerTest.unknownSkuIsRejected 30-34 test=true

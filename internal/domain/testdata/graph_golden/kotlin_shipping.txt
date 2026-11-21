@@ -1,0 +1,16 @@
+call kotlin/shipping:src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:OrdersCustomerDirectory.find http GET /customers/{} ext=HttpClient.get
+edge kotlin/shipping:src/main/kotlin/com/example/shipping/Application.kt:main -call -> kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:Application.shippingModule
+edge kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:Application.shippingModule -call -> kotlin/shipping:src/main/kotlin/com/example/shipping/rates/ShippingRates.kt:ShippingRates.quote
+edge kotlin/shipping:src/main/kotlin/com/example/shipping/rates/ShippingRates.kt:ShippingRates.quote -call -> kotlin/shipping:src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:RateCalculator.cents
+edge kotlin/shipping:src/main/kotlin/com/example/shipping/rates/ShippingRates.kt:ShippingRates.quote -iface:guess -> kotlin/shipping:src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:OrdersCustomerDirectory.find
+edge kotlin/shipping:src/test/kotlin/com/example/shipping/http/RoutesTest.kt:RoutesTest.rates -call -> kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:Application.shippingModule
+edge kotlin/shipping:src/test/kotlin/com/example/shipping/rates/RateCalculatorTest.kt:RateCalculatorTest.rates -call -> kotlin/shipping:src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:RateCalculator.cents
+edge kotlin/shipping:src/test/kotlin/com/example/shipping/rates/RateCalculatorTest.kt:RateCalculatorTest.rejectsNonPositiveUnits -call -> kotlin/shipping:src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:RateCalculator.cents
+node kotlin/shipping:src/main/kotlin/com/example/shipping/Application.kt:main 16-36 test=false
+node kotlin/shipping:src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:OrdersCustomerDirectory.find 26-38 test=false
+node kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:Application.shippingModule 31-54 test=false
+node kotlin/shipping:src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:RateCalculator.cents 11-20 test=false
+node kotlin/shipping:src/main/kotlin/com/example/shipping/rates/ShippingRates.kt:ShippingRates.quote 9-18 test=false
+node kotlin/shipping:src/test/kotlin/com/example/shipping/http/RoutesTest.kt:RoutesTest.rates 25-39 test=true
+node kotlin/shipping:src/test/kotlin/com/example/shipping/rates/RateCalculatorTest.kt:RateCalculatorTest.rates 8-20 test=true
+node kotlin/shipping:src/test/kotlin/com/example/shipping/rates/RateCalculatorTest.kt:RateCalculatorTest.rejectsNonPositiveUnits 22-25 test=true

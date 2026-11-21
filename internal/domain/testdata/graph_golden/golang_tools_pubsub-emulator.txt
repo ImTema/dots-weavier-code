@@ -1,0 +1,3 @@
+edge golang/tools/pubsub-emulator:main.go:main -iface:guess -> external: context.Context.Done
+node external: context.Context.Done 0-0 test=false
+node golang/tools/pubsub-emulator:main.go:main 20-33 test=false

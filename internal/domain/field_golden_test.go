@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-var update = flag.Bool("update", false, "rewrite testdata/field_golden/*.json")
+var update = flag.Bool("update", false, "rewrite golden files under testdata/")
 
 // TestTraceFieldGolden pins both trees of Go, Java and Kotlin field traces, so
 // refactors of field*.go and jvm_field.go can be checked byte for byte. Call paths

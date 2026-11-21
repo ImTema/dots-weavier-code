@@ -1,0 +1,213 @@
+call golang/orders:internal/inventory/client.go:Client.Release /inventory.v1.InventoryService/Release ext=inventoryv1.InventoryServiceClient.Release
+call golang/orders:internal/inventory/client.go:Client.Reserve /inventory.v1.InventoryService/Reserve ext=inventoryv1.InventoryServiceClient.Reserve
+call golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Release /inventory.v1.InventoryService/Release ext=grpc /inventory.v1.InventoryService/Release
+call golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Reserve /inventory.v1.InventoryService/Reserve ext=grpc /inventory.v1.InventoryService/Reserve
+call golang/orders:internal/pricer/pricer.go:Client.Price /pricing.v1.PricingService/Quote ext=pricingv1.PricingServiceClient.Quote
+edge golang/orders:api/events/v1/events.pb.go:OrderPlaced.Descriptor -call -> golang/orders:api/events/v1/events.pb.go:file_events_v1_events_proto_rawDescGZIP
+edge golang/orders:api/events/v1/events.pb.go:file_events_v1_events_proto_init -iface:guess -> external: reflect.Type.PkgPath
+edge golang/orders:api/events/v1/events.pb.go:init#1 -call -> golang/orders:api/events/v1/events.pb.go:file_events_v1_events_proto_init
+edge golang/orders:cmd/orders/main.go:main -call -> golang/orders:cmd/orders/main.go:run
+edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:cmd/orders/main.go:run$1
+edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/customer/store.go:NewStore
+edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/customer/store.go:Seed
+edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/events/publisher.go:EnsureTopic
+edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/events/publisher.go:NewPublisher
+edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/events/publisher.go:Publisher.Stop
+edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/httpapi/httpapi.go:Handler.Routes
+edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/httpapi/httpapi.go:New
+edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/inventory/client.go:New
+edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:NewInventoryServiceClient
+edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/notify/notify.go:NewEmail
+edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/notify/notify.go:NewSMS
+edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/order/order.go:NewService
+edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/pricer/pricer.go:New
+edge golang/orders:cmd/orders/main.go:run -iface:guess -> external: context.Context.Done
+edge golang/orders:internal/events/publisher_test.go:TestOrderPlaced -call -> golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetOrderId
+edge golang/orders:internal/events/publisher_test.go:TestOrderPlaced -call -> golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetPlacedAt
+edge golang/orders:internal/events/publisher_test.go:TestOrderPlaced -call -> golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetUnits
+edge golang/orders:internal/events/publisher_test.go:TestOrderPlaced -call -> golang/orders:internal/events/publisher.go:EnsureTopic
+edge golang/orders:internal/events/publisher_test.go:TestOrderPlaced -call -> golang/orders:internal/events/publisher.go:NewPublisher
+edge golang/orders:internal/events/publisher_test.go:TestOrderPlaced -call -> golang/orders:internal/events/publisher.go:Publisher.OrderPlaced
+edge golang/orders:internal/events/publisher_test.go:TestOrderPlaced -call -> golang/orders:internal/events/publisher.go:Publisher.Stop
+edge golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer -call -> golang/orders:internal/customer/store.go:Store.Lookup
+edge golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer -call -> golang/orders:internal/httpapi/httpapi.go:writeJSON
+edge golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer -iface:guess -> external: error.Error
+edge golang/orders:internal/httpapi/httpapi.go:Handler.placeOrder -call -> golang/orders:internal/httpapi/httpapi.go:writeJSON
+edge golang/orders:internal/httpapi/httpapi.go:Handler.placeOrder -call -> golang/orders:internal/notify/notify.go:WithNotifier
+edge golang/orders:internal/httpapi/httpapi.go:Handler.placeOrder -call -> golang/orders:internal/order/order.go:Service.Place
+edge golang/orders:internal/httpapi/httpapi.go:Handler.placeOrder -iface:guess -> external: error.Error
+edge golang/orders:internal/httpapi/httpapi.go:writeJSON -iface:guess -> external: http.ResponseWriter.Header
+edge golang/orders:internal/httpapi/httpapi.go:writeJSON -iface:guess -> external: http.ResponseWriter.WriteHeader
+edge golang/orders:internal/httpapi/httpapi_test.go:TestGetCustomer -call -> golang/orders:internal/customer/store.go:NewStore
+edge golang/orders:internal/httpapi/httpapi_test.go:TestGetCustomer -call -> golang/orders:internal/customer/store.go:Seed
+edge golang/orders:internal/httpapi/httpapi_test.go:TestGetCustomer -call -> golang/orders:internal/httpapi/httpapi.go:Handler.Routes
+edge golang/orders:internal/httpapi/httpapi_test.go:TestGetCustomer -call -> golang/orders:internal/httpapi/httpapi.go:New
+edge golang/orders:internal/httpapi/httpapi_test.go:TestGetCustomer -iface:guess -> golang/orders:internal/httpapi/httpapi_test.go:TestGetCustomer$1
+edge golang/orders:internal/httpapi/httpapi_test.go:TestGetCustomer$1 -iface:guess -> external: io.ReadCloser.Close
+edge golang/orders:internal/inventory/client.go:Client.Release -iface:sure -> golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Release
+edge golang/orders:internal/inventory/client.go:Client.Reserve -call -> golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReserveResponse.GetReservationId
+edge golang/orders:internal/inventory/client.go:Client.Reserve -iface:sure -> golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Reserve
+edge golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:Item.Descriptor -call -> golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:file_inventory_v1_inventory_proto_rawDescGZIP
+edge golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReleaseRequest.Descriptor -call -> golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:file_inventory_v1_inventory_proto_rawDescGZIP
+edge golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReleaseResponse.Descriptor -call -> golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:file_inventory_v1_inventory_proto_rawDescGZIP
+edge golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReserveRequest.Descriptor -call -> golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:file_inventory_v1_inventory_proto_rawDescGZIP
+edge golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReserveResponse.Descriptor -call -> golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:file_inventory_v1_inventory_proto_rawDescGZIP
+edge golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:file_inventory_v1_inventory_proto_init -iface:guess -> external: reflect.Type.PkgPath
+edge golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:init#1 -call -> golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:file_inventory_v1_inventory_proto_init
+edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:RegisterInventoryServiceServer -iface:guess -> external: grpc.ServiceRegistrar.RegisterService
+edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:RegisterInventoryServiceServer -iface:guess -> golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:UnimplementedInventoryServiceServer.testEmbeddedByValue
+edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_InventoryService_Release_Handler -iface:guess -> golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:UnimplementedInventoryServiceServer.Release
+edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_InventoryService_Release_Handler -iface:guess -> golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_InventoryService_Release_Handler$1
+edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_InventoryService_Release_Handler$1 -iface:guess -> golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:UnimplementedInventoryServiceServer.Release
+edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_InventoryService_Reserve_Handler -iface:guess -> golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:UnimplementedInventoryServiceServer.Reserve
+edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_InventoryService_Reserve_Handler -iface:guess -> golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_InventoryService_Reserve_Handler$1
+edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_InventoryService_Reserve_Handler$1 -iface:guess -> golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:UnimplementedInventoryServiceServer.Reserve
+edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Release -iface:guess -> external: grpc.ClientConnInterface.Invoke
+edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Reserve -iface:guess -> external: grpc.ClientConnInterface.Invoke
+edge golang/orders:internal/notify/notify.go:Send -iface:guess -> external: context.Context.Value
+edge golang/orders:internal/notify/notify.go:Send -iface:guess -> golang/orders:internal/notify/notify.go:Email.Notify
+edge golang/orders:internal/notify/notify.go:Send -iface:guess -> golang/orders:internal/notify/notify.go:SMS.Notify
+edge golang/orders:internal/order/order.go:Service.Place -call -> golang/orders:internal/customer/store.go:IsVIP
+edge golang/orders:internal/order/order.go:Service.Place -call -> golang/orders:internal/customer/store.go:Store.Lookup
+edge golang/orders:internal/order/order.go:Service.Place -call -> golang/orders:internal/notify/notify.go:Send
+edge golang/orders:internal/order/order.go:Service.Place -call -> golang/orders:internal/order/order.go:Validate
+edge golang/orders:internal/order/order.go:Service.Place -call -> golang/orders:internal/order/order.go:units
+edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/events/publisher.go:Publisher.OrderPlaced
+edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/inventory/client.go:Client.Release
+edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/inventory/client.go:Client.Reserve
+edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/order/order_test.go:failingPricer.Price
+edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/order/order_test.go:fakeReserver.Release
+edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/order/order_test.go:fakeReserver.Reserve
+edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/order/order_test.go:fixedPricer.Price
+edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/order/order_test.go:recordingEvents.OrderPlaced
+edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/pricer/pricer.go:Client.Price
+edge golang/orders:internal/order/order_test.go:TestPlace -call -> golang/orders:internal/customer/store.go:NewStore
+edge golang/orders:internal/order/order_test.go:TestPlace -call -> golang/orders:internal/customer/store.go:Seed
+edge golang/orders:internal/order/order_test.go:TestPlace -call -> golang/orders:internal/order/order.go:NewService
+edge golang/orders:internal/order/order_test.go:TestPlace -iface:guess -> golang/orders:internal/order/order_test.go:TestPlace$1
+edge golang/orders:internal/order/order_test.go:TestPlace$1 -call -> golang/orders:internal/order/order.go:Service.Place
+edge golang/orders:internal/order/order_test.go:TestPlaceReleasesWhenPricingFails -call -> golang/orders:internal/customer/store.go:NewStore
+edge golang/orders:internal/order/order_test.go:TestPlaceReleasesWhenPricingFails -call -> golang/orders:internal/customer/store.go:Seed
+edge golang/orders:internal/order/order_test.go:TestPlaceReleasesWhenPricingFails -call -> golang/orders:internal/order/order.go:NewService
+edge golang/orders:internal/order/order_test.go:TestPlaceReleasesWhenPricingFails -call -> golang/orders:internal/order/order.go:Service.Place
+impl http GET /customers/{} <- golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer
+impl http POST /orders <- golang/orders:internal/httpapi/httpapi.go:Handler.placeOrder
+node external: context.Context.Done 0-0 test=false
+node external: context.Context.Value 0-0 test=false
+node external: error.Error 0-0 test=false
+node external: grpc.ClientConnInterface.Invoke 0-0 test=false
+node external: grpc.ServiceRegistrar.RegisterService 0-0 test=false
+node external: http.ResponseWriter.Header 0-0 test=false
+node external: http.ResponseWriter.WriteHeader 0-0 test=false
+node external: io.ReadCloser.Close 0-0 test=false
+node external: reflect.Type.PkgPath 0-0 test=false
+node golang/orders:../../../../../Library/Caches/go-build/26/26b4470d0b03dee05a3ceeab7c68ffb926c790da0f79cd9ac5b08044f90e819d-d:init#1 39-43 test=true
+node golang/orders:../../../../../Library/Caches/go-build/26/26b4470d0b03dee05a3ceeab7c68ffb926c790da0f79cd9ac5b08044f90e819d-d:main 45-50 test=true
+node golang/orders:../../../../../Library/Caches/go-build/4f/4fdc5b22565863adc7e5de648b73960b61315ede573ab2e9617b5bd546b365e8-d:init#1 41-45 test=true
+node golang/orders:../../../../../Library/Caches/go-build/4f/4fdc5b22565863adc7e5de648b73960b61315ede573ab2e9617b5bd546b365e8-d:main 47-52 test=true
+node golang/orders:../../../../../Library/Caches/go-build/d6/d6a45433c7dcff4187429771ff2f7c42e31be28f35bf2a988a1b1f561fff7021-d:init#1 39-43 test=true
+node golang/orders:../../../../../Library/Caches/go-build/d6/d6a45433c7dcff4187429771ff2f7c42e31be28f35bf2a988a1b1f561fff7021-d:main 45-50 test=true
+node golang/orders:api/events/v1/events.pb.go:OrderPlaced.Descriptor 64-66 test=false
+node golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetCustomerId 75-80 test=false
+node golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetOrderId 68-73 test=false
+node golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetPlacedAt 96-101 test=false
+node golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetTotalCents 82-87 test=false
+node golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetUnits 89-94 test=false
+node golang/orders:api/events/v1/events.pb.go:OrderPlaced.ProtoMessage 49-49 test=false
+node golang/orders:api/events/v1/events.pb.go:OrderPlaced.ProtoReflect 51-61 test=false
+node golang/orders:api/events/v1/events.pb.go:OrderPlaced.Reset 38-43 test=false
+node golang/orders:api/events/v1/events.pb.go:OrderPlaced.String 45-47 test=false
+node golang/orders:api/events/v1/events.pb.go:file_events_v1_events_proto_init 144-165 test=false
+node golang/orders:api/events/v1/events.pb.go:file_events_v1_events_proto_rawDescGZIP 122-127 test=false
+node golang/orders:api/events/v1/events.pb.go:file_events_v1_events_proto_rawDescGZIP$1 123-0 test=false
+node golang/orders:api/events/v1/events.pb.go:init#1 143-143 test=false
+node golang/orders:cmd/orders/main.go:main 32-37 test=false
+node golang/orders:cmd/orders/main.go:run 39-111 test=false
+node golang/orders:cmd/orders/main.go:run$1 94-0 test=false
+node golang/orders:internal/customer/store.go:IsVIP 53-60 test=false
+node golang/orders:internal/customer/store.go:NewStore 22-28 test=false
+node golang/orders:internal/customer/store.go:Seed 31-37 test=false
+node golang/orders:internal/customer/store.go:Store.Lookup 40-50 test=false
+node golang/orders:internal/events/publisher.go:EnsureTopic 31-40 test=false
+node golang/orders:internal/events/publisher.go:NewPublisher 26-28 test=false
+node golang/orders:internal/events/publisher.go:Publisher.OrderPlaced 44-66 test=false
+node golang/orders:internal/events/publisher.go:Publisher.Stop 69-69 test=false
+node golang/orders:internal/events/publisher_test.go:TestOrderPlaced 20-64 test=true
+node golang/orders:internal/httpapi/httpapi.go:Handler.Routes 31-36 test=false
+node golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer 61-71 test=false
+node golang/orders:internal/httpapi/httpapi.go:Handler.placeOrder 38-58 test=false
+node golang/orders:internal/httpapi/httpapi.go:New 26-28 test=false
+node golang/orders:internal/httpapi/httpapi.go:writeJSON 73-79 test=false
+node golang/orders:internal/httpapi/httpapi_test.go:TestGetCustomer 14-50 test=true
+node golang/orders:internal/httpapi/httpapi_test.go:TestGetCustomer$1 29-0 test=true
+node golang/orders:internal/inventory/client.go:Client.Release 47-52 test=false
+node golang/orders:internal/inventory/client.go:Client.Reserve 26-44 test=false
+node golang/orders:internal/inventory/client.go:New 22-22 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:Item.Descriptor 58-60 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:Item.GetQty 69-74 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:Item.GetSku 62-67 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:Item.ProtoMessage 43-43 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:Item.ProtoReflect 45-55 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:Item.Reset 32-37 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:Item.String 39-41 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReleaseRequest.Descriptor 205-207 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReleaseRequest.GetReservationId 209-214 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReleaseRequest.ProtoMessage 190-190 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReleaseRequest.ProtoReflect 192-202 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReleaseRequest.Reset 179-184 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReleaseRequest.String 186-188 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReleaseResponse.Descriptor 250-252 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReleaseResponse.GetReleased 254-259 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReleaseResponse.ProtoMessage 235-235 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReleaseResponse.ProtoReflect 237-247 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReleaseResponse.Reset 224-229 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReleaseResponse.String 231-233 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReserveRequest.Descriptor 110-112 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReserveRequest.GetCustomerId 114-119 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReserveRequest.GetItems 121-126 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReserveRequest.ProtoMessage 95-95 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReserveRequest.ProtoReflect 97-107 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReserveRequest.Reset 84-89 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReserveRequest.String 91-93 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReserveResponse.Descriptor 161-163 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReserveResponse.GetReservationId 165-170 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReserveResponse.ProtoMessage 146-146 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReserveResponse.ProtoReflect 148-158 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReserveResponse.Reset 135-140 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:ReserveResponse.String 142-144 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:file_inventory_v1_inventory_proto_init 318-339 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:file_inventory_v1_inventory_proto_rawDescGZIP 289-294 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:file_inventory_v1_inventory_proto_rawDescGZIP$1 290-0 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory.pb.go:init#1 317-317 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:NewInventoryServiceClient 42-44 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:RegisterInventoryServiceServer 102-111 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:UnimplementedInventoryServiceServer.Release 89-91 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:UnimplementedInventoryServiceServer.Reserve 86-88 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:UnimplementedInventoryServiceServer.mustEmbedUnimplementedInventoryServiceServer 92-92 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:UnimplementedInventoryServiceServer.testEmbeddedByValue 93-93 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_InventoryService_Release_Handler 131-147 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_InventoryService_Release_Handler$1 143-0 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_InventoryService_Reserve_Handler 113-129 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_InventoryService_Reserve_Handler$1 125-0 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Release 56-64 test=false
+node golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Reserve 46-54 test=false
+node golang/orders:internal/notify/notify.go:Email.Notify 43-50 test=false
+node golang/orders:internal/notify/notify.go:NewEmail 41-41 test=false
+node golang/orders:internal/notify/notify.go:NewSMS 56-56 test=false
+node golang/orders:internal/notify/notify.go:SMS.Notify 58-65 test=false
+node golang/orders:internal/notify/notify.go:Send 27-35 test=false
+node golang/orders:internal/notify/notify.go:WithNotifier 21-23 test=false
+node golang/orders:internal/order/order.go:NewService 66-68 test=false
+node golang/orders:internal/order/order.go:Service.Place 73-111 test=false
+node golang/orders:internal/order/order.go:Validate 122-136 test=false
+node golang/orders:internal/order/order.go:units 113-119 test=false
+node golang/orders:internal/order/order_test.go:TestPlace 65-100 test=true
+node golang/orders:internal/order/order_test.go:TestPlace$1 84-0 test=true
+node golang/orders:internal/order/order_test.go:TestPlaceReleasesWhenPricingFails 50-63 test=true
+node golang/orders:internal/order/order_test.go:failingPricer.Price 21-23 test=true
+node golang/orders:internal/order/order_test.go:fakeReserver.Release 37-40 test=true
+node golang/orders:internal/order/order_test.go:fakeReserver.Reserve 28-35 test=true
+node golang/orders:internal/order/order_test.go:fixedPricer.Price 15-17 test=true
+node golang/orders:internal/order/order_test.go:recordingEvents.OrderPlaced 45-48 test=true
+node golang/orders:internal/pricer/pricer.go:Client.Price 21-35 test=false
+node golang/orders:internal/pricer/pricer.go:New 18-18 test=false

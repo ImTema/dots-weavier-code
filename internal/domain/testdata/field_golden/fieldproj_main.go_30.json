@@ -1,0 +1,161 @@
+{
+ "Origin": [
+  {
+   "kind": "seed",
+   "loc": "main.go:30",
+   "code": "return Loan{ID: *r.ID}",
+   "before": "func adapt(r *Request) Loan {",
+   "after": "}",
+   "type": "main.Loan",
+   "fn": "adapt",
+   "kids": [
+    {
+     "kind": "field",
+     "name": "main.Request.ID",
+     "type": "*main.ID",
+     "kids": [
+      {
+       "kind": "store",
+       "loc": "main.go:24",
+       "code": "req.ID = \u0026id",
+       "before": "id := ID(n)",
+       "after": "}",
+       "type": "main.ID",
+       "fn": "convert",
+       "kids": [
+        {
+         "kind": "assign",
+         "loc": "main.go:23",
+         "code": "id := ID(n)",
+         "before": "}",
+         "after": "req.ID = \u0026id",
+         "type": "main.ID",
+         "fn": "convert",
+         "kids": [
+          {
+           "kind": "transform",
+           "loc": "main.go:16",
+           "code": "func convert(raw string) (*Request, error) {",
+           "after": "req := \u0026Request{}",
+           "type": "string",
+           "fn": "convert",
+           "kids": [
+            {
+             "kind": "arg",
+             "loc": "main.go:44",
+             "code": "req, _ := convert(\"42\")",
+             "before": "func main() {",
+             "after": "if req.ID == nil {",
+             "type": "string"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "store",
+       "loc": "main.go:47",
+       "code": "req.ID = \u0026fresh",
+       "before": "fresh := ID(1)",
+       "after": "}",
+       "type": "main.ID",
+       "fn": "main",
+       "kids": [
+        {
+         "kind": "assign",
+         "loc": "main.go:46",
+         "code": "fresh := ID(1)",
+         "before": "if req.ID == nil {",
+         "after": "req.ID = \u0026fresh",
+         "type": "main.ID"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "Uses": [
+  {
+   "kind": "seed",
+   "loc": "main.go:30",
+   "code": "return Loan{ID: *r.ID}",
+   "before": "func adapt(r *Request) Loan {",
+   "after": "}",
+   "type": "main.Loan",
+   "fn": "adapt",
+   "kids": [
+    {
+     "kind": "field",
+     "name": "main.Request.ID",
+     "type": "*main.ID",
+     "kids": [
+      {
+       "kind": "read",
+       "loc": "main.go:45",
+       "code": "if req.ID == nil {",
+       "before": "req, _ := convert(\"42\")",
+       "after": "fresh := ID(1)",
+       "type": "*main.ID",
+       "fn": "main"
+      }
+     ]
+    },
+    {
+     "kind": "field",
+     "name": "main.Loan.ID",
+     "type": "main.ID",
+     "kids": [
+      {
+       "kind": "read",
+       "loc": "main.go:35",
+       "code": "res.ID = keep(l.ID)",
+       "before": "res := \u0026Result{}",
+       "after": "return res",
+       "type": "main.ID",
+       "fn": "process",
+       "kids": [
+        {
+         "kind": "field",
+         "name": "main.Result.ID",
+         "type": "main.ID"
+        },
+        {
+         "kind": "arg",
+         "loc": "main.go:39",
+         "code": "func keep(id ID) ID { return id }",
+         "type": "main.ID",
+         "fn": "keep",
+         "via": "main.go:35"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "return",
+     "loc": "main.go:49",
+     "code": "fmt.Println(process(adapt(req)).ID, unrelated())",
+     "before": "}",
+     "after": "}",
+     "type": "main.Loan",
+     "fn": "main",
+     "kids": [
+      {
+       "kind": "arg",
+       "loc": "main.go:33",
+       "code": "func process(l Loan) *Result {",
+       "after": "res := \u0026Result{}",
+       "type": "main.Loan",
+       "fn": "process",
+       "via": "main.go:49"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

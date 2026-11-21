@@ -86,7 +86,7 @@ func traceGoHandler(ws, loc string, line int, tests bool, maxProjects int) (*Fie
 	if err != nil {
 		return nil, err
 	}
-	t, err := traceFieldSeeded(gos, home, file, line, tests, maxProjects, requestParam)
+	t, err := traceField(gos, home, file, line, tests, maxProjects, requestParam)
 	if err != nil {
 		return nil, err
 	}

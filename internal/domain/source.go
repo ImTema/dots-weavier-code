@@ -1,9 +1,11 @@
 package domain
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -52,4 +54,45 @@ func Source(ws, loc string) (*SourceFile, error) {
 		return nil, err
 	}
 	return &SourceFile{Project: p.Name, File: filepath.ToSlash(rel), Line: line, Text: string(b)}, nil
+}
+
+// resolveFile finds the project and absolute path of [project:]rel/path.go.
+func resolveFile(projects []project, s string) (project, string, error) {
+	name, file, ok := strings.Cut(s, ":")
+	if !ok {
+		name, file = "", s
+	}
+	var hits []project
+	for _, p := range projects {
+		if name != "" && p.Name != name {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(p.dir, file)); err == nil {
+			hits = append(hits, p)
+		}
+	}
+	if abs, err := filepath.Abs(file); name == "" && len(hits) == 0 && err == nil {
+		if _, err := os.Stat(abs); err == nil { // absolute or cwd-relative: innermost project wins
+			for _, p := range projects {
+				if strings.HasPrefix(abs, p.dir+string(filepath.Separator)) {
+					hits = append(hits, p)
+				}
+			}
+			slices.SortFunc(hits, func(a, b project) int { return cmp.Compare(len(b.dir), len(a.dir)) })
+			if len(hits) > 0 {
+				return hits[0], abs, nil
+			}
+		}
+	}
+	switch len(hits) {
+	case 0:
+		return project{}, "", fmt.Errorf("no project has %s", s)
+	case 1:
+		return hits[0], filepath.Join(hits[0].dir, file), nil
+	}
+	var names []string
+	for _, h := range hits {
+		names = append(names, h.Name)
+	}
+	return project{}, "", fmt.Errorf("%s is in several projects (%s); prefix it with project:", s, strings.Join(names, ", "))
 }

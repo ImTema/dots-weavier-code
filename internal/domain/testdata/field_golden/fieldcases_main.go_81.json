@@ -1,0 +1,342 @@
+{
+ "Origin": [
+  {
+   "kind": "seed",
+   "loc": "main.go:81",
+   "code": "final := string(h.(Box).ID) + u.Path + string(readGlobal()) + string(z) + strconv.Itoa(-n) + extra",
+   "before": "extra := tag() + string(pair) + string(w) + path + lib + string(k) + rs + st.String()",
+   "after": "go fmt.Println(final)",
+   "type": "main.Holder",
+   "fn": "sink",
+   "kids": [
+    {
+     "kind": "return",
+     "loc": "main.go:24",
+     "code": "func readGlobal() ID { return global }",
+     "type": "main.ID",
+     "fn": "readGlobal",
+     "kids": [
+      {
+       "kind": "assign",
+       "loc": "main.go:20",
+       "code": "var global ID",
+       "type": "main.ID",
+       "kids": [
+        {
+         "kind": "assign",
+         "loc": "main.go:22",
+         "code": "func store(id ID) { global = id }",
+         "type": "main.ID",
+         "fn": "store",
+         "via": "main.go:22",
+         "kids": [
+          {
+           "kind": "arg",
+           "loc": "main.go:43",
+           "code": "store(id)",
+           "before": "id := source(raw)",
+           "after": "ids := []ID{id}",
+           "type": "main.ID",
+           "fn": "sink",
+           "kids": [
+            {
+             "kind": "assign",
+             "loc": "main.go:42",
+             "code": "id := source(raw)",
+             "before": "func sink(raw string) string {",
+             "after": "store(id)",
+             "type": "main.ID",
+             "fn": "sink",
+             "kids": [
+              {
+               "kind": "return",
+               "loc": "main.go:34",
+               "code": "return id",
+               "before": "}",
+               "after": "}",
+               "type": "main.ID",
+               "fn": "source",
+               "kids": [
+                {
+                 "kind": "assign",
+                 "loc": "main.go:30",
+                 "code": "id = ID(s)",
+                 "before": "if s != \"\" {",
+                 "after": "} else {",
+                 "type": "main.ID",
+                 "fn": "source",
+                 "kids": [
+                  {
+                   "kind": "convert",
+                   "loc": "main.go:27",
+                   "code": "s := strings.TrimSpace(raw)",
+                   "before": "func source(raw string) ID {",
+                   "after": "var id ID",
+                   "type": "string",
+                   "fn": "source",
+                   "kids": [
+                    {
+                     "kind": "transform",
+                     "loc": "main.go:26",
+                     "code": "func source(raw string) ID {",
+                     "after": "s := strings.TrimSpace(raw)",
+                     "type": "string",
+                     "fn": "source",
+                     "kids": [
+                      {
+                       "kind": "arg",
+                       "loc": "main.go:41",
+                       "code": "func sink(raw string) string {",
+                       "after": "id := source(raw)",
+                       "type": "string",
+                       "fn": "sink",
+                       "via": "main.go:42",
+                       "kids": [
+                        {
+                         "kind": "arg",
+                         "loc": "main.go:86",
+                         "code": "func main() { fmt.Println(sink(\" 42 \")) }",
+                         "type": "string"
+                        }
+                       ]
+                      }
+                     ]
+                    }
+                   ]
+                  }
+                 ]
+                },
+                {
+                 "kind": "assign",
+                 "loc": "main.go:32",
+                 "code": "id = ID(\"x\" + s)",
+                 "before": "} else {",
+                 "after": "}",
+                 "type": "main.ID",
+                 "fn": "source"
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "assign",
+     "loc": "main.go:53",
+     "code": "var h Holder = Box{ID: got}",
+     "before": "got := \u003c-ch",
+     "after": "fn := func() ID { return h.Get() + ID(strconv.Itoa(len(ids))) }",
+     "type": "main.Holder",
+     "fn": "sink",
+     "kids": [
+      {
+       "kind": "transform",
+       "loc": "main.go:50",
+       "code": "ch := make(chan ID, 1)",
+       "before": "m[\"j\"] = id",
+       "after": "ch \u003c- m[\"k\"]",
+       "type": "chan main.ID",
+       "fn": "sink",
+       "kids": [
+        {
+         "kind": "container",
+         "loc": "main.go:51",
+         "code": "ch \u003c- m[\"k\"]",
+         "before": "ch := make(chan ID, 1)",
+         "after": "got := \u003c-ch",
+         "type": "main.ID",
+         "fn": "sink"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "container",
+     "loc": "main.go:61",
+     "code": "u := url.URL{Path: string(*p)}",
+     "before": "p := \u0026arr[0]",
+     "after": "_ = slices.ContainsFunc(ids, func(i ID) bool { return i == id })",
+     "type": "url.URL",
+     "fn": "sink",
+     "kids": [
+      {
+       "kind": "assign",
+       "loc": "main.go:60",
+       "code": "p := \u0026arr[0]",
+       "before": "arr := [1]ID{fn()}",
+       "after": "u := url.URL{Path: string(*p)}",
+       "type": "*main.ID",
+       "fn": "sink",
+       "kids": [
+        {
+         "kind": "container",
+         "loc": "main.go:59",
+         "code": "arr := [1]ID{fn()}",
+         "before": "}",
+         "after": "p := \u0026arr[0]",
+         "type": "[1]main.ID",
+         "fn": "sink",
+         "kids": [
+          {
+           "kind": "return",
+           "loc": "main.go:54",
+           "code": "fn := func() ID { return h.Get() + ID(strconv.Itoa(len(ids))) }",
+           "before": "var h Holder = Box{ID: got}",
+           "after": "var last ID",
+           "type": "main.ID",
+           "fn": "sink$1",
+           "kids": [
+            {
+             "kind": "return",
+             "loc": "main.go:18",
+             "code": "func (b Box) Get() ID { return b.ID }",
+             "type": "main.ID",
+             "fn": "Box.Get",
+             "kids": [
+              {
+               "kind": "field",
+               "name": "main.Box.ID",
+               "type": "main.ID"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "convert",
+     "loc": "main.go:74",
+     "code": "z, ok := m[\"z\"]",
+     "before": "rs := strings.Map(func(r rune) rune { return r }, strings.Repeat(u.String(), 2))",
+     "after": "if !ok {",
+     "type": "main.ID",
+     "fn": "sink",
+     "kids": [
+      {
+       "kind": "container",
+       "loc": "main.go:48",
+       "code": "m := map[string]ID{\"k\": cp[0]}",
+       "before": "copy(cp, ids)",
+       "after": "m[\"j\"] = id",
+       "type": "map[string]main.ID",
+       "fn": "sink",
+       "kids": [
+        {
+         "kind": "container",
+         "loc": "main.go:46",
+         "code": "cp := make([]ID, len(ids))",
+         "before": "ids = append(ids, id)",
+         "after": "copy(cp, ids)",
+         "type": "[]main.ID",
+         "fn": "sink"
+        },
+        {
+         "kind": "container",
+         "loc": "main.go:49",
+         "code": "m[\"j\"] = id",
+         "before": "m := map[string]ID{\"k\": cp[0]}",
+         "after": "ch := make(chan ID, 1)",
+         "type": "main.ID",
+         "fn": "sink"
+        }
+       ]
+      },
+      {
+       "kind": "assign",
+       "loc": "main.go:55",
+       "code": "var last ID",
+       "before": "fn := func() ID { return h.Get() + ID(strconv.Itoa(len(ids))) }",
+       "after": "for _, v := range m {",
+       "type": "main.ID",
+       "fn": "sink",
+       "kids": [
+        {
+         "kind": "container",
+         "loc": "main.go:56",
+         "code": "for _, v := range m {",
+         "before": "var last ID",
+         "after": "last = v",
+         "type": "ssa.rangeIter",
+         "fn": "sink"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "transform",
+     "loc": "main.go:79",
+     "code": "n, _ := strconv.Atoi(string(ids[1:][0]))",
+     "before": "k := any(z).(ID)",
+     "after": "extra := tag() + string(pair) + string(w) + path + lib + string(k) + rs + st.String()",
+     "type": "string",
+     "fn": "sink",
+     "kids": [
+      {
+       "kind": "assign",
+       "loc": "main.go:44",
+       "code": "ids := []ID{id}",
+       "before": "store(id)",
+       "after": "ids = append(ids, id)",
+       "type": "[]main.ID",
+       "fn": "sink",
+       "kids": [
+        {
+         "kind": "assign",
+         "loc": "main.go:45",
+         "code": "ids = append(ids, id)",
+         "before": "ids := []ID{id}",
+         "after": "cp := make([]ID, len(ids))",
+         "type": "[]main.ID",
+         "fn": "sink"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "Uses": [
+  {
+   "kind": "seed",
+   "loc": "main.go:81",
+   "code": "final := string(h.(Box).ID) + u.Path + string(readGlobal()) + string(z) + strconv.Itoa(-n) + extra",
+   "before": "extra := tag() + string(pair) + string(w) + path + lib + string(k) + rs + st.String()",
+   "after": "go fmt.Println(final)",
+   "type": "main.Holder",
+   "fn": "sink",
+   "kids": [
+    {
+     "kind": "container",
+     "loc": "main.go:82",
+     "code": "go fmt.Println(final)",
+     "before": "final := string(h.(Box).ID) + u.Path + string(readGlobal()) + string(z) + strconv.Itoa(-n) + extra",
+     "after": "return final",
+     "type": "[1]any",
+     "fn": "sink"
+    },
+    {
+     "kind": "return",
+     "loc": "main.go:86",
+     "code": "func main() { fmt.Println(sink(\" 42 \")) }",
+     "type": "string",
+     "fn": "main"
+    }
+   ]
+  }
+ ]
+}

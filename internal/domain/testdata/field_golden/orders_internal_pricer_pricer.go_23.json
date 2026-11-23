@@ -1,0 +1,493 @@
+{
+ "Origin": [
+  {
+   "kind": "seed",
+   "loc": "internal/pricer/pricer.go:23",
+   "code": "CustomerId: c.ID,",
+   "before": "req := \u0026pricingv1.QuoteRequest{",
+   "after": "Region:     c.Region,",
+   "type": "string",
+   "fn": "Client.Price",
+   "kids": [
+    {
+     "kind": "field",
+     "name": "api.Customer.ID",
+     "type": "string",
+     "kids": [
+      {
+       "kind": "store",
+       "loc": "internal/customer/store.go:33",
+       "code": "{ID: \"c1\", Tier: api.TierGold, Region: \"EU\"},",
+       "before": "return []api.Customer{",
+       "after": "{ID: \"c2\", Tier: api.TierSilver, Region: \"US\", Phone: \"+15550100\"},",
+       "type": "string"
+      },
+      {
+       "kind": "store",
+       "loc": "internal/customer/store.go:34",
+       "code": "{ID: \"c2\", Tier: api.TierSilver, Region: \"US\", Phone: \"+15550100\"},",
+       "before": "{ID: \"c1\", Tier: api.TierGold, Region: \"EU\"},",
+       "after": "{ID: \"c3\", Region: \"UK\"},",
+       "type": "string"
+      },
+      {
+       "kind": "store",
+       "loc": "internal/customer/store.go:35",
+       "code": "{ID: \"c3\", Region: \"UK\"},",
+       "before": "{ID: \"c2\", Tier: api.TierSilver, Region: \"US\", Phone: \"+15550100\"},",
+       "after": "}",
+       "type": "string"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "Uses": [
+  {
+   "kind": "seed",
+   "loc": "internal/pricer/pricer.go:23",
+   "code": "CustomerId: c.ID,",
+   "before": "req := \u0026pricingv1.QuoteRequest{",
+   "after": "Region:     c.Region,",
+   "type": "string",
+   "fn": "Client.Price",
+   "kids": [
+    {
+     "kind": "field",
+     "name": "api.Customer.ID",
+     "type": "string",
+     "kids": [
+      {
+       "kind": "read",
+       "loc": "internal/customer/store.go:25",
+       "code": "s.byID[c.ID] = c",
+       "before": "for _, c := range customers {",
+       "after": "}",
+       "type": "string",
+       "fn": "NewStore"
+      },
+      {
+       "kind": "read",
+       "loc": "internal/notify/notify.go:33",
+       "code": "slog.WarnContext(ctx, \"notify failed\", \"customer\", c.ID, \"err\", err)",
+       "before": "if err := n.Notify(ctx, c, msg); err != nil {",
+       "after": "}",
+       "type": "string",
+       "fn": "Send"
+      },
+      {
+       "kind": "read",
+       "loc": "internal/notify/notify.go:45",
+       "code": "slog.InfoContext(ctx, \"email\", \"to\", c.ID, \"msg\", msg)",
+       "before": "if e.from == \"\" {",
+       "after": "} else {",
+       "type": "string",
+       "fn": "Email.Notify"
+      },
+      {
+       "kind": "read",
+       "loc": "internal/notify/notify.go:47",
+       "code": "slog.InfoContext(ctx, \"email\", \"from\", e.from, \"to\", c.ID, \"msg\", msg)",
+       "before": "} else {",
+       "after": "}",
+       "type": "string",
+       "fn": "Email.Notify"
+      },
+      {
+       "kind": "read",
+       "loc": "internal/notify/notify.go:60",
+       "code": "slog.InfoContext(ctx, \"sms skipped: no phone\", \"customer\", c.ID)",
+       "before": "if c.Phone == \"\" {",
+       "after": "return nil",
+       "type": "string",
+       "fn": "SMS.Notify"
+      },
+      {
+       "kind": "read",
+       "loc": "internal/order/order.go:81",
+       "code": "resID, err := s.reserver.Reserve(ctx, c.ID, req.Items)",
+       "before": "}",
+       "after": "if err != nil {",
+       "type": "string",
+       "fn": "Service.Place",
+       "kids": [
+        {
+         "kind": "arg",
+         "loc": "internal/inventory/client.go:26",
+         "code": "func (c *Client) Reserve(ctx context.Context, customerID string, items []api.Item) (string, error) {",
+         "before": "// Rejections the caller can act on are wrapped in order.ErrUnavailable.",
+         "after": "req := \u0026inventoryv1.ReserveRequest{",
+         "type": "string",
+         "fn": "Client.Reserve",
+         "via": "internal/order/order.go:81",
+         "kids": [
+          {
+           "kind": "field",
+           "name": "inventoryv1.ReserveRequest.CustomerId",
+           "type": "string",
+           "kids": [
+            {
+             "kind": "read",
+             "loc": "internal/inventorypb/inventory/v1/inventory.pb.go:116",
+             "code": "return x.CustomerId",
+             "before": "if x != nil {",
+             "after": "}",
+             "type": "string",
+             "fn": "ReserveRequest.GetCustomerId"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "read",
+       "loc": "internal/order/order.go:95",
+       "code": "CustomerID:    c.ID,",
+       "before": "ID:            fmt.Sprintf(\"o-%d\", s.seq.Add(1)),",
+       "after": "ReservationID: resID,",
+       "type": "string",
+       "fn": "Service.Place",
+       "kids": [
+        {
+         "kind": "field",
+         "name": "order.Order.CustomerID",
+         "type": "string",
+         "kids": [
+          {
+           "kind": "read",
+           "loc": "internal/events/publisher.go:50",
+           "code": "CustomerId: o.CustomerID,",
+           "before": "OrderId:    o.ID,",
+           "after": "TotalCents: o.TotalCents,",
+           "type": "string",
+           "fn": "Publisher.OrderPlaced",
+           "kids": [
+            {
+             "kind": "field",
+             "name": "eventsv1.OrderPlaced.CustomerId",
+             "type": "string",
+             "kids": [
+              {
+               "kind": "read",
+               "loc": "api/events/v1/events.pb.go:77",
+               "code": "return x.CustomerId",
+               "before": "if x != nil {",
+               "after": "}",
+               "type": "string",
+               "fn": "OrderPlaced.GetCustomerId"
+              },
+              {
+               "kind": "read",
+               "loc": "pricing:internal/events/subscriber.go:70",
+               "code": "if s.ledger.Record(e.GetOrderId(), e.GetCustomerId()) {",
+               "before": "}",
+               "after": "slog.InfoContext(ctx, \"order recorded\", \"order\", e.GetOrderId(), \"customer\", e.GetCustomerId(),",
+               "type": "string",
+               "fn": "Subscriber.Handle",
+               "kids": [
+                {
+                 "kind": "arg",
+                 "loc": "pricing:internal/loyalty/ledger.go:21",
+                 "code": "func (l *Ledger) Record(orderID, customerID string) bool {",
+                 "before": "// customer or an order already recorded.",
+                 "after": "if orderID == \"\" || customerID == \"\" {",
+                 "type": "string",
+                 "fn": "Ledger.Record",
+                 "via": "pricing:internal/events/subscriber.go:70",
+                 "kids": [
+                  {
+                   "kind": "container",
+                   "loc": "pricing:internal/loyalty/ledger.go:32",
+                   "code": "l.counts[customerID]++",
+                   "before": "l.seen[orderID] = true",
+                   "after": "return true",
+                   "type": "map[string]int",
+                   "fn": "Ledger.Record"
+                  }
+                 ]
+                }
+               ]
+              },
+              {
+               "kind": "read",
+               "loc": "pricing:internal/events/subscriber.go:71",
+               "code": "slog.InfoContext(ctx, \"order recorded\", \"order\", e.GetOrderId(), \"customer\", e.GetCustomerId(),",
+               "before": "if s.ledger.Record(e.GetOrderId(), e.GetCustomerId()) {",
+               "after": "\"orders\", s.ledger.Orders(e.GetCustomerId()))",
+               "type": "string",
+               "fn": "Subscriber.Handle"
+              },
+              {
+               "kind": "read",
+               "loc": "pricing:internal/events/subscriber.go:72",
+               "code": "\"orders\", s.ledger.Orders(e.GetCustomerId()))",
+               "before": "slog.InfoContext(ctx, \"order recorded\", \"order\", e.GetOrderId(), \"customer\", e.GetCustomerId(),",
+               "after": "}",
+               "type": "string",
+               "fn": "Subscriber.Handle",
+               "kids": [
+                {
+                 "kind": "arg",
+                 "loc": "pricing:internal/loyalty/ledger.go:37",
+                 "code": "func (l *Ledger) Orders(customerID string) int {",
+                 "before": "// Orders returns how many distinct orders customerID has placed.",
+                 "after": "l.mu.Lock()",
+                 "type": "string",
+                 "fn": "Ledger.Orders",
+                 "via": "pricing:internal/events/subscriber.go:72"
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "field",
+     "name": "pricingv1.QuoteRequest.CustomerId",
+     "type": "string",
+     "kids": [
+      {
+       "kind": "read",
+       "loc": "pricing:api/pricing/v1/pricing.pb.go:125",
+       "code": "return x.CustomerId",
+       "before": "if x != nil {",
+       "after": "}",
+       "type": "string",
+       "fn": "QuoteRequest.GetCustomerId",
+       "kids": [
+        {
+         "kind": "return",
+         "loc": "pricing:internal/server/server.go:47",
+         "code": "tier, err := s.tiers.Tier(ctx, req.GetCustomerId())",
+         "before": "}",
+         "after": "if err != nil {",
+         "type": "string",
+         "fn": "Server.Quote",
+         "kids": [
+          {
+           "kind": "arg",
+           "loc": "pricing:internal/customers/client.go:27",
+           "code": "func (c *Client) Tier(ctx context.Context, id string) (string, error) {",
+           "before": "// Anonymous and unknown customers price as standard.",
+           "after": "if id == \"\" {",
+           "type": "string",
+           "fn": "Client.Tier",
+           "via": "pricing:internal/server/server.go:47",
+           "kids": [
+            {
+             "kind": "transform",
+             "loc": "pricing:internal/customers/client.go:31",
+             "code": "u, err := url.JoinPath(c.base, ordersapi.CustomerPath, url.PathEscape(id))",
+             "before": "}",
+             "after": "if err != nil {",
+             "type": "string",
+             "fn": "Client.Tier",
+             "kids": [
+              {
+               "kind": "transform",
+               "loc": "pricing:internal/customers/client.go:35",
+               "code": "req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)",
+               "before": "}",
+               "after": "if err != nil {",
+               "type": "*http.Request",
+               "fn": "Client.Tier",
+               "kids": [
+                {
+                 "kind": "transform",
+                 "loc": "pricing:internal/customers/client.go:39",
+                 "code": "resp, err := c.http.Do(req)",
+                 "before": "}",
+                 "after": "if err != nil {",
+                 "type": "*http.Response",
+                 "fn": "Client.Tier",
+                 "kids": [
+                  {
+                   "kind": "container",
+                   "loc": "pricing:internal/customers/client.go:43",
+                   "code": "defer resp.Body.Close()",
+                   "before": "}",
+                   "type": "*io.ReadCloser",
+                   "fn": "Client.Tier"
+                  },
+                  {
+                   "kind": "container",
+                   "loc": "pricing:internal/customers/client.go:45",
+                   "code": "if resp.StatusCode == http.StatusNotFound {",
+                   "after": "return ordersapi.TierStandard, nil",
+                   "type": "*int",
+                   "fn": "Client.Tier"
+                  },
+                  {
+                   "kind": "container",
+                   "loc": "pricing:internal/customers/client.go:47",
+                   "code": "} else if resp.StatusCode != http.StatusOK {",
+                   "before": "return ordersapi.TierStandard, nil",
+                   "after": "return \"\", fmt.Errorf(\"get customer: unexpected status %s\", resp.Status)",
+                   "type": "*int",
+                   "fn": "Client.Tier"
+                  },
+                  {
+                   "kind": "container",
+                   "loc": "pricing:internal/customers/client.go:48",
+                   "code": "return \"\", fmt.Errorf(\"get customer: unexpected status %s\", resp.Status)",
+                   "before": "} else if resp.StatusCode != http.StatusOK {",
+                   "after": "}",
+                   "type": "*string",
+                   "fn": "Client.Tier"
+                  },
+                  {
+                   "kind": "container",
+                   "loc": "pricing:internal/customers/client.go:51",
+                   "code": "if err := json.NewDecoder(resp.Body).Decode(\u0026cust); err != nil {",
+                   "before": "var cust ordersapi.Customer",
+                   "after": "return \"\", fmt.Errorf(\"decode customer: %w\", err)",
+                   "type": "*io.ReadCloser",
+                   "fn": "Client.Tier"
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "kind": "return",
+         "loc": "pricing:internal/server/server.go:56",
+         "code": "ship, err := s.shipping.Rate(ctx, req.GetCustomerId(), quote.Units(lines))",
+         "before": "}",
+         "after": "if err != nil {",
+         "type": "string",
+         "fn": "Server.Quote",
+         "kids": [
+          {
+           "kind": "arg",
+           "loc": "pricing:internal/shipping/client.go:32",
+           "code": "func (c *Client) Rate(ctx context.Context, customerID string, units int64) (int64, error) {",
+           "before": "// Rate makes the HTTP hop GET {base}/rates?customer_id=ID\u0026units=N to shipping.",
+           "after": "if units \u003c= 0 {",
+           "type": "string",
+           "fn": "Client.Rate",
+           "via": "pricing:internal/server/server.go:56",
+           "kids": [
+            {
+             "kind": "container",
+             "loc": "pricing:internal/shipping/client.go:42",
+             "code": "\"customer_id\": {customerID},",
+             "before": "u.RawQuery = url.Values{",
+             "after": "\"units\":       {strconv.FormatInt(units, 10)},",
+             "type": "[1]string",
+             "fn": "Client.Rate",
+             "kids": [
+              {
+               "kind": "transform",
+               "loc": "pricing:internal/shipping/client.go:44",
+               "code": "}.Encode()",
+               "before": "\"units\":       {strconv.FormatInt(units, 10)},",
+               "type": "string",
+               "fn": "Client.Rate",
+               "kids": [
+                {
+                 "kind": "container",
+                 "loc": "pricing:internal/shipping/client.go:41",
+                 "code": "u.RawQuery = url.Values{",
+                 "before": "u = u.JoinPath(\"rates\")",
+                 "after": "\"customer_id\": {customerID},",
+                 "type": "*url.URL",
+                 "fn": "Client.Rate",
+                 "kids": [
+                  {
+                   "kind": "transform",
+                   "loc": "pricing:internal/shipping/client.go:46",
+                   "code": "req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)",
+                   "after": "if err != nil {",
+                   "type": "string",
+                   "fn": "Client.Rate",
+                   "kids": [
+                    {
+                     "kind": "transform",
+                     "loc": "pricing:internal/shipping/client.go:50",
+                     "code": "resp, err := c.http.Do(req)",
+                     "before": "}",
+                     "after": "if err != nil {",
+                     "type": "*http.Response",
+                     "fn": "Client.Rate",
+                     "kids": [
+                      {
+                       "kind": "container",
+                       "loc": "pricing:internal/shipping/client.go:54",
+                       "code": "defer resp.Body.Close()",
+                       "before": "}",
+                       "type": "*io.ReadCloser",
+                       "fn": "Client.Rate"
+                      },
+                      {
+                       "kind": "container",
+                       "loc": "pricing:internal/shipping/client.go:56",
+                       "code": "if resp.StatusCode != http.StatusOK {",
+                       "after": "return 0, fmt.Errorf(\"get rate: unexpected status %s\", resp.Status)",
+                       "type": "*int",
+                       "fn": "Client.Rate"
+                      },
+                      {
+                       "kind": "container",
+                       "loc": "pricing:internal/shipping/client.go:57",
+                       "code": "return 0, fmt.Errorf(\"get rate: unexpected status %s\", resp.Status)",
+                       "before": "if resp.StatusCode != http.StatusOK {",
+                       "after": "}",
+                       "type": "*string",
+                       "fn": "Client.Rate"
+                      },
+                      {
+                       "kind": "container",
+                       "loc": "pricing:internal/shipping/client.go:60",
+                       "code": "if err := json.NewDecoder(resp.Body).Decode(\u0026r); err != nil {",
+                       "before": "var r rate",
+                       "after": "return 0, fmt.Errorf(\"decode rate: %w\", err)",
+                       "type": "*io.ReadCloser",
+                       "fn": "Client.Rate"
+                      }
+                     ]
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "kind": "return",
+         "loc": "pricing:internal/server/server.go:60",
+         "code": "buyer := quote.Customer{Tier: tier, Region: req.GetRegion(), PriorOrders: s.loyalty.Orders(req.GetCustomerId())}",
+         "before": "}",
+         "after": "q, err := quote.Calculate(lines, buyer, ship)",
+         "type": "string",
+         "fn": "Server.Quote"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

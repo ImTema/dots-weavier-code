@@ -1,0 +1,239 @@
+{
+ "Origin": [
+  {
+   "kind": "seed",
+   "loc": "internal/server/server.go:47",
+   "code": "tier, err := s.tiers.Tier(ctx, req.GetCustomerId())",
+   "before": "}",
+   "after": "if err != nil {",
+   "type": "server.TierSource",
+   "fn": "Server.Quote",
+   "kids": [
+    {
+     "kind": "field",
+     "name": "server.Server.tiers",
+     "type": "server.TierSource",
+     "kids": [
+      {
+       "kind": "store",
+       "loc": "internal/server/server.go:38",
+       "code": "func New(tiers TierSource, shipping ShippingSource, ledger *loyalty.Ledger) *Server {",
+       "before": "// sources and order history through ledger.",
+       "after": "return \u0026Server{tiers: tiers, shipping: shipping, loyalty: ledger}",
+       "type": "server.TierSource",
+       "fn": "New",
+       "via": "internal/server/server.go:39",
+       "kids": [
+        {
+         "kind": "arg",
+         "loc": "cmd/pricing/main.go:61",
+         "code": "pricingv1.RegisterPricingServiceServer(s, server.New(",
+         "before": "s := grpc.NewServer()",
+         "after": "customers.NewClient(*ordersURL, hc),",
+         "type": "server.TierSource",
+         "fn": "run",
+         "kids": [
+          {
+           "kind": "convert",
+           "loc": "cmd/pricing/main.go:62",
+           "code": "customers.NewClient(*ordersURL, hc),",
+           "before": "pricingv1.RegisterPricingServiceServer(s, server.New(",
+           "after": "shipping.NewClient(*shippingURL, hc),",
+           "type": "*customers.Client",
+           "fn": "run",
+           "kids": [
+            {
+             "kind": "return",
+             "loc": "internal/customers/client.go:22",
+             "code": "return \u0026Client{base: base, http: hc}",
+             "before": "func NewClient(base string, hc *http.Client) *Client {",
+             "after": "}",
+             "type": "customers.Client",
+             "fn": "NewClient"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "return",
+     "loc": "api/pricing/v1/pricing.pb.go:125",
+     "code": "return x.CustomerId",
+     "before": "if x != nil {",
+     "after": "}",
+     "type": "string",
+     "fn": "QuoteRequest.GetCustomerId",
+     "kids": [
+      {
+       "kind": "field",
+       "name": "pricingv1.QuoteRequest.CustomerId",
+       "type": "string",
+       "kids": [
+        {
+         "kind": "store",
+         "loc": "orders:internal/pricer/pricer.go:23",
+         "code": "CustomerId: c.ID,",
+         "before": "req := \u0026pricingv1.QuoteRequest{",
+         "after": "Region:     c.Region,",
+         "type": "string",
+         "fn": "Client.Price",
+         "kids": [
+          {
+           "kind": "field",
+           "name": "api.Customer.ID",
+           "type": "string",
+           "kids": [
+            {
+             "kind": "store",
+             "loc": "orders:internal/customer/store.go:33",
+             "code": "{ID: \"c1\", Tier: api.TierGold, Region: \"EU\"},",
+             "before": "return []api.Customer{",
+             "after": "{ID: \"c2\", Tier: api.TierSilver, Region: \"US\", Phone: \"+15550100\"},",
+             "type": "string"
+            },
+            {
+             "kind": "store",
+             "loc": "orders:internal/customer/store.go:34",
+             "code": "{ID: \"c2\", Tier: api.TierSilver, Region: \"US\", Phone: \"+15550100\"},",
+             "before": "{ID: \"c1\", Tier: api.TierGold, Region: \"EU\"},",
+             "after": "{ID: \"c3\", Region: \"UK\"},",
+             "type": "string"
+            },
+            {
+             "kind": "store",
+             "loc": "orders:internal/customer/store.go:35",
+             "code": "{ID: \"c3\", Region: \"UK\"},",
+             "before": "{ID: \"c2\", Tier: api.TierSilver, Region: \"US\", Phone: \"+15550100\"},",
+             "after": "}",
+             "type": "string"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "return",
+     "loc": "api/pricing/v1/pricing.pb.go:127",
+     "code": "return \"\"",
+     "before": "}",
+     "after": "}",
+     "type": "string"
+    }
+   ]
+  }
+ ],
+ "Uses": [
+  {
+   "kind": "seed",
+   "loc": "internal/server/server.go:47",
+   "code": "tier, err := s.tiers.Tier(ctx, req.GetCustomerId())",
+   "before": "}",
+   "after": "if err != nil {",
+   "type": "server.TierSource",
+   "fn": "Server.Quote",
+   "kids": [
+    {
+     "kind": "field",
+     "name": "server.Server.tiers",
+     "type": "server.TierSource"
+    },
+    {
+     "kind": "arg",
+     "loc": "internal/customers/client.go:27",
+     "code": "func (c *Client) Tier(ctx context.Context, id string) (string, error) {",
+     "before": "// Anonymous and unknown customers price as standard.",
+     "after": "if id == \"\" {",
+     "type": "*customers.Client",
+     "fn": "Client.Tier",
+     "via": "internal/server/server.go:47",
+     "kids": [
+      {
+       "kind": "transform",
+       "loc": "internal/customers/client.go:31",
+       "code": "u, err := url.JoinPath(c.base, ordersapi.CustomerPath, url.PathEscape(id))",
+       "before": "}",
+       "after": "if err != nil {",
+       "type": "string",
+       "fn": "Client.Tier",
+       "kids": [
+        {
+         "kind": "transform",
+         "loc": "internal/customers/client.go:35",
+         "code": "req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)",
+         "before": "}",
+         "after": "if err != nil {",
+         "type": "*http.Request",
+         "fn": "Client.Tier",
+         "kids": [
+          {
+           "kind": "transform",
+           "loc": "internal/customers/client.go:39",
+           "code": "resp, err := c.http.Do(req)",
+           "before": "}",
+           "after": "if err != nil {",
+           "type": "*http.Response",
+           "fn": "Client.Tier",
+           "kids": [
+            {
+             "kind": "container",
+             "loc": "internal/customers/client.go:43",
+             "code": "defer resp.Body.Close()",
+             "before": "}",
+             "type": "*io.ReadCloser",
+             "fn": "Client.Tier"
+            },
+            {
+             "kind": "container",
+             "loc": "internal/customers/client.go:45",
+             "code": "if resp.StatusCode == http.StatusNotFound {",
+             "after": "return ordersapi.TierStandard, nil",
+             "type": "*int",
+             "fn": "Client.Tier"
+            },
+            {
+             "kind": "container",
+             "loc": "internal/customers/client.go:47",
+             "code": "} else if resp.StatusCode != http.StatusOK {",
+             "before": "return ordersapi.TierStandard, nil",
+             "after": "return \"\", fmt.Errorf(\"get customer: unexpected status %s\", resp.Status)",
+             "type": "*int",
+             "fn": "Client.Tier"
+            },
+            {
+             "kind": "container",
+             "loc": "internal/customers/client.go:48",
+             "code": "return \"\", fmt.Errorf(\"get customer: unexpected status %s\", resp.Status)",
+             "before": "} else if resp.StatusCode != http.StatusOK {",
+             "after": "}",
+             "type": "*string",
+             "fn": "Client.Tier"
+            },
+            {
+             "kind": "container",
+             "loc": "internal/customers/client.go:51",
+             "code": "if err := json.NewDecoder(resp.Body).Decode(\u0026cust); err != nil {",
+             "before": "var cust ordersapi.Customer",
+             "after": "return \"\", fmt.Errorf(\"decode customer: %w\", err)",
+             "type": "*io.ReadCloser",
+             "fn": "Client.Tier"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

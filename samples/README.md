@@ -67,7 +67,7 @@ Pub/Sub endpoint; locally that is the in-memory emulator in
 ```sh
 (cd golang/tools/pubsub-emulator && go run .)
 export PUBSUB_EMULATOR_HOST=localhost:8085   # in each Go service's shell
-(cd java/inventory && ./gradlew build && java -jar build/quarkus-app/quarkus-run.jar)
+(cd java/inventory && ./mvnw package && java -jar target/quarkus-app/quarkus-run.jar)
 (cd kotlin/shipping && ./gradlew run)
 (cd golang/pricing && go run ./cmd/pricing)
 (cd golang/orders && go run ./cmd/orders)
@@ -77,8 +77,9 @@ curl -XPOST localhost:8080/orders \
 # {"order_id":"o-1","total_cents":15050}
 ```
 
-The JVM projects build with JDK 25 through Gradle toolchains; run the
-inventory jar with a JDK 25 `java`. Start everything before calling
+The JVM projects build for JDK 25: inventory through Maven
+(`maven.compiler.release`), shipping through Gradle toolchains. Run the
+inventory jar with a JDK 25 or newer `java`. Start everything before calling
 `POST /orders`. `orders` creates the topic; `pricing` creates its
 subscription and, if it starts first, waits for the topic.
 
@@ -97,7 +98,7 @@ fourth 14210 once the loyalty discount applies.
 ```sh
 (cd golang/orders && go test ./...)
 (cd golang/pricing && go test ./...)
-(cd java/inventory && ./gradlew test)
+(cd java/inventory && ./mvnw test)
 (cd kotlin/shipping && ./gradlew test)
 ```
 
@@ -106,12 +107,12 @@ library's in-process fake (`pstest`).
 
 ## Tracing with dotweavier
 
-dotweavier indexes Go only, so `index` picks up the Go projects (the two
-services and the emulator tool). Indexed from this directory, the project
-names are `golang/orders` and `golang/pricing`:
+`index` picks up every project: the Go ones by `go.mod`, `java/inventory` by
+`pom.xml` and `kotlin/shipping` by `build.gradle.kts`. Indexed from this
+directory, the project names are their paths, such as `golang/orders`:
 
 ```sh
-dotweavier index --workspace samples
+dotweavier index --project samples
 dotweavier trace path -A golang/orders::Handler.placeOrder -B golang/pricing::TierRule.Discount
 # 1. Handler.placeOrder -call-> Service.Place -iface:sure-> Client.Price
 #    -grpc /pricing.v1.PricingService/Quote-> Server.Quote -call-> Calculate
@@ -120,12 +121,24 @@ dotweavier trace path -A golang/orders::Service.Place -B golang/orders::Client.R
 # 1. Service.Place -iface:sure-> Client.Reserve  (1/1 sure)
 dotweavier trace path -A golang/pricing::Server.Quote -B golang/pricing::Client.Rate
 # 1. Server.Quote -iface:sure-> Client.Rate  (1/1 sure)
+dotweavier trace path -A golang/orders::Service.Place -B java/inventory::StockLedger.reserve
+# 1. Service.Place -iface:sure-> Client.Reserve
+#    -grpc /inventory.v1.InventoryService/Reserve-> InventoryGrpcService.reserve
+#    -call-> ReservationService.reserve -call-> StockLedger.reserve  (1/1 sure)
 ```
 
-The gRPC calls into `inventory` and the HTTP calls into `shipping` end at the
-Go client, because no Java or Kotlin extractor exists yet. Reaching
-`InventoryGrpcService.reserve` or the `/rates` route from Go is the test for
-those extractors.
+The gRPC call into `inventory` reaches the Java handler: the JVM extractor
+reads `inventory.proto` and finds `InventoryGrpcService` by its supertype.
+HTTP hops join a client request to the route serving its method and path.
+Only Ktor clients and Go `net/http` routes are read so far, so
+`shipping`'s `GET /customers/{id}` reaches `orders`, while the calls from
+`pricing` and `inventory` still end at their clients:
+
+```sh
+dotweavier trace path -A kotlin/shipping::ShippingRates.quote -B golang/orders::Handler.getCustomer
+# 1. ShippingRates.quote -iface:guess-> OrdersCustomerDirectory.find
+#    -http GET /customers/{}-> Handler.getCustomer  (0/1 sure)
+```
 
 dotweavier does not link Pub/Sub yet either: a trace from
 `golang/orders::Service.Place` to `golang/pricing::Subscriber.Handle` prints

@@ -1,0 +1,116 @@
+{
+ "Origin": [
+  {
+   "kind": "seed",
+   "loc": "src/main/java/com/example/inventory/reservation/ReservationService.java:24",
+   "code": "public String reserve(String customerId, List\u003cLine\u003e lines) {",
+   "before": "/** @return the reservation ID */",
+   "after": "if (lines.isEmpty()) {",
+   "type": "String",
+   "fn": "ReservationService.reserve",
+   "kids": [
+    {
+     "kind": "arg",
+     "loc": "src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:38",
+     "code": "String id = reservations.reserve(req.getCustomerId(), lines);",
+     "before": "try {",
+     "after": "return Uni.createFrom().item(ReserveResponse.newBuilder().setReservationId(id).build());",
+     "fn": "InventoryGrpcService.reserve",
+     "kids": [
+      {
+       "kind": "field",
+       "name": "ReserveRequest.customerId"
+      },
+      {
+       "kind": "assign",
+       "loc": "src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:34",
+       "code": "var lines = req.getItemsList().stream()",
+       "before": "public Uni\u003cReserveResponse\u003e reserve(ReserveRequest req) {",
+       "after": ".map(it -\u003e new ReservationService.Line(it.getSku(), it.getQty()))",
+       "fn": "InventoryGrpcService.reserve",
+       "kids": [
+        {
+         "kind": "field",
+         "name": "ReserveRequest.itemsList"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "Uses": [
+  {
+   "kind": "seed",
+   "loc": "src/main/java/com/example/inventory/reservation/ReservationService.java:24",
+   "code": "public String reserve(String customerId, List\u003cLine\u003e lines) {",
+   "before": "/** @return the reservation ID */",
+   "after": "if (lines.isEmpty()) {",
+   "type": "String",
+   "fn": "ReservationService.reserve",
+   "kids": [
+    {
+     "kind": "assign",
+     "loc": "src/main/java/com/example/inventory/reservation/ReservationService.java:29",
+     "code": "for (Line l : lines) {",
+     "before": "Map\u003cString, Integer\u003e wanted = new LinkedHashMap\u003c\u003e();",
+     "after": "if (l.sku() == null || l.sku().isBlank()) {",
+     "type": "Line",
+     "fn": "ReservationService.reserve"
+    },
+    {
+     "kind": "assign",
+     "loc": "src/main/java/com/example/inventory/reservation/ReservationService.java:39",
+     "code": "int limit = TierLimits.perSku(customers.tier(customerId));",
+     "before": "// HTTP hop to orders: GET /customers/{id}.",
+     "after": "wanted.forEach((sku, qty) -\u003e {",
+     "fn": "ReservationService.reserve",
+     "kids": [
+      {
+       "kind": "arg",
+       "loc": "src/main/java/com/example/inventory/customers/OrdersCustomerDirectory.java:20",
+       "code": "public String tier(String customerId) {",
+       "before": "@Override",
+       "after": "if (customerId == null || customerId.isBlank()) {",
+       "type": "String",
+       "fn": "OrdersCustomerDirectory.tier",
+       "via": "src/main/java/com/example/inventory/reservation/ReservationService.java:39",
+       "kids": [
+        {
+         "kind": "assign",
+         "loc": "src/main/java/com/example/inventory/customers/OrdersCustomerDirectory.java:25",
+         "code": "OrdersApi.Customer c = orders.customer(customerId);",
+         "before": "try {",
+         "after": "return c.tier() == null || c.tier().isBlank() ? STANDARD : c.tier();",
+         "type": "Customer",
+         "fn": "OrdersCustomerDirectory.tier"
+        },
+        {
+         "kind": "assign",
+         "loc": "src/main/java/com/example/inventory/customers/OrdersCustomerDirectory.java:33",
+         "code": "throw new CustomerLookupException(\"get customer \" + customerId, e);",
+         "before": "} catch (ProcessingException e) {",
+         "after": "}",
+         "fn": "OrdersCustomerDirectory.tier",
+         "kids": [
+          {
+           "kind": "arg",
+           "loc": "src/main/java/com/example/inventory/customers/CustomerLookupException.java:4",
+           "code": "public CustomerLookupException(String message, Throwable cause) {",
+           "before": "public final class CustomerLookupException extends RuntimeException {",
+           "after": "super(message, cause);",
+           "type": "String",
+           "fn": "CustomerLookupException.\u003cinit\u003e",
+           "via": "src/main/java/com/example/inventory/customers/OrdersCustomerDirectory.java:33"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

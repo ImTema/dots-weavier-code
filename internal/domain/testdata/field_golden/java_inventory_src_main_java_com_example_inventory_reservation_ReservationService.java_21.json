@@ -1,0 +1,256 @@
+{
+ "Origin": [
+  {
+   "kind": "field",
+   "name": "Line.sku",
+   "type": "String",
+   "kids": [
+    {
+     "kind": "store",
+     "loc": "src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:35",
+     "code": ".map(it -\u003e new ReservationService.Line(it.getSku(), it.getQty()))",
+     "before": "var lines = req.getItemsList().stream()",
+     "after": ".toList();",
+     "fn": "InventoryGrpcService.reserve",
+     "kids": [
+      {
+       "kind": "callback?",
+       "loc": "src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:34",
+       "code": "var lines = req.getItemsList().stream()",
+       "before": "public Uni\u003cReserveResponse\u003e reserve(ReserveRequest req) {",
+       "after": ".map(it -\u003e new ReservationService.Line(it.getSku(), it.getQty()))",
+       "fn": "InventoryGrpcService.reserve",
+       "kids": [
+        {
+         "kind": "field",
+         "name": "ReserveRequest.itemsList"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "field",
+   "name": "Line.qty",
+   "type": "int"
+  }
+ ],
+ "Uses": [
+  {
+   "kind": "field",
+   "name": "Line.sku",
+   "type": "String",
+   "kids": [
+    {
+     "kind": "read",
+     "loc": "src/main/java/com/example/inventory/reservation/ReservationService.java:30",
+     "code": "if (l.sku() == null || l.sku().isBlank()) {",
+     "before": "for (Line l : lines) {",
+     "after": "throw new IllegalArgumentException(\"missing sku\");",
+     "fn": "ReservationService.reserve"
+    },
+    {
+     "kind": "read",
+     "loc": "src/main/java/com/example/inventory/reservation/ReservationService.java:33",
+     "code": "throw new IllegalArgumentException(\"sku \" + l.sku() + \": qty must be positive\");",
+     "before": "} else if (l.qty() \u003c= 0) {",
+     "after": "}",
+     "fn": "ReservationService.reserve"
+    },
+    {
+     "kind": "read",
+     "loc": "src/main/java/com/example/inventory/reservation/ReservationService.java:35",
+     "code": "wanted.merge(l.sku(), l.qty(), Integer::sum);",
+     "before": "}",
+     "after": "}",
+     "type": "Map",
+     "fn": "ReservationService.reserve",
+     "kids": [
+      {
+       "kind": "assign",
+       "loc": "src/main/java/com/example/inventory/reservation/ReservationService.java:40",
+       "code": "wanted.forEach((sku, qty) -\u003e {",
+       "before": "int limit = TierLimits.perSku(customers.tier(customerId));",
+       "after": "if (qty \u003e limit) {",
+       "fn": "ReservationService.reserve",
+       "kids": [
+        {
+         "kind": "assign",
+         "loc": "src/main/java/com/example/inventory/reservation/ReservationService.java:42",
+         "code": "throw new LimitExceededException(sku, qty, limit);",
+         "before": "if (qty \u003e limit) {",
+         "after": "}",
+         "fn": "ReservationService.reserve",
+         "kids": [
+          {
+           "kind": "arg",
+           "loc": "src/main/java/com/example/inventory/reservation/LimitExceededException.java:4",
+           "code": "public LimitExceededException(String sku, int wanted, int limit) {",
+           "before": "public final class LimitExceededException extends RuntimeException {",
+           "after": "super(\"sku \" + sku + \": \" + wanted + \" exceeds tier limit \" + limit);",
+           "type": "String",
+           "fn": "LimitExceededException.\u003cinit\u003e",
+           "via": "src/main/java/com/example/inventory/reservation/ReservationService.java:42",
+           "kids": [
+            {
+             "kind": "assign",
+             "loc": "src/main/java/com/example/inventory/reservation/LimitExceededException.java:5",
+             "code": "super(\"sku \" + sku + \": \" + wanted + \" exceeds tier limit \" + limit);",
+             "before": "public LimitExceededException(String sku, int wanted, int limit) {",
+             "after": "}",
+             "fn": "LimitExceededException.\u003cinit\u003e"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "assign",
+       "loc": "src/main/java/com/example/inventory/reservation/ReservationService.java:45",
+       "code": "return ledger.reserve(wanted);",
+       "before": "});",
+       "after": "}",
+       "fn": "ReservationService.reserve",
+       "kids": [
+        {
+         "kind": "arg",
+         "loc": "src/main/java/com/example/inventory/stock/StockLedger.java:21",
+         "code": "public synchronized String reserve(Map\u003cString, Integer\u003e wanted) {",
+         "before": "*/",
+         "after": "for (var e : wanted.entrySet()) {",
+         "type": "Map",
+         "fn": "StockLedger.reserve",
+         "via": "src/main/java/com/example/inventory/reservation/ReservationService.java:45",
+         "kids": [
+          {
+           "kind": "assign",
+           "loc": "src/main/java/com/example/inventory/stock/StockLedger.java:22",
+           "code": "for (var e : wanted.entrySet()) {",
+           "before": "public synchronized String reserve(Map\u003cString, Integer\u003e wanted) {",
+           "after": "Integer have = onHand.get(e.getKey());",
+           "fn": "StockLedger.reserve",
+           "kids": [
+            {
+             "kind": "assign",
+             "loc": "src/main/java/com/example/inventory/stock/StockLedger.java:23",
+             "code": "Integer have = onHand.get(e.getKey());",
+             "before": "for (var e : wanted.entrySet()) {",
+             "after": "if (have == null) {",
+             "type": "Integer",
+             "fn": "StockLedger.reserve"
+            },
+            {
+             "kind": "assign",
+             "loc": "src/main/java/com/example/inventory/stock/StockLedger.java:25",
+             "code": "throw new UnknownSkuException(e.getKey());",
+             "before": "if (have == null) {",
+             "after": "} else if (have \u003c e.getValue()) {",
+             "fn": "StockLedger.reserve",
+             "kids": [
+              {
+               "kind": "arg",
+               "loc": "src/main/java/com/example/inventory/stock/UnknownSkuException.java:4",
+               "code": "public UnknownSkuException(String sku) {",
+               "before": "public final class UnknownSkuException extends RuntimeException {",
+               "after": "super(\"unknown sku \" + sku);",
+               "type": "String",
+               "fn": "UnknownSkuException.\u003cinit\u003e",
+               "via": "src/main/java/com/example/inventory/stock/StockLedger.java:25",
+               "kids": [
+                {
+                 "kind": "assign",
+                 "loc": "src/main/java/com/example/inventory/stock/UnknownSkuException.java:5",
+                 "code": "super(\"unknown sku \" + sku);",
+                 "before": "public UnknownSkuException(String sku) {",
+                 "after": "}",
+                 "fn": "UnknownSkuException.\u003cinit\u003e"
+                }
+               ]
+              }
+             ]
+            },
+            {
+             "kind": "assign",
+             "loc": "src/main/java/com/example/inventory/stock/StockLedger.java:26",
+             "code": "} else if (have \u003c e.getValue()) {",
+             "before": "throw new UnknownSkuException(e.getKey());",
+             "after": "throw new OutOfStockException(e.getKey(), e.getValue(), have);",
+             "fn": "StockLedger.reserve"
+            },
+            {
+             "kind": "assign",
+             "loc": "src/main/java/com/example/inventory/stock/StockLedger.java:27",
+             "code": "throw new OutOfStockException(e.getKey(), e.getValue(), have);",
+             "before": "} else if (have \u003c e.getValue()) {",
+             "after": "}",
+             "fn": "StockLedger.reserve",
+             "kids": [
+              {
+               "kind": "arg",
+               "loc": "src/main/java/com/example/inventory/stock/OutOfStockException.java:4",
+               "code": "public OutOfStockException(String sku, int wanted, int available) {",
+               "before": "public final class OutOfStockException extends RuntimeException {",
+               "after": "super(\"sku \" + sku + \": wanted \" + wanted + \", available \" + available);",
+               "type": "String",
+               "fn": "OutOfStockException.\u003cinit\u003e",
+               "via": "src/main/java/com/example/inventory/stock/StockLedger.java:27",
+               "kids": [
+                {
+                 "kind": "assign",
+                 "loc": "src/main/java/com/example/inventory/stock/OutOfStockException.java:5",
+                 "code": "super(\"sku \" + sku + \": wanted \" + wanted + \", available \" + available);",
+                 "before": "public OutOfStockException(String sku, int wanted, int available) {",
+                 "after": "}",
+                 "fn": "OutOfStockException.\u003cinit\u003e"
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "kind": "assign",
+           "loc": "src/main/java/com/example/inventory/stock/StockLedger.java:30",
+           "code": "wanted.forEach((sku, qty) -\u003e onHand.merge(sku, -qty, Integer::sum));",
+           "before": "}",
+           "after": "String id = UUID.randomUUID().toString();",
+           "fn": "StockLedger.reserve"
+          },
+          {
+           "kind": "assign",
+           "loc": "src/main/java/com/example/inventory/stock/StockLedger.java:32",
+           "code": "reservations.put(id, Map.copyOf(wanted));",
+           "before": "String id = UUID.randomUUID().toString();",
+           "after": "return id;",
+           "fn": "StockLedger.reserve"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "field",
+   "name": "Line.qty",
+   "type": "int",
+   "kids": [
+    {
+     "kind": "read",
+     "loc": "src/main/java/com/example/inventory/reservation/ReservationService.java:32",
+     "code": "} else if (l.qty() \u003c= 0) {",
+     "before": "throw new IllegalArgumentException(\"missing sku\");",
+     "after": "throw new IllegalArgumentException(\"sku \" + l.sku() + \": qty must be positive\");",
+     "fn": "ReservationService.reserve"
+    }
+   ]
+  }
+ ]
+}

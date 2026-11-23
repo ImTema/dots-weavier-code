@@ -7,7 +7,10 @@ package domain
 import (
 	"cmp"
 	"fmt"
+	"go/token"
 	"go/types"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -185,14 +188,18 @@ func (g *graph) path(s *state) Path {
 
 // FieldStep is one source line (or struct field) in a value's lifecycle.
 type FieldStep struct {
-	Kind string       `json:"kind"`           // flow into this step; "field" or "overwritten" are special
-	Name string       `json:"name,omitempty"` // field, as pkg.Type.Field
-	Loc  string       `json:"loc,omitempty"`  // [project:]rel/path.go:LINE
-	Code string       `json:"code,omitempty"` // the source line
-	Type string       `json:"type,omitempty"`
-	Fn   string       `json:"fn,omitempty"`
-	Via  string       `json:"via,omitempty"` // call site, for parameters
-	Kids []*FieldStep `json:"kids,omitempty"`
+	Kind   string       `json:"kind"`             // flow into this step; "field" or "overwritten" are special
+	Name   string       `json:"name,omitempty"`   // field, as pkg.Type.Field
+	Loc    string       `json:"loc,omitempty"`    // [project:]rel/path.go:LINE
+	Code   string       `json:"code,omitempty"`   // the source line
+	Before string       `json:"before,omitempty"` // the line above, for context
+	After  string       `json:"after,omitempty"`  // the line below
+	Type   string       `json:"type,omitempty"`
+	Fn     string       `json:"fn,omitempty"`
+	Via    string       `json:"via,omitempty"` // call site, for parameters
+	Kids   []*FieldStep `json:"kids,omitempty"`
+	Call   *Path        `json:"call,omitempty"` // best indexed call path between the seed's function and this step's
+	Hops   []Hop        `json:"hops,omitempty"` // calls from this step's function into other projects
 }
 
 type FieldTrace struct {
@@ -201,25 +208,42 @@ type FieldTrace struct {
 }
 
 // TraceField traces the value computed at [project:]rel/path.go:LINE in both
-// directions, live over SSA of the projects under ws.
+// directions, live over SSA of the projects under ws. A .java or .kt file is
+// traced from its project's syntax instead (jvm_field.go).
 func TraceField(ws, addr string, tests bool, maxProjects int) (*FieldTrace, error) {
 	i := strings.LastIndex(addr, ":")
 	line, err := strconv.Atoi(addr[i+1:])
-	if i < 0 || err != nil || !strings.HasSuffix(addr[:i], ".go") {
-		return nil, fmt.Errorf("bad address %q, want [project:]rel/path.go:LINE", addr)
+	lang := map[string]string{".go": "go", ".java": "jvm", ".kt": "jvm"}[filepath.Ext(addr[:max(i, 0)])]
+	if i < 0 || err != nil || lang == "" {
+		return nil, fmt.Errorf("bad address %q, want [project:]rel/path.{go,java,kt}:LINE", addr)
 	}
 	projects, err := discover(ws)
 	if err != nil {
 		return nil, err
 	}
+	projects = slices.DeleteFunc(projects, func(p project) bool { return p.lang != lang })
 	home, file, err := resolveFile(projects, addr[:i])
 	if err != nil {
 		return nil, err
 	}
-	t, err := traceField(projects, home, file, line, tests, maxProjects)
+	if lang == "jvm" {
+		r, rel, err := traceJVMField(home, file, line, tests)
+		if err != nil {
+			return nil, err
+		}
+		attachCalls(r, home.Name, rel, line)
+		return r, nil
+	}
+	t, err := traceField(projects, home, file, line, tests, maxProjects, nil)
 	if err != nil {
 		return nil, err
 	}
+	return fieldTrace(t, home, projects, file, line), nil
+}
+
+// fieldTrace turns a Go tracker's walks into the two trees, with call paths and hops.
+func fieldTrace(t *tracker, home project, projects []project, file string, line int) *FieldTrace {
+	projects = slices.Clone(projects)
 	slices.SortFunc(projects, func(a, b project) int { return cmp.Compare(len(b.dir), len(a.dir)) })
 	p := &printer{t: t, home: home, projects: projects, src: map[string][]string{}}
 	r := &FieldTrace{}
@@ -229,7 +253,8 @@ func TraceField(ws, addr string, tests bool, maxProjects int) (*FieldTrace, erro
 	for _, n := range t.fwd.tree() {
 		r.Uses = append(r.Uses, p.step(n))
 	}
-	return r, nil
+	attachCalls(r, home.Name, p.rel(file), line)
+	return r
 }
 
 // step converts a tnode; kids are ordered by location, overwrites come last.
@@ -239,6 +264,7 @@ func (p *printer) step(n *tnode) *FieldStep {
 		s.Kind, s.Name = "field", p.fieldName(n.field)
 	} else {
 		s.Loc, s.Code = p.rel(n.file)+":"+strconv.Itoa(n.line), p.text(n.file, n.line)
+		s.Before, s.After = p.text(n.file, n.line-1), p.text(n.file, n.line+1) // one line of context each side
 		if n.fn != nil {
 			s.Fn = display(n.fn)
 		}
@@ -261,4 +287,55 @@ func (p *printer) step(n *tnode) *FieldStep {
 		s.Kids = append(s.Kids, &FieldStep{Kind: "overwritten", Loc: p.where(o), Code: p.text(ps.Filename, ps.Line)})
 	}
 	return s
+}
+
+// printer turns a finished trace into Steps: paths relative to the projects,
+// source lines read from disk.
+type printer struct {
+	t        *tracker
+	home     project   // files here show without a project prefix
+	projects []project // innermost first
+	src      map[string][]string
+}
+
+func (p *printer) rel(file string) string {
+	for _, pr := range append([]project{p.home}, p.projects...) {
+		if r, err := filepath.Rel(pr.dir, file); err == nil && !strings.HasPrefix(r, "..") {
+			if pr == p.home {
+				return filepath.ToSlash(r)
+			}
+			return pr.Name + ":" + filepath.ToSlash(r)
+		}
+	}
+	return file
+}
+
+func (p *printer) text(file string, line int) string {
+	ls, ok := p.src[file]
+	if !ok {
+		b, _ := os.ReadFile(file)
+		ls = strings.Split(string(b), "\n")
+		p.src[file] = ls
+	}
+	if line < 1 || line > len(ls) {
+		return ""
+	}
+	return strings.TrimSpace(ls[line-1])
+}
+
+func (p *printer) where(pos token.Pos) string {
+	ps := p.t.fset.Position(pos)
+	return p.rel(ps.Filename) + ":" + strconv.Itoa(ps.Line)
+}
+
+func qual(pkg *types.Package) string { return pkg.Name() }
+
+// fieldName shows a field as pkg.Type.Field.
+func (p *printer) fieldName(k fieldKey) string {
+	s := string(k)
+	name := s[strings.LastIndex(s[:strings.LastIndex(s, ".")], ".")+1:] // Type.Field
+	if v := p.t.fields[k]; v.Pkg() != nil {
+		name = v.Pkg().Name() + "." + name
+	}
+	return name
 }

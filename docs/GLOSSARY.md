@@ -7,7 +7,7 @@ dotweavier is a CLI that indexes many code projects into one typed graph and tra
 ### Sources
 
 **Project**:
-A single folder that is indexed on its own, recognised by its module manifest (Go: a directory containing `go.mod`). A folder with its own manifest inside a project is not part of that project's index: it is a **Module** of it.
+A single folder that is indexed on its own, recognised by its manifest: `go.mod` for Go; `pom.xml`, `build.gradle(.kts)` or `settings.gradle(.kts)` for Java and Kotlin. A folder with its own manifest inside a project is not part of that project's index: it is a **Module** of it.
 _Avoid_: workspace, repo, service, monorepo
 
 **Module**:
@@ -33,7 +33,7 @@ A typed element of the graph, such as a function, method or type. Its identity i
 _Avoid_: vertex, entity
 
 **Edge**:
-A typed, directed relation between two nodes, such as `call`, `grpc` or `pubsub`.
+A typed, directed relation between two nodes, such as `call`, `grpc`, `http` or `pubsub`.
 _Avoid_: link (reserved), relation
 
 **Hop**:
@@ -56,7 +56,7 @@ An edge that crosses from one project to another.
 _Avoid_: cross-edge, bridge
 
 **Test node**:
-A node that comes from test code. In Go, that means `_test.go` files and configured mock packages. Test nodes are excluded from traces unless `--include-tests` is given.
+A node that comes from test code. In Go, that means `_test.go` files and configured mock packages. In Java and Kotlin, files under a `src/test*` source set. Test nodes are excluded from traces unless `--include-tests` is given.
 
 ### Querying
 
@@ -68,7 +68,7 @@ _Avoid_: selector, locator
 A query for the directed paths from symbol A to symbol B (`dotweavier trace path`).
 
 **Field trace**:
-A query for the full lifecycle of one value (`dotweavier trace field [project:]relative/path.go:LINE`), printed as two trees: its origin (where it comes from) and its uses (every variable, conversion, struct field, call and return it may flow into). A field of a struct declared in any loaded project stands for that field in every object of the type, across projects, so a protobuf field written by a client in one project meets its server's reads in another. The trees show where the value may come from and go, not where it must. Unlike a trace, it analyses projects live and needs no index.
+A query for the full lifecycle of one value (`dotweavier trace field [project:]relative/path.{go,java,kt}:LINE`), printed as two trees: its origin (where it comes from) and its uses (every variable, conversion, struct field, call and return it may flow into). A field of a struct declared in any loaded project stands for that field in every object of the type, across projects, so a protobuf field written by a client in one project meets its server's reads in another. The trees show where the value may come from and go, not where it must. Unlike a trace, it analyses projects live and needs no index. A Java or Kotlin field trace stays inside its own project.
 _Avoid_: variable trace, taint trace
 
 **Path**:

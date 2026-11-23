@@ -1,0 +1,99 @@
+{
+ "Origin": [
+  {
+   "kind": "seed",
+   "loc": "src/main/kotlin/com/example/shipping/http/Routes.kt:47",
+   "code": "val customerId = call.request.queryParameters[\"customer_id\"].orEmpty()",
+   "before": "get(\"/rates\") {",
+   "after": "val units = call.request.queryParameters[\"units\"]?.toIntOrNull()",
+   "fn": "Application.shippingModule"
+  }
+ ],
+ "Uses": [
+  {
+   "kind": "seed",
+   "loc": "src/main/kotlin/com/example/shipping/http/Routes.kt:47",
+   "code": "val customerId = call.request.queryParameters[\"customer_id\"].orEmpty()",
+   "before": "get(\"/rates\") {",
+   "after": "val units = call.request.queryParameters[\"units\"]?.toIntOrNull()",
+   "fn": "Application.shippingModule",
+   "kids": [
+    {
+     "kind": "assign",
+     "loc": "src/main/kotlin/com/example/shipping/http/Routes.kt:50",
+     "code": "val quote = rates.quote(customerId, units)",
+     "before": "?: throw BadRequestException(\"units must be an integer\")",
+     "after": "call.respond(RateResponse(customerId, quote.region, quote.cents))",
+     "fn": "Application.shippingModule",
+     "kids": [
+      {
+       "kind": "arg",
+       "loc": "src/main/kotlin/com/example/shipping/rates/ShippingRates.kt:9",
+       "code": "suspend fun quote(customerId: String, units: Int): RateQuote {",
+       "before": "class ShippingRates(private val customers: CustomerDirectory) {",
+       "after": "require(units \u003e 0) { \"units must be positive\" }",
+       "type": "String",
+       "fn": "ShippingRates.quote",
+       "via": "src/main/kotlin/com/example/shipping/http/Routes.kt:50",
+       "kids": [
+        {
+         "kind": "assign",
+         "loc": "src/main/kotlin/com/example/shipping/rates/ShippingRates.kt:12",
+         "code": "val customer = customers.find(customerId)",
+         "before": "// HTTP hop to orders: GET /customers/{id}.",
+         "after": "return if (customer == null) {",
+         "fn": "ShippingRates.quote",
+         "kids": [
+          {
+           "kind": "arg",
+           "loc": "src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:26",
+           "code": "override suspend fun find(customerId: String): Customer? {",
+           "before": ") : CustomerDirectory {",
+           "after": "if (customerId.isBlank()) return null",
+           "type": "String",
+           "fn": "OrdersCustomerDirectory.find",
+           "via": "src/main/kotlin/com/example/shipping/rates/ShippingRates.kt:12",
+           "kids": [
+            {
+             "kind": "assign",
+             "loc": "src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:29",
+             "code": "client.get(\"${baseUrl.trimEnd('/')}/customers/${customerId.encodeURLPathPart()}\")",
+             "before": "val resp = try {",
+             "after": "} catch (e: Exception) {",
+             "fn": "OrdersCustomerDirectory.find"
+            },
+            {
+             "kind": "assign",
+             "loc": "src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:31",
+             "code": "throw CustomerLookupException(\"get customer $customerId\", e)",
+             "before": "} catch (e: Exception) {",
+             "after": "}",
+             "fn": "OrdersCustomerDirectory.find"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "assign",
+     "loc": "src/main/kotlin/com/example/shipping/http/Routes.kt:51",
+     "code": "call.respond(RateResponse(customerId, quote.region, quote.cents))",
+     "before": "val quote = rates.quote(customerId, units)",
+     "after": "}",
+     "fn": "Application.shippingModule",
+     "kids": [
+      {
+       "kind": "field",
+       "name": "RateResponse.customerId",
+       "type": "String"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

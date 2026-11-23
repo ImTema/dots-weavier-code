@@ -1,0 +1,228 @@
+{
+ "Origin": [
+  {
+   "kind": "seed",
+   "loc": "src/main/kotlin/cases/Cases.kt:33",
+   "code": "val cast = (any as String)",
+   "before": "val any: Any = picked",
+   "after": "val total = -n * 2 + n % 3",
+   "type": "Any",
+   "fn": "Cases.flow",
+   "kids": [
+    {
+     "kind": "assign",
+     "loc": "src/main/kotlin/cases/Cases.kt:32",
+     "code": "val any: Any = picked",
+     "before": "val picked = pick(id = id, n = n)",
+     "after": "val cast = (any as String)",
+     "fn": "Cases.flow",
+     "kids": [
+      {
+       "kind": "assign",
+       "loc": "src/main/kotlin/cases/Cases.kt:31",
+       "code": "val picked = pick(id = id, n = n)",
+       "before": "val id = clean(raw) ?: \"none\"",
+       "after": "val any: Any = picked",
+       "fn": "Cases.flow",
+       "kids": [
+        {
+         "kind": "return",
+         "loc": "src/main/kotlin/cases/Cases.kt:23",
+         "code": "return when (n) {",
+         "before": "}",
+         "after": "0 -\u003e chosen",
+         "fn": "Cases.pick",
+         "kids": [
+          {
+           "kind": "assign",
+           "loc": "src/main/kotlin/cases/Cases.kt:24",
+           "code": "0 -\u003e chosen",
+           "before": "return when (n) {",
+           "after": "else -\u003e \"${chosen}x\"",
+           "fn": "Cases.pick",
+           "kids": [
+            {
+             "kind": "assign",
+             "loc": "src/main/kotlin/cases/Cases.kt:18",
+             "code": "val chosen = if (n \u003e 0) {",
+             "before": "fun pick(id: String, n: Int): String {",
+             "after": "\"big-$id\"",
+             "fn": "Cases.pick",
+             "kids": [
+              {
+               "kind": "assign",
+               "loc": "src/main/kotlin/cases/Cases.kt:19",
+               "code": "\"big-$id\"",
+               "before": "val chosen = if (n \u003e 0) {",
+               "after": "} else {",
+               "fn": "Cases.pick"
+              },
+              {
+               "kind": "assign",
+               "loc": "src/main/kotlin/cases/Cases.kt:21",
+               "code": "id",
+               "before": "} else {",
+               "after": "}",
+               "fn": "Cases.pick",
+               "kids": [
+                {
+                 "kind": "assign",
+                 "loc": "src/main/kotlin/cases/Cases.kt:17",
+                 "code": "fun pick(id: String, n: Int): String {",
+                 "after": "val chosen = if (n \u003e 0) {",
+                 "type": "String",
+                 "fn": "Cases.pick"
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "kind": "assign",
+           "loc": "src/main/kotlin/cases/Cases.kt:25",
+           "code": "else -\u003e \"${chosen}x\"",
+           "before": "0 -\u003e chosen",
+           "after": "}",
+           "fn": "Cases.pick"
+          }
+         ]
+        },
+        {
+         "kind": "assign",
+         "loc": "src/main/kotlin/cases/Cases.kt:30",
+         "code": "val id = clean(raw) ?: \"none\"",
+         "before": "fun flow(raw: String?, n: Int): String {",
+         "after": "val picked = pick(id = id, n = n)",
+         "fn": "Cases.flow",
+         "kids": [
+          {
+           "kind": "return",
+           "loc": "src/main/kotlin/cases/Cases.kt:15",
+           "code": "fun clean(raw: String?) = raw!!.trim()",
+           "type": "String",
+           "fn": "Cases.clean"
+          },
+          {
+           "kind": "assign",
+           "loc": "src/main/kotlin/cases/Cases.kt:29",
+           "code": "fun flow(raw: String?, n: Int): String {",
+           "after": "val id = clean(raw) ?: \"none\"",
+           "type": "String",
+           "fn": "Cases.flow",
+           "kids": [
+            {
+             "kind": "arg",
+             "loc": "src/main/kotlin/cases/Cases.kt:58",
+             "code": "fun caller() = println(flow(\" 42 \", 3))",
+             "after": "}",
+             "fn": "Cases.caller"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "Uses": [
+  {
+   "kind": "seed",
+   "loc": "src/main/kotlin/cases/Cases.kt:33",
+   "code": "val cast = (any as String)",
+   "before": "val any: Any = picked",
+   "after": "val total = -n * 2 + n % 3",
+   "fn": "Cases.flow",
+   "kids": [
+    {
+     "kind": "assign",
+     "loc": "src/main/kotlin/cases/Cases.kt:36",
+     "code": "val parts = arrayOf(cast, seed)",
+     "before": "val range = 0..total",
+     "after": "val head = parts[0]",
+     "fn": "Cases.flow",
+     "kids": [
+      {
+       "kind": "assign",
+       "loc": "src/main/kotlin/cases/Cases.kt:37",
+       "code": "val head = parts[0]",
+       "before": "val parts = arrayOf(cast, seed)",
+       "after": "val (a, b) = Pair(head, total)",
+       "fn": "Cases.flow",
+       "kids": [
+        {
+         "kind": "assign",
+         "loc": "src/main/kotlin/cases/Cases.kt:38",
+         "code": "val (a, b) = Pair(head, total)",
+         "before": "val head = parts[0]",
+         "after": "var acc = \"\"",
+         "fn": "Cases.flow",
+         "kids": [
+          {
+           "kind": "assign",
+           "loc": "src/main/kotlin/cases/Cases.kt:40",
+           "code": "for ((i, p) in listOf(a, b.toString()).withIndex()) {",
+           "before": "var acc = \"\"",
+           "after": "acc = acc + i",
+           "fn": "Cases.flow",
+           "kids": [
+            {
+             "kind": "assign",
+             "loc": "src/main/kotlin/cases/Cases.kt:41",
+             "code": "acc = acc + i",
+             "before": "for ((i, p) in listOf(a, b.toString()).withIndex()) {",
+             "after": "acc = acc + p",
+             "fn": "Cases.flow",
+             "kids": [
+              {
+               "kind": "assign",
+               "loc": "src/main/kotlin/cases/Cases.kt:45",
+               "code": "box.id = acc",
+               "before": "val box = Box()",
+               "after": "box.tags.add(box.id)",
+               "fn": "Cases.flow",
+               "kids": [
+                {
+                 "kind": "field",
+                 "name": "Box.id",
+                 "type": "String",
+                 "kids": [
+                  {
+                   "kind": "read",
+                   "loc": "src/main/kotlin/cases/Cases.kt:46",
+                   "code": "box.tags.add(box.id)",
+                   "before": "box.id = acc",
+                   "after": "last = box.tags[0]",
+                   "fn": "Cases.flow"
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            },
+            {
+             "kind": "assign",
+             "loc": "src/main/kotlin/cases/Cases.kt:42",
+             "code": "acc = acc + p",
+             "before": "acc = acc + i",
+             "after": "}",
+             "fn": "Cases.flow"
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

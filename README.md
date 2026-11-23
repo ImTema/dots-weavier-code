@@ -12,14 +12,36 @@ Status: prototype.
 go build -o dotweavier ./cmd/dotweavier
 ```
 
+## Install
+
+To run `dotweavier` from any folder, install it into `~/go/bin` and put that folder on your `PATH`:
+
+```sh
+go install ./cmd/dotweavier
+echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+```
+
+Re-run `go install ./cmd/dotweavier` after pulling changes.
+
+## Uninstall
+
+Remove the binary, and optionally all stored indexes and pages:
+
+```sh
+rm "$(go env GOPATH)/bin/dotweavier"
+rm -rf ~/.dotweavier
+```
+
+If you added the `PATH` line only for dotweavier, delete it from `~/.zshrc`.
+
 ## Usage
 
 ### 1. Index
 
-Run it from a workspace directory, or pass `--workspace DIR`. dotweavier treats every directory under the workspace that contains a `go.mod` as a project. A project's name is its path relative to the workspace.
+Run it from a project folder, or pass `--project DIR`. dotweavier treats every directory under it that contains a `go.mod`, `pom.xml`, `build.gradle(.kts)` or `settings.gradle(.kts)` as a project. Java and Kotlin projects are read from source, without building them (`docs/adr/0007-jvm-extractor-from-source.md`). A project's name is its path relative to that folder.
 
 ```sh
-dotweavier index                    # every project under the workspace
+dotweavier index                    # every project under the current folder
 dotweavier index orders pricing     # only these projects
 ```
 
@@ -51,26 +73,71 @@ Flags:
 
 ```sh
 dotweavier trace field orders:internal/order/order.go:94
+dotweavier trace field java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:24
+dotweavier trace field kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:47
 ```
 
-The line must compute a value. The output is two trees: where the value comes from, and where it goes.
+The line must compute a value, declare a parameter, or declare a field. The output is two trees: where the value comes from, and where it goes. Java and Kotlin files are traced from source within their own project (ADR 0007).
 
 Flags:
 
 - `--depth N`: limit the tree depth
 - `--max-projects N`: how many projects to load when following fields shared across projects (default 10)
 - `--include-tests`
-- `--format ui`: write a tree view to `~/.dotweavier/ui/trace-field.html`
+- `--follow N`: follow gRPC, HTTP and Pub/Sub calls into the services that handle them, N services deep (at most 10 calls)
+- `--format ui`: write a tree view to `~/.dotweavier/ui/trace-field.html`; every run is kept in `~/.dotweavier/trace-field-history`
+
+#### Example: follow a value into other services
+
+In `samples/`, `orders` reserves stock and prices an order on one line (`internal/order/order.go:81`):
+
+```go
+resID, err := s.reserver.Reserve(ctx, c.ID, req.Items)
+```
+
+Index the samples, then trace that line and follow its calls two services deep:
+
+```sh
+dotweavier index --project samples
+dotweavier trace field golang/orders:internal/order/order.go:81 --project samples --follow 2
+```
+
+The lifecycle tree crosses into Java `inventory` and Go `pricing`. Each `[grpc]` step is the handler, with the trace of the request it receives below it (excerpt):
+
+```
+followed 3 hops
+[seed] internal/order/order.go:81  resID, err := s.reserver.Reserve(ctx, c.ID, req.Items)  in Service.Place
+├─ [arg] internal/inventory/client.go:26  func (c *Client) Reserve(...)  in Client.Reserve
+│  └─ [grpc] java/inventory:.../grpc/InventoryGrpcService.java:31  /inventory.v1.InventoryService/Reserve
+│     └─ [seed] java/inventory:.../grpc/InventoryGrpcService.java:33  public Uni<ReserveResponse> reserve(ReserveRequest req) {
+├─ [arg] internal/inventory/client.go:47  func (c *Client) Release(...)  in Client.Release
+│  └─ [grpc] java/inventory:.../grpc/InventoryGrpcService.java:52  /inventory.v1.InventoryService/Release
+└─ [read] internal/pricer/pricer.go:23  CustomerId: c.ID,  in Client.Price
+   └─ [grpc] golang/pricing:internal/server/server.go:43  /pricing.v1.PricingService/Quote
+      └─ [seed] golang/pricing:internal/server/server.go:43  func (s *Server) Quote(ctx context.Context, req *pricingv1.QuoteRequest) ...
+         ├─ [arg] golang/pricing:internal/customers/client.go:27  func (c *Client) Tier(...)  in Client.Tier
+         └─ [arg] golang/pricing:internal/shipping/client.go:32  func (c *Client) Rate(...)  in Client.Rate
+```
+
+The excerpt keeps only the hops and the steps that lead to them; the real tree has every step in between.
+
+What to check against `samples/README.md`:
+
+- `orders → inventory` (`Reserve`, `Release`) and `orders → pricing` (`Quote`) are followed into their handlers.
+- Inside `pricing`, the customer ID reaches its HTTP clients `customers.Client.Tier` and `shipping.Client.Rate`. The trace stops there: Go HTTP clients are not linked yet, so `pricing → orders` and `pricing → shipping` are not followed.
+- A handler reached from several steps is traced once; the other steps show `(traced at another step)`.
+
+The same in the browser: run `dotweavier overview --project samples`, open `http://127.0.0.1:7357/ui/trace-field.html`, trace the line from its file viewer, and press **follow all hops** (or **follow ⇢** on one step).
 
 ## Try it
 
-`samples/` holds small services in Go, Java and Kotlin that call each other over gRPC, HTTP and Pub/Sub. `samples/golang/README.md` lists every expected hop, so you can check a trace against it. Only the Go projects are indexed today.
+`samples/` holds small services in Go, Java and Kotlin that call each other over gRPC, HTTP and Pub/Sub. `samples/golang/README.md` lists every expected hop, so you can check a trace against it. All of them are indexed; the Go client of `inventory` links to its Java gRPC handler.
 
 ```sh
 cd samples/golang && dotweavier index
 ```
 
-dotweavier loads projects with the Go toolchain. A project whose modules cannot be downloaded fails with `no packages`. Run `go mod download` in that project first.
+dotweavier loads Go projects with the Go toolchain. A project whose modules cannot be downloaded fails with `no packages`. Run `go mod download` in that project first.
 
 ## Docs
 

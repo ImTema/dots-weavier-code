@@ -1,0 +1,170 @@
+call golang/pricing:api/pricing/v1/pricing_grpc.pb.go:pricingServiceClient.Quote /pricing.v1.PricingService/Quote ext=grpc /pricing.v1.PricingService/Quote
+edge golang/pricing:api/pricing/v1/pricing.pb.go:Item.Descriptor -call -> golang/pricing:api/pricing/v1/pricing.pb.go:file_api_pricing_v1_pricing_proto_rawDescGZIP
+edge golang/pricing:api/pricing/v1/pricing.pb.go:QuoteRequest.Descriptor -call -> golang/pricing:api/pricing/v1/pricing.pb.go:file_api_pricing_v1_pricing_proto_rawDescGZIP
+edge golang/pricing:api/pricing/v1/pricing.pb.go:QuoteResponse.Descriptor -call -> golang/pricing:api/pricing/v1/pricing.pb.go:file_api_pricing_v1_pricing_proto_rawDescGZIP
+edge golang/pricing:api/pricing/v1/pricing.pb.go:file_api_pricing_v1_pricing_proto_init -iface:guess -> external: reflect.Type.PkgPath
+edge golang/pricing:api/pricing/v1/pricing.pb.go:init#1 -call -> golang/pricing:api/pricing/v1/pricing.pb.go:file_api_pricing_v1_pricing_proto_init
+edge golang/pricing:api/pricing/v1/pricing_grpc.pb.go:RegisterPricingServiceServer -iface:guess -> external: grpc.ServiceRegistrar.RegisterService
+edge golang/pricing:api/pricing/v1/pricing_grpc.pb.go:RegisterPricingServiceServer -iface:guess -> golang/pricing:api/pricing/v1/pricing_grpc.pb.go:UnimplementedPricingServiceServer.testEmbeddedByValue
+edge golang/pricing:api/pricing/v1/pricing_grpc.pb.go:_PricingService_Quote_Handler -iface:guess -> golang/pricing:api/pricing/v1/pricing_grpc.pb.go:UnimplementedPricingServiceServer.Quote
+edge golang/pricing:api/pricing/v1/pricing_grpc.pb.go:_PricingService_Quote_Handler -iface:guess -> golang/pricing:api/pricing/v1/pricing_grpc.pb.go:_PricingService_Quote_Handler$1
+edge golang/pricing:api/pricing/v1/pricing_grpc.pb.go:_PricingService_Quote_Handler -iface:guess -> golang/pricing:internal/server/server.go:Server.Quote
+edge golang/pricing:api/pricing/v1/pricing_grpc.pb.go:_PricingService_Quote_Handler$1 -iface:guess -> golang/pricing:api/pricing/v1/pricing_grpc.pb.go:UnimplementedPricingServiceServer.Quote
+edge golang/pricing:api/pricing/v1/pricing_grpc.pb.go:_PricingService_Quote_Handler$1 -iface:guess -> golang/pricing:internal/server/server.go:Server.Quote
+edge golang/pricing:api/pricing/v1/pricing_grpc.pb.go:pricingServiceClient.Quote -iface:guess -> external: grpc.ClientConnInterface.Invoke
+edge golang/pricing:cmd/pricing/main.go:consume -call -> golang/pricing:internal/events/subscriber.go:EnsureSubscription
+edge golang/pricing:cmd/pricing/main.go:consume -call -> golang/pricing:internal/events/subscriber.go:NewSubscriber
+edge golang/pricing:cmd/pricing/main.go:consume -call -> golang/pricing:internal/events/subscriber.go:Subscriber.Run
+edge golang/pricing:cmd/pricing/main.go:consume -iface:guess -> external: context.Context.Done
+edge golang/pricing:cmd/pricing/main.go:main -call -> golang/pricing:cmd/pricing/main.go:run
+edge golang/pricing:cmd/pricing/main.go:run -call -> golang/pricing:api/pricing/v1/pricing_grpc.pb.go:RegisterPricingServiceServer
+edge golang/pricing:cmd/pricing/main.go:run -call -> golang/pricing:cmd/pricing/main.go:run$1
+edge golang/pricing:cmd/pricing/main.go:run -call -> golang/pricing:cmd/pricing/main.go:run$2
+edge golang/pricing:cmd/pricing/main.go:run -call -> golang/pricing:internal/customers/client.go:NewClient
+edge golang/pricing:cmd/pricing/main.go:run -call -> golang/pricing:internal/loyalty/ledger.go:NewLedger
+edge golang/pricing:cmd/pricing/main.go:run -call -> golang/pricing:internal/server/server.go:New
+edge golang/pricing:cmd/pricing/main.go:run -call -> golang/pricing:internal/shipping/client.go:NewClient
+edge golang/pricing:cmd/pricing/main.go:run$1 -call -> golang/pricing:cmd/pricing/main.go:consume
+edge golang/pricing:cmd/pricing/main.go:run$2 -iface:guess -> external: context.Context.Done
+edge golang/pricing:internal/customers/client.go:Client.Tier -iface:guess -> external: io.ReadCloser.Close
+edge golang/pricing:internal/customers/client_test.go:TestTier -call -> golang/pricing:internal/customers/client.go:Client.Tier
+edge golang/pricing:internal/customers/client_test.go:TestTier -call -> golang/pricing:internal/customers/client.go:NewClient
+edge golang/pricing:internal/customers/client_test.go:TestTier$1 -iface:guess -> external: http.ResponseWriter.Write
+edge golang/pricing:internal/customers/client_test.go:TestTier$1 -iface:guess -> external: http.ResponseWriter.WriteHeader
+edge golang/pricing:internal/discount/discount.go:Best -iface:sure -> golang/pricing:internal/discount/discount.go:LoyaltyRule.Discount
+edge golang/pricing:internal/discount/discount.go:Best -iface:sure -> golang/pricing:internal/discount/discount.go:TierRule.Discount
+edge golang/pricing:internal/discount/discount.go:Best -iface:sure -> golang/pricing:internal/discount/discount.go:VolumeRule.Discount
+edge golang/pricing:internal/events/subscriber.go:Subscriber.Handle -call -> golang/pricing:internal/loyalty/ledger.go:Ledger.Orders
+edge golang/pricing:internal/events/subscriber.go:Subscriber.Handle -call -> golang/pricing:internal/loyalty/ledger.go:Ledger.Record
+edge golang/pricing:internal/events/subscriber.go:Subscriber.Run -iface:guess -> external: context.Context.Err
+edge golang/pricing:internal/events/subscriber.go:Subscriber.Run -iface:guess -> golang/pricing:internal/events/subscriber.go:Subscriber.Run$1
+edge golang/pricing:internal/events/subscriber.go:Subscriber.Run$1 -call -> golang/pricing:internal/events/subscriber.go:Subscriber.Handle
+edge golang/pricing:internal/events/subscriber_test.go:TestSubscriberRecordsOrders -call -> golang/pricing:internal/events/subscriber.go:EnsureSubscription
+edge golang/pricing:internal/events/subscriber_test.go:TestSubscriberRecordsOrders -call -> golang/pricing:internal/events/subscriber_test.go:TestSubscriberRecordsOrders$1
+edge golang/pricing:internal/events/subscriber_test.go:TestSubscriberRecordsOrders -call -> golang/pricing:internal/loyalty/ledger.go:Ledger.Orders
+edge golang/pricing:internal/events/subscriber_test.go:TestSubscriberRecordsOrders -call -> golang/pricing:internal/loyalty/ledger.go:NewLedger
+edge golang/pricing:internal/events/subscriber_test.go:TestSubscriberRecordsOrders -iface:guess -> external: context.Context.Err
+edge golang/pricing:internal/events/subscriber_test.go:TestSubscriberRecordsOrders$1 -call -> golang/pricing:internal/events/subscriber.go:NewSubscriber
+edge golang/pricing:internal/events/subscriber_test.go:TestSubscriberRecordsOrders$1 -call -> golang/pricing:internal/events/subscriber.go:Subscriber.Run
+edge golang/pricing:internal/loyalty/ledger_test.go:TestRecord -call -> golang/pricing:internal/loyalty/ledger.go:Ledger.Orders
+edge golang/pricing:internal/loyalty/ledger_test.go:TestRecord -call -> golang/pricing:internal/loyalty/ledger.go:Ledger.Record
+edge golang/pricing:internal/loyalty/ledger_test.go:TestRecord -call -> golang/pricing:internal/loyalty/ledger.go:NewLedger
+edge golang/pricing:internal/quote/quote.go:Calculate -call -> golang/pricing:internal/discount/discount.go:Best
+edge golang/pricing:internal/quote/quote.go:Calculate -call -> golang/pricing:internal/discount/discount.go:Rules
+edge golang/pricing:internal/quote/quote.go:Calculate -call -> golang/pricing:internal/quote/quote.go:subtotal
+edge golang/pricing:internal/quote/quote.go:Calculate -call -> golang/pricing:internal/tax/tax.go:Amount
+edge golang/pricing:internal/quote/quote_test.go:TestCalculate -iface:guess -> golang/pricing:internal/quote/quote_test.go:TestCalculate$1
+edge golang/pricing:internal/quote/quote_test.go:TestCalculate$1 -call -> golang/pricing:internal/quote/quote.go:Calculate
+edge golang/pricing:internal/server/server.go:Server.Quote -call -> golang/pricing:api/pricing/v1/pricing.pb.go:Item.GetQty
+edge golang/pricing:internal/server/server.go:Server.Quote -call -> golang/pricing:api/pricing/v1/pricing.pb.go:Item.GetSku
+edge golang/pricing:internal/server/server.go:Server.Quote -call -> golang/pricing:api/pricing/v1/pricing.pb.go:Item.GetUnitCents
+edge golang/pricing:internal/server/server.go:Server.Quote -call -> golang/pricing:api/pricing/v1/pricing.pb.go:QuoteRequest.GetCustomerId
+edge golang/pricing:internal/server/server.go:Server.Quote -call -> golang/pricing:api/pricing/v1/pricing.pb.go:QuoteRequest.GetItems
+edge golang/pricing:internal/server/server.go:Server.Quote -call -> golang/pricing:api/pricing/v1/pricing.pb.go:QuoteRequest.GetRegion
+edge golang/pricing:internal/server/server.go:Server.Quote -call -> golang/pricing:internal/loyalty/ledger.go:Ledger.Orders
+edge golang/pricing:internal/server/server.go:Server.Quote -call -> golang/pricing:internal/quote/quote.go:Calculate
+edge golang/pricing:internal/server/server.go:Server.Quote -call -> golang/pricing:internal/quote/quote.go:Units
+edge golang/pricing:internal/server/server.go:Server.Quote -iface:guess -> external: error.Error
+edge golang/pricing:internal/server/server.go:Server.Quote -iface:sure -> golang/pricing:internal/customers/client.go:Client.Tier
+edge golang/pricing:internal/server/server.go:Server.Quote -iface:sure -> golang/pricing:internal/shipping/client.go:Client.Rate
+edge golang/pricing:internal/shipping/client.go:Client.Rate -iface:guess -> external: io.ReadCloser.Close
+edge golang/pricing:internal/shipping/client_test.go:TestRate -call -> golang/pricing:internal/shipping/client.go:Client.Rate
+edge golang/pricing:internal/shipping/client_test.go:TestRate -call -> golang/pricing:internal/shipping/client.go:NewClient
+edge golang/pricing:internal/shipping/client_test.go:TestRate$1 -iface:guess -> external: http.ResponseWriter.Write
+edge golang/pricing:internal/tax/tax.go:Amount -call -> golang/pricing:internal/tax/tax.go:rate
+impl /pricing.v1.PricingService/Quote <- golang/pricing:internal/server/server.go:Server.Quote
+node external: context.Context.Done 0-0 test=false
+node external: context.Context.Err 0-0 test=false
+node external: error.Error 0-0 test=false
+node external: grpc.ClientConnInterface.Invoke 0-0 test=false
+node external: grpc.ServiceRegistrar.RegisterService 0-0 test=false
+node external: http.ResponseWriter.Write 0-0 test=false
+node external: http.ResponseWriter.WriteHeader 0-0 test=false
+node external: io.ReadCloser.Close 0-0 test=false
+node external: reflect.Type.PkgPath 0-0 test=false
+node golang/pricing:../../../../../Library/Caches/go-build/60/60cb5798ef32c1554ca4149150b513e04c32a17e2325e2a166133e3e9febd7df-d:init#1 39-43 test=true
+node golang/pricing:../../../../../Library/Caches/go-build/60/60cb5798ef32c1554ca4149150b513e04c32a17e2325e2a166133e3e9febd7df-d:main 45-50 test=true
+node golang/pricing:../../../../../Library/Caches/go-build/7a/7a60175833496d99b7ff8f9f8e76745c249b514f2618339838c6f6f840bc7abd-d:init#1 39-43 test=true
+node golang/pricing:../../../../../Library/Caches/go-build/7a/7a60175833496d99b7ff8f9f8e76745c249b514f2618339838c6f6f840bc7abd-d:main 45-50 test=true
+node golang/pricing:../../../../../Library/Caches/go-build/9d/9d655f54c5a08bf0d523b61ec67eee7c99a884666e82f3b860a5cee2e2558a12-d:init#1 39-43 test=true
+node golang/pricing:../../../../../Library/Caches/go-build/9d/9d655f54c5a08bf0d523b61ec67eee7c99a884666e82f3b860a5cee2e2558a12-d:main 45-50 test=true
+node golang/pricing:../../../../../Library/Caches/go-build/cc/cc057ab51365a822889b4d84cdf331fe41bcc59fdbe02f35656f487a85f5a5a4-d:init#1 39-43 test=true
+node golang/pricing:../../../../../Library/Caches/go-build/cc/cc057ab51365a822889b4d84cdf331fe41bcc59fdbe02f35656f487a85f5a5a4-d:main 45-50 test=true
+node golang/pricing:../../../../../Library/Caches/go-build/f4/f48ebd72e89388d7488f1886ee21351c177f5f3f9c60f4d8e05ef0398be15d03-d:init#1 39-43 test=true
+node golang/pricing:../../../../../Library/Caches/go-build/f4/f48ebd72e89388d7488f1886ee21351c177f5f3f9c60f4d8e05ef0398be15d03-d:main 45-50 test=true
+node golang/pricing:api/pricing/v1/pricing.pb.go:Item.Descriptor 59-61 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:Item.GetQty 77-82 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:Item.GetSku 63-68 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:Item.GetUnitCents 70-75 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:Item.ProtoMessage 44-44 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:Item.ProtoReflect 46-56 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:Item.Reset 33-38 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:Item.String 40-42 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteRequest.Descriptor 119-121 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteRequest.GetCustomerId 123-128 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteRequest.GetItems 137-142 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteRequest.GetRegion 130-135 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteRequest.ProtoMessage 104-104 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteRequest.ProtoReflect 106-116 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteRequest.Reset 93-98 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteRequest.String 100-102 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteResponse.Descriptor 183-185 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteResponse.GetDiscountCents 194-199 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteResponse.GetShippingCents 215-220 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteResponse.GetSubtotalCents 187-192 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteResponse.GetTaxCents 201-206 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteResponse.GetTotalCents 208-213 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteResponse.ProtoMessage 168-168 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteResponse.ProtoReflect 170-180 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteResponse.Reset 157-162 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:QuoteResponse.String 164-166 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:file_api_pricing_v1_pricing_proto_init 278-299 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:file_api_pricing_v1_pricing_proto_rawDescGZIP 253-258 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:file_api_pricing_v1_pricing_proto_rawDescGZIP$1 254-0 test=false
+node golang/pricing:api/pricing/v1/pricing.pb.go:init#1 277-277 test=false
+node golang/pricing:api/pricing/v1/pricing_grpc.pb.go:NewPricingServiceClient 38-40 test=false
+node golang/pricing:api/pricing/v1/pricing_grpc.pb.go:RegisterPricingServiceServer 82-91 test=false
+node golang/pricing:api/pricing/v1/pricing_grpc.pb.go:UnimplementedPricingServiceServer.Quote 69-71 test=false
+node golang/pricing:api/pricing/v1/pricing_grpc.pb.go:UnimplementedPricingServiceServer.mustEmbedUnimplementedPricingServiceServer 72-72 test=false
+node golang/pricing:api/pricing/v1/pricing_grpc.pb.go:UnimplementedPricingServiceServer.testEmbeddedByValue 73-73 test=false
+node golang/pricing:api/pricing/v1/pricing_grpc.pb.go:_PricingService_Quote_Handler 93-109 test=false
+node golang/pricing:api/pricing/v1/pricing_grpc.pb.go:_PricingService_Quote_Handler$1 105-0 test=false
+node golang/pricing:api/pricing/v1/pricing_grpc.pb.go:pricingServiceClient.Quote 42-50 test=false
+node golang/pricing:cmd/pricing/main.go:consume 83-100 test=false
+node golang/pricing:cmd/pricing/main.go:main 30-35 test=false
+node golang/pricing:cmd/pricing/main.go:run 37-79 test=false
+node golang/pricing:cmd/pricing/main.go:run$1 67-0 test=false
+node golang/pricing:cmd/pricing/main.go:run$2 73-0 test=false
+node golang/pricing:internal/customers/client.go:Client.Tier 27-55 test=false
+node golang/pricing:internal/customers/client.go:NewClient 21-23 test=false
+node golang/pricing:internal/customers/client_test.go:TestTier 13-43 test=true
+node golang/pricing:internal/customers/client_test.go:TestTier$1 14-0 test=true
+node golang/pricing:internal/discount/discount.go:Best 62-70 test=false
+node golang/pricing:internal/discount/discount.go:LoyaltyRule.Discount 39-44 test=false
+node golang/pricing:internal/discount/discount.go:Rules 48-59 test=false
+node golang/pricing:internal/discount/discount.go:TierRule.Discount 13-18 test=false
+node golang/pricing:internal/discount/discount.go:VolumeRule.Discount 23-30 test=false
+node golang/pricing:internal/events/subscriber.go:EnsureSubscription 24-36 test=false
+node golang/pricing:internal/events/subscriber.go:NewSubscriber 45-47 test=false
+node golang/pricing:internal/events/subscriber.go:Subscriber.Handle 65-75 test=false
+node golang/pricing:internal/events/subscriber.go:Subscriber.Run 50-62 test=false
+node golang/pricing:internal/events/subscriber.go:Subscriber.Run$1 51-0 test=false
+node golang/pricing:internal/events/subscriber_test.go:TestSubscriberRecordsOrders 21-67 test=true
+node golang/pricing:internal/events/subscriber_test.go:TestSubscriberRecordsOrders$1 55-0 test=true
+node golang/pricing:internal/loyalty/ledger.go:Ledger.Orders 37-41 test=false
+node golang/pricing:internal/loyalty/ledger.go:Ledger.Record 21-34 test=false
+node golang/pricing:internal/loyalty/ledger.go:NewLedger 15-17 test=false
+node golang/pricing:internal/loyalty/ledger_test.go:TestRecord 9-30 test=true
+node golang/pricing:internal/quote/quote.go:Calculate 48-68 test=false
+node golang/pricing:internal/quote/quote.go:Units 32-38 test=false
+node golang/pricing:internal/quote/quote.go:subtotal 70-81 test=false
+node golang/pricing:internal/quote/quote_test.go:TestCalculate 10-47 test=true
+node golang/pricing:internal/quote/quote_test.go:TestCalculate$1 37-0 test=true
+node golang/pricing:internal/server/server.go:New 38-40 test=false
+node golang/pricing:internal/server/server.go:Server.Quote 43-74 test=false
+node golang/pricing:internal/shipping/client.go:Client.Rate 32-64 test=false
+node golang/pricing:internal/shipping/client.go:NewClient 20-22 test=false
+node golang/pricing:internal/shipping/client_test.go:TestRate 12-38 test=true
+node golang/pricing:internal/shipping/client_test.go:TestRate$1 13-0 test=true
+node golang/pricing:internal/tax/tax.go:Amount 16-25 test=false
+node golang/pricing:internal/tax/tax.go:rate 27-34 test=false

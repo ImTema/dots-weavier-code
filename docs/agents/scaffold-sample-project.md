@@ -55,7 +55,7 @@ Under `samples/<language>/<service>/`, with the layout the other samples use:
 - one port interface per outbound dependency, with an adapter implementing it;
 - tests that run without any other service: domain rules table-driven, and
   each adapter against a local fake server;
-- the build wrapper (`gradlew`, etc.) and a `.gitignore` for build output;
+- the build wrapper (`mvnw`, `gradlew`, etc.) and a `.gitignore` for build output;
 - a `README.md` with contract, rules, layout, and run and test commands.
 
 Done when the project builds and its tests pass.
@@ -81,7 +81,7 @@ customer tier and one request per new failure mode. Check the numbers
 against the rules in the READMEs. Then index and trace:
 
 ```sh
-dotweavier index --workspace samples
+dotweavier index --project samples
 dotweavier trace path -A <caller> -B <callee>
 ```
 
@@ -113,7 +113,8 @@ Done when each README command has been run and printed what the README says.
   (`samples/golang/orders/buf.gen.yaml`). Generate with `buf`,
   `protoc-gen-go` and `protoc-gen-go-grpc` on `PATH`; `go install` all three
   into a temporary `GOBIN` if they are missing.
-- **JVM projects build on JDK 25** through Gradle toolchains. Run a built jar
+- **JVM projects build for JDK 25**: Java with Maven (`maven.compiler.release`),
+  Kotlin with Gradle toolchains. Run a built jar
   with a JDK 25 `java`, and confirm library versions against Maven Central
   rather than memory.
 - **Quarkus gRPC** runs on its own port (`quarkus.grpc.server.use-separate-server=true`),

@@ -27,6 +27,7 @@ type tracker struct {
 	callers    map[*ssa.Function][]ssa.CallInstruction
 	fwd, back  *walk
 	seedOK     func(ssa.Value) bool // nil: every value on the line is a seed
+	warnings   []string             // projects skipped or not loaded, load stats
 }
 
 func newTracker(fset *token.FileSet, tests bool, modules []string) *tracker {

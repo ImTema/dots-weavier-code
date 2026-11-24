@@ -6,6 +6,7 @@ package domain
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"go/token"
 	"go/types"
@@ -17,11 +18,31 @@ import (
 	"time"
 )
 
-// Index indexes the projects of workspace ws (DefaultWorkspace for ""), or only
-// the named ones, each into the one index of its folder.
-// done is called after each project with its load stats or its error.
-func Index(ws string, names []string, done func(project, stats string, err error)) error {
-	ws, fs, err := workspaceFolders(ws)
+// IndexOptions says what Index indexes.
+type IndexOptions struct {
+	Workspace string            // workspace name; DefaultWorkspace for ""
+	Names     []string          // project names in the workspace; empty: every project
+	Progress  func(IndexResult) // called after each project; may be nil
+}
+
+// IndexResult is what indexing one project did.
+type IndexResult struct {
+	Project  string
+	Stats    string   // load stats, when indexed
+	Warnings []string // one line each, e.g. an SSA build panic
+	Err      error
+}
+
+// Index indexes the projects of a workspace, or only the named ones, each into
+// the one index of its folder. Cancelling ctx stops it between projects and
+// package loads; a project's index is written whole or not at all.
+func Index(ctx context.Context, o IndexOptions) error {
+	done := o.Progress
+	if done == nil {
+		done = func(IndexResult) {}
+	}
+	names := o.Names
+	ws, fs, err := workspaceFolders(o.Workspace)
 	if err != nil {
 		return err
 	}
@@ -38,17 +59,23 @@ func Index(ws string, names []string, done func(project, stats string, err error
 			continue
 		}
 		delete(want, p.Name)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		g := &graph{ids: map[string]int32{}, Impls: map[string][]int32{}}
 		// Tests are always indexed and flagged; traces drop them unless asked.
-		st, err := extract(g, p, true)
+		st, err := extract(ctx, g, p, true)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if err != nil {
-			done(p.Name, "", err)
+			done(IndexResult{Project: p.Name, Warnings: st.warnings, Err: err})
 			continue
 		}
 		if err := save(&stored{Project: p.Name, Dir: p.dir, Built: time.Now(), Graph: *g}); err != nil {
 			return err
 		}
-		done(p.Name, st.String(), nil)
+		done(IndexResult{Project: p.Name, Stats: st.String(), Warnings: st.warnings})
 	}
 	for n := range want {
 		return fmt.Errorf("project %q not found in workspace %s", n, ws)
@@ -95,7 +122,7 @@ func projectsUnder(ws, dir string) ([]string, error) {
 // IndexProject indexes the project in folder dir, with its modules, into
 // workspace ws (DefaultWorkspace for ""), creating ws if it does not exist. If no
 // folder of ws contains dir, dir's parent folder is registered in ws first.
-func IndexProject(dir, ws string, done func(project, stats string, err error)) error {
+func IndexProject(ctx context.Context, dir, ws string, progress func(IndexResult)) error {
 	if ws == "" {
 		ws = DefaultWorkspace
 	}
@@ -119,7 +146,7 @@ func IndexProject(dir, ws string, done func(project, stats string, err error)) e
 	if err != nil {
 		return err
 	}
-	return Index(ws, names, done)
+	return Index(ctx, IndexOptions{Workspace: ws, Names: names, Progress: progress})
 }
 
 func (st loadStats) String() string {
@@ -176,13 +203,23 @@ type PathTrace struct {
 	Exhausted bool   // false: search hit its limit, more paths may exist
 	// What the search ran over.
 	Indexes, Nodes, Edges, GRPCHops, PubsubHops, GRPCCalls, ServedMethods int
+	Warnings                                                              []string // e.g. an index that could not be read
+}
+
+// PathQuery is what TracePath traces.
+type PathQuery struct {
+	Workspace    string // workspace name; DefaultWorkspace for ""
+	A, B         string // symbol addresses
+	MaxPaths     int
+	IncludeTests bool
 }
 
 // TracePath finds up to maxPaths call paths from address a to address b over
 // every project indexed in workspace ws (DefaultWorkspace for ""). Addresses:
 // project::Type.Method, project:rel/path.go:Type.Method, project:rel/path.go:LINE.
-func TracePath(ws, a, b string, maxPaths int, tests bool) (*PathTrace, error) {
-	ws, fs, err := workspaceFolders(ws)
+func TracePath(q PathQuery) (*PathTrace, error) {
+	a, b, maxPaths, tests := q.A, q.B, q.MaxPaths, q.IncludeTests
+	ws, fs, err := workspaceFolders(q.Workspace)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +231,7 @@ func TracePath(ws, a, b string, maxPaths int, tests bool) (*PathTrace, error) {
 	if err != nil {
 		return nil, err
 	}
-	g, loaded, err := loadIndexes(fs)
+	g, loaded, warnings, err := loadIndexes(fs)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +244,7 @@ func TracePath(ws, a, b string, maxPaths int, tests bool) (*PathTrace, error) {
 		g.dropTests()
 	}
 	g.join()
-	r := &PathTrace{Indexes: len(loaded), Nodes: len(g.Nodes), GRPCCalls: len(g.Calls), ServedMethods: len(g.Impls)}
+	r := &PathTrace{Warnings: warnings, Indexes: len(loaded), Nodes: len(g.Nodes), GRPCCalls: len(g.Calls), ServedMethods: len(g.Impls)}
 	for _, es := range g.Out {
 		r.Edges += len(es)
 		for _, e := range es {
@@ -278,14 +315,31 @@ type FieldStep struct {
 }
 
 type FieldTrace struct {
-	Origin []*FieldStep // where the value comes from; each step flows into its parent
-	Uses   []*FieldStep // where it goes; each step flows into its kids
+	Origin   []*FieldStep // where the value comes from; each step flows into its parent
+	Uses     []*FieldStep // where it goes; each step flows into its kids
+	Warnings []string     `json:",omitempty"` // one line each: projects loaded, skipped or not loaded, call paths skipped
+}
+
+// FieldQuery holds the options shared by TraceField, TraceHop, FollowHop and FollowHops.
+type FieldQuery struct {
+	Dir          string // folder whose projects (and modules) are analysed
+	IncludeTests bool
+	MaxProjects  int // load at most this many projects when following shared fields; 0: 10
+}
+
+func (q FieldQuery) maxProjects() int {
+	if q.MaxProjects <= 0 {
+		return 10
+	}
+	return q.MaxProjects
 }
 
 // TraceField traces the value computed at [project:]rel/path.go:LINE in both
 // directions, live over SSA of the projects under ws. A .java or .kt file is
 // traced from its project's syntax instead (jvm_field.go).
-func TraceField(ws, addr string, tests bool, maxProjects int) (*FieldTrace, error) {
+// Cancelling ctx stops it between package loads.
+func TraceField(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, error) {
+	ws, tests, maxProjects := q.Dir, q.IncludeTests, q.maxProjects()
 	i := strings.LastIndex(addr, ":")
 	line, err := strconv.Atoi(addr[i+1:])
 	lang := map[string]string{".go": "go", ".java": "jvm", ".kt": "jvm"}[filepath.Ext(addr[:max(i, 0)])]
@@ -309,7 +363,7 @@ func TraceField(ws, addr string, tests bool, maxProjects int) (*FieldTrace, erro
 		attachCalls(r, ws, home.Name, rel, line)
 		return r, nil
 	}
-	t, err := traceField(projects, home, file, line, tests, maxProjects, nil)
+	t, err := traceField(ctx, projects, home, file, line, tests, maxProjects, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +375,7 @@ func fieldTrace(ws string, t *tracker, home project, projects []project, file st
 	projects = slices.Clone(projects)
 	slices.SortFunc(projects, func(a, b project) int { return cmp.Compare(len(b.dir), len(a.dir)) })
 	p := &printer{t: t, home: home, projects: projects, src: map[string][]string{}}
-	r := &FieldTrace{}
+	r := &FieldTrace{Warnings: t.warnings}
 	for _, n := range t.back.tree() {
 		r.Origin = append(r.Origin, p.step(n))
 	}

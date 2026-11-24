@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -15,7 +16,7 @@ func TestExtractJVM(t *testing.T) {
 		{"java/inventory", filepath.Join("..", "..", "samples", "java", "inventory"), "jvm"},
 		{"kotlin/shipping", filepath.Join("..", "..", "samples", "kotlin", "shipping"), "jvm"},
 	} {
-		if _, err := extract(g, p, true); err != nil {
+		if _, err := extract(context.Background(), g, p, true); err != nil {
 			t.Fatal(err)
 		}
 	}

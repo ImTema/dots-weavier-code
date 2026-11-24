@@ -11,15 +11,16 @@ package main
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"dotweavier/internal/domain"
@@ -39,11 +40,17 @@ func main() {
 		usage()
 	}
 	start := time.Now()
+	// Ctrl-C cancels a long index or field trace; indexes are written whole or not at all.
+	// Only those two catch it: every other command keeps Ctrl-C's default exit.
+	cancellable := func() context.Context {
+		ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
+		return ctx
+	}
 	switch os.Args[1] {
 	case "init":
 		runInit(os.Args[2:])
 	case "index":
-		runIndex(os.Args[2:])
+		runIndex(cancellable(), os.Args[2:])
 	case "overview": // PROTOTYPE
 		runOverview(os.Args[2:])
 	case "trace":
@@ -54,22 +61,29 @@ func main() {
 		case "path":
 			runTrace(os.Args[3:])
 		case "field":
-			runTraceField(os.Args[3:])
+			runTraceField(cancellable(), os.Args[3:])
 		default:
 			usage()
 		}
 	default:
 		usage()
 	}
-	var ru syscall.Rusage
-	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &ru)
-	fmt.Fprintf(os.Stderr, "wall=%s maxRSS=%dMB\n", time.Since(start).Round(time.Millisecond), ru.Maxrss>>20) // darwin: bytes
+	if os.Getenv("DOTWEAVIER_DEBUG") == "1" {
+		fmt.Fprintf(os.Stderr, "wall=%s%s\n", time.Since(start).Round(time.Millisecond), maxRSS())
+	}
 }
 
 // defaultProjectDir is the current directory, made absolute so stored file paths stay relative to projects.
 func defaultProjectDir() string {
 	wd, _ := os.Getwd()
 	return wd
+}
+
+// warn prints the domain's warnings to stderr, one per line.
+func warn(ws []string) {
+	for _, w := range ws {
+		fmt.Fprintln(os.Stderr, w)
+	}
 }
 
 // dirAndWorkspace parses the optional folder argument (default: the current folder)
@@ -106,14 +120,15 @@ func runInit(args []string) {
 	}
 }
 
-func runIndex(args []string) {
+func runIndex(ctx context.Context, args []string) {
 	dir, ws := dirAndWorkspace("index", args)
-	must(domain.IndexProject(dir, ws, func(project, stats string, err error) {
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "index %s: %v\n", project, err)
+	must(domain.IndexProject(ctx, dir, ws, func(r domain.IndexResult) {
+		warn(r.Warnings)
+		if r.Err != nil {
+			fmt.Fprintf(os.Stderr, "index %s: %v\n", r.Project, r.Err)
 			return
 		}
-		fmt.Fprintf(os.Stderr, "indexed %-28s %s\n", project, stats)
+		fmt.Fprintf(os.Stderr, "indexed %-28s %s\n", r.Project, r.Stats)
 	}))
 	fmt.Fprintf(os.Stderr, "workspace %s\n", ws)
 }
@@ -128,8 +143,9 @@ func runTrace(args []string) {
 	format := fl.String("format", "text", "text (one line per path) or ui (galaxy view written to ~/.dotweavier/ui/trace-path.html)")
 	_ = fl.Parse(args)
 
-	r, err := domain.TracePath(*wsFlag, *aFlag, *bFlag, *maxPaths, *tests)
+	r, err := domain.TracePath(domain.PathQuery{Workspace: *wsFlag, A: *aFlag, B: *bFlag, MaxPaths: *maxPaths, IncludeTests: *tests})
 	must(err)
+	warn(r.Warnings)
 	fmt.Fprintf(os.Stderr, "loaded %d indexes: nodes=%d edges=%d grpcHops=%d pubsubHops=%d grpcClientCalls=%d servedMethods=%d\n",
 		r.Indexes, r.Nodes, r.Edges, r.GRPCHops, r.PubsubHops, r.GRPCCalls, r.ServedMethods)
 	fmt.Fprintf(os.Stderr, "A = %s\nB = %s\n", r.A, r.B)
@@ -151,7 +167,7 @@ func runTrace(args []string) {
 	}
 }
 
-func runTraceField(args []string) {
+func runTraceField(ctx context.Context, args []string) {
 	fl := flag.NewFlagSet("trace field", flag.ExitOnError)
 	ws := fl.String("project", defaultProjectDir(), "project folder; projects (and modules) under it are found by their manifest")
 	depth := fl.Int("depth", 0, "text: print at most N levels of each tree (0: all); ui: levels open at first (0: 6)")
@@ -173,10 +189,14 @@ func runTraceField(args []string) {
 	if len(pos) != 1 {
 		usage()
 	}
-	r, err := domain.TraceField(*ws, pos[0], *tests, *maxProjects)
+	q := domain.FieldQuery{Dir: *ws, IncludeTests: *tests, MaxProjects: *maxProjects}
+	r, err := domain.TraceField(ctx, q, pos[0])
 	must(err)
+	warn(r.Warnings)
 	if *follow > 0 {
-		n, errs := domain.FollowHops(*ws, r, *follow, maxFollow, *tests, *maxProjects)
+		seen := len(r.Warnings)
+		n, errs := domain.FollowHops(ctx, q, r, *follow, maxFollow)
+		warn(r.Warnings[seen:])
 		fmt.Fprintf(os.Stderr, "followed %d hops\n", n)
 		for _, e := range errs {
 			fmt.Fprintln(os.Stderr, "hop not followed:", e)
@@ -413,9 +433,14 @@ func saveFieldRun(data []byte, addr string) (string, error) {
 	return name, os.WriteFile(filepath.Join(dir, "index.js"), append(append([]byte("window.HISTORY = "), js...), ";\n"...), 0o644)
 }
 
-func historyDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".dotweavier", "trace-field-history")
+func historyDir() string { return dotDir("trace-field-history") }
+
+// dotDir is a folder under ~/.dotweavier. Without a home folder it exits rather
+// than fall back to the current folder, which may be a target project.
+func dotDir(name string) string {
+	home, err := os.UserHomeDir()
+	must(err)
+	return filepath.Join(home, ".dotweavier", name)
 }
 
 // fieldRun is one saved run of the field page, as fieldData writes it.
@@ -471,8 +496,7 @@ func fill(template string, data any) ([]byte, error) {
 
 // writeUI writes a page under ~/.dotweavier/ui and returns its path.
 func writeUI(name string, html []byte) string {
-	home, _ := os.UserHomeDir()
-	out := filepath.Join(home, ".dotweavier", "ui", name)
+	out := filepath.Join(dotDir("ui"), name)
 	must(os.MkdirAll(filepath.Dir(out), 0o755))
 	must(os.WriteFile(out, html, 0o644))
 	return out

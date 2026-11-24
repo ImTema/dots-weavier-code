@@ -2,6 +2,7 @@ package domain
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,15 +30,15 @@ func TestGraphGolden(t *testing.T) {
 	if _, err := InitWorkspace("../../samples", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := Index("", nil, func(p, _ string, err error) {
-		if err != nil {
-			t.Errorf("index %s: %v", p, err)
+	if err := Index(context.Background(), IndexOptions{Progress: func(r IndexResult) {
+		if r.Err != nil {
+			t.Errorf("index %s: %v", r.Project, r.Err)
 		}
-	}); err != nil {
+	}}); err != nil {
 		t.Fatal(err)
 	}
 	ws, _ := filepath.Abs("../../samples")
-	files, err := filepath.Glob(filepath.Join(storesDir(), "*.db"))
+	files, err := filepath.Glob(filepath.Join(mustStoresDir(t), "*.db"))
 	if err != nil || len(files) == 0 {
 		t.Fatalf("no stores: %v", err)
 	}
@@ -49,7 +50,7 @@ func TestGraphGolden(t *testing.T) {
 		golden(t, strings.ReplaceAll(s.Project, "/", "_")+".txt", dumpGraph(&s.Graph, false))
 	}
 
-	g, _, err := loadIndexes([]string{ws})
+	g, _, _, err := loadIndexes([]string{ws})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +75,7 @@ func TestGraphGolden(t *testing.T) {
 		{"golang/orders:internal/pricer/pricer.go:23", "golang/pricing::TierRule.Discount", false},
 	} {
 		fmt.Fprintf(&b, "== %s -> %s tests=%v\n", c.a, c.b, c.tests)
-		r, err := TracePath("", c.a, c.b, 10, c.tests)
+		r, err := TracePath(PathQuery{A: c.a, B: c.b, MaxPaths: 10, IncludeTests: c.tests})
 		if err != nil {
 			fmt.Fprintf(&b, "error: %v\n\n", err)
 			continue

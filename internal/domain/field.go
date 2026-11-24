@@ -15,6 +15,7 @@
 package domain
 
 import (
+	"context"
 	"fmt"
 	"go/parser"
 	"go/token"
@@ -165,7 +166,7 @@ func importers(projects []project) map[string][]project {
 // traceField runs both walks from file:line in home, loading further projects that
 // import a reached field's package, up to maxProjects in total. A non-nil seedOK
 // keeps only the line's values it accepts as seeds.
-func traceField(projects []project, home project, file string, line int, tests bool, maxProjects int, seedOK func(ssa.Value) bool) (*tracker, error) {
+func traceField(ctx context.Context, projects []project, home project, file string, line int, tests bool, maxProjects int, seedOK func(ssa.Value) bool) (*tracker, error) {
 	var modules []string
 	moduleOf := map[string]string{} // project name -> module path
 	for _, p := range projects {
@@ -184,16 +185,22 @@ func traceField(projects []project, home project, file string, line int, tests b
 	loadAll := func(ps []project) []*ssa.Program {
 		progs := make([]*ssa.Program, len(ps))
 		for i, p := range ps {
+			if ctx.Err() != nil {
+				break
+			}
 			var st loadStats
-			prog, own, err := loadSSA(p, tests, &st, t.fset)
+			prog, own, err := loadSSA(ctx, p, tests, &st, t.fset)
+			t.warnings = append(t.warnings, st.warnings...)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "skip project %s: %v\n", p.Name, err)
+				if ctx.Err() == nil {
+					t.warnings = append(t.warnings, fmt.Sprintf("skip project %s: %v", p.Name, err))
+				}
 				continue
 			}
 			t0 := time.Now()
 			t.add(prog, own)
 			progs[i] = prog
-			fmt.Fprintf(os.Stderr, "loaded %s: pkgs=%d load=%s analyze=%s\n", p.Name, st.pkgs, st.load.Round(time.Millisecond), time.Since(t0).Round(time.Millisecond))
+			t.warnings = append(t.warnings, fmt.Sprintf("loaded %s: pkgs=%d load=%s analyze=%s", p.Name, st.pkgs, st.load.Round(time.Millisecond), time.Since(t0).Round(time.Millisecond)))
 		}
 		return progs
 	}
@@ -201,6 +208,9 @@ func traceField(projects []project, home project, file string, line int, tests b
 	impsC := make(chan map[string][]project, 1)
 	go func() { impsC <- importers(projects) }()
 	prog := loadAll([]project{home})[0]
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if prog == nil {
 		return nil, fmt.Errorf("project %s did not load", home.Name)
 	}
@@ -252,13 +262,17 @@ func traceField(projects []project, home project, file string, line int, tests b
 		var batch []project
 		for _, p := range next {
 			if len(loaded) >= maxProjects {
-				fmt.Fprintf(os.Stderr, "not loaded (--max-projects %d): %s\n", maxProjects, p.Name)
+				t.warnings = append(t.warnings, fmt.Sprintf("not loaded (--max-projects %d): %s", maxProjects, p.Name))
 				continue
 			}
 			loaded[p.Name] = true
 			batch = append(batch, p)
 		}
-		if !slices.ContainsFunc(loadAll(batch), func(p *ssa.Program) bool { return p != nil }) {
+		progs := loadAll(batch)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if !slices.ContainsFunc(progs, func(p *ssa.Program) bool { return p != nil }) {
 			return t, nil
 		}
 		t.back.requeueFields()

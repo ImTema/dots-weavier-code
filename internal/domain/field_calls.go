@@ -2,7 +2,6 @@ package domain
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -17,19 +16,21 @@ import (
 // share one reverse graph if large trees get slow.
 func attachCalls(r *FieldTrace, ws, home, seedFile string, seedLine int) {
 	// Project names in the trace are relative to ws, and so are the indexes' names when loaded for ws.
+	warn := func(format string, args ...any) { r.Warnings = append(r.Warnings, fmt.Sprintf(format, args...)) }
 	abs, err := filepath.Abs(ws)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "call paths skipped:", err)
+		warn("call paths skipped: %v", err)
 		return
 	}
-	g, err := mergedGraph([]string{abs})
+	g, warns, err := mergedGraph([]string{abs})
+	r.Warnings = append(r.Warnings, warns...)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "call paths skipped:", err)
+		warn("call paths skipped: %v", err)
 		return
 	}
 	seed, err := g.resolve(address{Project: home, File: seedFile, Line: seedLine}, false)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "call paths skipped: seed is not in the index (run: dotweavier index %s): %v\n", filepath.Join(abs, home), err)
+		warn("call paths skipped: seed is not in the index (run: dotweavier index %s): %v", filepath.Join(abs, home), err)
 		return
 	}
 	cache := map[int32]*Path{}

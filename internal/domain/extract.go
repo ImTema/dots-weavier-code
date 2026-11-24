@@ -2,6 +2,7 @@
 package domain
 
 import (
+	"context"
 	"fmt"
 	"go/ast"
 	"go/constant"
@@ -118,16 +119,17 @@ func display(f *ssa.Function) string {
 type loadStats struct {
 	pkgs, pkgErrs, funcs, illTyped, stubbed, buildPanics int
 	load, analyze                                        time.Duration
+	warnings                                             []string // one line each, e.g. an SSA build panic
 }
 
 // extract loads one project and adds its functions, call edges, gRPC client calls
 // and gRPC handlers to g. Only the project's own packages get bodies; dependencies
 // come from export data (type info only), which is the analysis boundary of ticket 10.
-func extract(g *graph, p project, tests bool) (st loadStats, err error) {
+func extract(ctx context.Context, g *graph, p project, tests bool) (st loadStats, err error) {
 	if p.lang == "jvm" {
 		return extractJVM(g, p)
 	}
-	prog, own, err := loadSSA(p, tests, &st, nil)
+	prog, own, err := loadSSA(ctx, p, tests, &st, nil)
 	if err != nil {
 		return st, err
 	}
@@ -353,16 +355,20 @@ func extract(g *graph, p project, tests bool) (st loadStats, err error) {
 //
 // fset may be shared between loads so positions from several projects stay distinct;
 // nil gives the load its own.
-func loadSSA(p project, tests bool, st *loadStats, fset *token.FileSet) (*ssa.Program, map[*types.Package]bool, error) {
+func loadSSA(ctx context.Context, p project, tests bool, st *loadStats, fset *token.FileSet) (*ssa.Program, map[*types.Package]bool, error) {
 	t0 := time.Now()
 	cfg := &packages.Config{
-		Fset:  fset,
-		Mode:  packages.LoadSyntax,
-		Dir:   p.dir,
-		Tests: tests,
-		Env:   append(os.Environ(), "GOFLAGS=-mod=readonly", "GOWORK=off"),
+		Context: ctx,
+		Fset:    fset,
+		Mode:    packages.LoadSyntax,
+		Dir:     p.dir,
+		Tests:   tests,
+		Env:     append(os.Environ(), "GOFLAGS=-mod=readonly", "GOWORK=off"),
 	}
 	pkgs, err := packages.Load(cfg, "./...")
+	if err == nil {
+		err = ctx.Err()
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -407,11 +413,14 @@ func loadSSA(p project, tests bool, st *loadStats, fset *token.FileSet) (*ssa.Pr
 		}
 	}
 	for _, sp := range ownSSA {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
 					st.buildPanics++
-					fmt.Fprintf(os.Stderr, "  ssa build panic in %s: %v\n", sp.Pkg.Path(), r)
+					st.warnings = append(st.warnings, fmt.Sprintf("  ssa build panic in %s: %v", sp.Pkg.Path(), r))
 				}
 			}()
 			sp.Build()

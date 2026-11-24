@@ -48,6 +48,7 @@ func runOverview(args []string) {
 		if err != nil {
 			return err
 		}
+		warn(src.Warnings())
 		cur.Store(src)
 		return nil
 	}
@@ -297,7 +298,7 @@ func runOverview(args []string) {
 		}
 		if q.Get("path") == "" {
 			depth, _ := strconv.Atoi(q.Get("depth"))
-			n, errs := domain.FollowHops(dir, tr, max(depth, 1), maxFollow, false, 10)
+			n, errs := domain.FollowHops(r.Context(), domain.FieldQuery{Dir: dir}, tr, max(depth, 1), maxFollow)
 			if n == 0 && len(errs) > 0 {
 				err = errs[0]
 			}
@@ -313,9 +314,10 @@ func runOverview(args []string) {
 			}
 			if err == nil {
 				k, _ := strconv.Atoi(q.Get("hop"))
-				err = domain.FollowHop(dir, tr, path, k, false, 10)
+				err = domain.FollowHop(r.Context(), domain.FieldQuery{Dir: dir}, tr, path, k)
 			}
 		}
+		warn(tr.Warnings)
 		var name string
 		if err == nil {
 			var data []byte
@@ -349,10 +351,13 @@ func runOverview(args []string) {
 		var tr *domain.FieldTrace
 		dir, err := src.FolderOf(a)
 		if err == nil {
-			tr, err = domain.TraceField(dir, a, false, 10)
+			tr, err = domain.TraceField(r.Context(), domain.FieldQuery{Dir: dir}, a)
 		}
 		if n, _ := strconv.Atoi(r.URL.Query().Get("follow")); err == nil && n > 0 {
-			domain.FollowHops(dir, tr, n, maxFollow, false, 10) // a hop that fails stays unfollowed
+			domain.FollowHops(r.Context(), domain.FieldQuery{Dir: dir}, tr, n, maxFollow) // a hop that fails stays unfollowed
+		}
+		if tr != nil {
+			warn(tr.Warnings)
 		}
 		var name string
 		if err == nil {

@@ -24,18 +24,33 @@ type stored struct {
 // One SQLite file per project folder (ADR 0004), shared by every workspace that
 // contains the folder. trace still loads whole graphs into memory; the tables
 // just make them queryable without dotweavier.
-func dotweavierDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".dotweavier")
+// Without a home folder there is nowhere to keep state: never fall back to a
+// relative path, which would write inside whatever folder dotweavier runs in.
+func dotweavierDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("no home folder for ~/.dotweavier: %w", err)
+	}
+	return filepath.Join(home, ".dotweavier"), nil
 }
 
 // storePath is the index file of the project in the absolute folder dir.
-func storePath(dir string) string {
+func storePath(dir string) (string, error) {
+	stores, err := storesDir()
+	if err != nil {
+		return "", err
+	}
 	name := strings.ReplaceAll(strings.TrimPrefix(filepath.ToSlash(filepath.Clean(dir)), "/"), "/", "__")
-	return filepath.Join(storesDir(), name+".db")
+	return filepath.Join(stores, name+".db"), nil
 }
 
-func storesDir() string { return filepath.Join(dotweavierDir(), "projects") }
+func storesDir() (string, error) {
+	d, err := dotweavierDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(d, "projects"), nil
+}
 
 const schema = `
 CREATE TABLE meta (project TEXT NOT NULL, dir TEXT NOT NULL, built TEXT NOT NULL);
@@ -52,16 +67,20 @@ CREATE INDEX nodes_name ON nodes(name);
 // save writes a fresh database next to the old one and renames it over, so a
 // crash never leaves a half-written index.
 func save(s *stored) error {
-	if err := os.MkdirAll(storesDir(), 0o755); err != nil {
+	path, err := storePath(s.Dir)
+	if err != nil {
 		return err
 	}
-	tmp := storePath(s.Dir) + ".tmp"
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
 	os.Remove(tmp)
 	if err := writeDB(tmp, s); err != nil {
 		os.Remove(tmp)
 		return err
 	}
-	return os.Rename(tmp, storePath(s.Dir))
+	return os.Rename(tmp, path)
 }
 
 func writeDB(path string, s *stored) error {
@@ -235,10 +254,14 @@ const registrySchema = `CREATE TABLE IF NOT EXISTS workspace_folders (
 	workspace TEXT NOT NULL, dir TEXT NOT NULL, registered TEXT NOT NULL, PRIMARY KEY (workspace, dir))`
 
 func openRegistry() (*sql.DB, error) {
-	if err := os.MkdirAll(dotweavierDir(), 0o755); err != nil {
+	dir, err := dotweavierDir()
+	if err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(dotweavierDir(), "dotweavier.db")+"?_pragma=busy_timeout(5000)")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "dotweavier.db")+"?_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, err
 	}
@@ -365,7 +388,11 @@ func projectsIn(folders []string) ([]project, error) {
 // indexesIn maps the index file of every project folder inside folders to the
 // project's name: its path relative to the deepest folder that contains it.
 func indexesIn(folders []string) (map[string]string, error) {
-	files, err := filepath.Glob(filepath.Join(storesDir(), "*.db"))
+	stores, err := storesDir()
+	if err != nil {
+		return nil, err
+	}
+	files, err := filepath.Glob(filepath.Join(stores, "*.db"))
 	if err != nil {
 		return nil, err
 	}
@@ -387,18 +414,20 @@ func indexesIn(folders []string) (map[string]string, error) {
 }
 
 // loadIndexes merges the index of every project inside folders (absolute) into
-// one graph, each project named as indexesIn names it; unreadable indexes are skipped.
-func loadIndexes(folders []string) (*graph, map[string]bool, error) {
+// one graph, each project named as indexesIn names it; unreadable indexes are
+// skipped, with a warning each.
+func loadIndexes(folders []string) (*graph, map[string]bool, []string, error) {
 	files, err := indexesIn(folders)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
+	var warnings []string
 	g := &graph{ids: map[string]int32{}, Impls: map[string][]int32{}}
 	loaded := map[string]bool{}
 	for f, name := range files {
 		s, err := load(f)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "skip index %s: %v\n", f, err)
+			warnings = append(warnings, fmt.Sprintf("skip index %s: %v", f, err))
 			continue
 		}
 		// The index carries the name it was built under; this workspace may name it differently.
@@ -410,5 +439,5 @@ func loadIndexes(folders []string) (*graph, map[string]bool, error) {
 		loaded[name] = true
 		g.merge(&s.Graph)
 	}
-	return g, loaded, nil
+	return g, loaded, warnings, nil
 }

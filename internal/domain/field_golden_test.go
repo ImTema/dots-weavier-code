@@ -2,6 +2,7 @@ package domain
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"os"
@@ -52,12 +53,13 @@ func TestTraceFieldGolden(t *testing.T) {
 	} {
 		name := strings.NewReplacer("/", "_", ":", "_").Replace(c.addr)
 		t.Run(name, func(t *testing.T) {
-			r, err := TraceField(c.ws, c.addr, false, 10)
+			r, err := TraceField(context.Background(), FieldQuery{Dir: c.ws}, c.addr)
 			if err != nil {
 				t.Fatal(err)
 			}
 			strip(r.Origin)
 			strip(r.Uses)
+			r.Warnings = nil // timings and absolute paths; pinned by the warning tests instead
 			got, err := json.MarshalIndent(r, "", " ")
 			if err != nil {
 				t.Fatal(err)

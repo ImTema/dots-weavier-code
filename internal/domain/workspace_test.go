@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"os/exec"
@@ -43,20 +44,21 @@ func TestWorkspaceRegistryAndInvalid(t *testing.T) {
 	write("x/c/go.mod", "module c\n\ngo 1.22\n")
 	write("y/c/go.mod", "module c\n\ngo 1.22\n")
 	svc := filepath.Join(ws, "svc")
-	noop := func(string, string, error) {}
+	ctx := context.Background()
+	noop := func(IndexResult) {}
 
-	if err := IndexProject(filepath.Join(ws, "svc"), "", noop); err == nil {
+	if err := IndexProject(ctx, filepath.Join(ws, "svc"), "", noop); err == nil {
 		t.Error("indexing a folder without a manifest: want an error")
 	}
-	if _, err := TracePath("", "a::A", "a::A", 1, false); err == nil {
+	if _, err := TracePath(PathQuery{A: "a::A", B: "a::A", MaxPaths: 1}); err == nil {
 		t.Error("tracing in a workspace that does not exist: want an error")
 	}
 	var indexed []string
-	if err := IndexProject(filepath.Join(ws, "svc/a"), "", func(p, _ string, err error) {
-		if err != nil {
-			t.Errorf("index %s: %v", p, err)
+	if err := IndexProject(ctx, filepath.Join(ws, "svc/a"), "", func(r IndexResult) {
+		if r.Err != nil {
+			t.Errorf("index %s: %v", r.Project, r.Err)
 		}
-		indexed = append(indexed, p)
+		indexed = append(indexed, r.Project)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +82,7 @@ func TestWorkspaceRegistryAndInvalid(t *testing.T) {
 	if !slices.Contains(names, "svc/a") {
 		t.Errorf("init detected %v, want svc/a among them", names)
 	}
-	if err := IndexProject(filepath.Join(ws, "svc/a"), "team", noop); err != nil {
+	if err := IndexProject(ctx, filepath.Join(ws, "svc/a"), "team", noop); err != nil {
 		t.Fatal(err)
 	}
 	if fs, _ := folders("team"); !slices.Equal(fs, []string{ws}) {
@@ -91,7 +93,7 @@ func TestWorkspaceRegistryAndInvalid(t *testing.T) {
 	}
 	for name, want := range map[string]string{DefaultWorkspace: "a", "team": "svc/a"} {
 		fs, _ := folders(name)
-		g, loaded, err := loadIndexes(fs)
+		g, loaded, _, err := loadIndexes(fs)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -104,26 +106,26 @@ func TestWorkspaceRegistryAndInvalid(t *testing.T) {
 			}
 		}
 	}
-	if files, _ := filepath.Glob(filepath.Join(storesDir(), "*.db")); len(files) != 2 {
+	if files, _ := filepath.Glob(filepath.Join(mustStoresDir(t), "*.db")); len(files) != 2 {
 		t.Errorf("index files %v, want one per project folder", files)
 	}
 
 	// One workspace holds projects indexed from several folders.
-	if err := IndexProject(filepath.Join(ws, "other/b"), "", noop); err != nil {
+	if err := IndexProject(ctx, filepath.Join(ws, "other/b"), "", noop); err != nil {
 		t.Fatal(err)
 	}
 	if fs, _ := folders(DefaultWorkspace); !slices.Equal(fs, []string{filepath.Join(ws, "other"), svc}) {
 		t.Errorf("default folders %v, want other and svc", fs)
 	}
-	if _, loaded, _ := loadIndexes([]string{filepath.Join(ws, "other"), svc}); !loaded["a"] || !loaded["b"] {
+	if _, loaded, _, _ := loadIndexes([]string{filepath.Join(ws, "other"), svc}); !loaded["a"] || !loaded["b"] {
 		t.Errorf("default loads %v, want a and b", loaded)
 	}
 
 	// Two folders of one workspace may not produce one project name.
-	if err := IndexProject(filepath.Join(ws, "x/c"), "clash", noop); err != nil {
+	if err := IndexProject(ctx, filepath.Join(ws, "x/c"), "clash", noop); err != nil {
 		t.Fatal(err)
 	}
-	if err := IndexProject(filepath.Join(ws, "y/c"), "clash", noop); err == nil || !strings.Contains(err.Error(), `two projects named "c"`) {
+	if err := IndexProject(ctx, filepath.Join(ws, "y/c"), "clash", noop); err == nil || !strings.Contains(err.Error(), `two projects named "c"`) {
 		t.Errorf("clashing names: got %v", err)
 	}
 
@@ -152,7 +154,7 @@ func TestWorkspaceRegistryAndInvalid(t *testing.T) {
 	if removed, err := src.RemoveInvalid(); err != nil || !slices.Equal(removed, []string{"gone"}) {
 		t.Errorf("removed %v, %v", removed, err)
 	}
-	if _, err := os.Stat(storePath(filepath.Join(svc, "gone"))); err == nil {
+	if _, err := os.Stat(mustStorePath(t, filepath.Join(svc, "gone"))); err == nil {
 		t.Error("gone's index still exists")
 	}
 	if _, ok := indexBuilt(filepath.Join(svc, "a")); !ok {
@@ -163,10 +165,11 @@ func TestWorkspaceRegistryAndInvalid(t *testing.T) {
 // Folders registered before workspaces had names move into the default workspace.
 func TestRegistryMigratesFolderWorkspaces(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	if err := os.MkdirAll(dotweavierDir(), 0o755); err != nil {
+	dir := filepath.Join(os.Getenv("HOME"), ".dotweavier")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	db, err := sql.Open("sqlite", filepath.Join(dotweavierDir(), "dotweavier.db"))
+	db, err := sql.Open("sqlite", filepath.Join(dir, "dotweavier.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

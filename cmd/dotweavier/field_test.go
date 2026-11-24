@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,7 +17,7 @@ func TestTraceFieldLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := domain.TraceField(ws, "fieldproj:main.go:16", false, 1) // func convert(raw string)
+	r, err := domain.TraceField(context.Background(), domain.FieldQuery{Dir: ws, MaxProjects: 1}, "fieldproj:main.go:16") // func convert(raw string)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,5 +44,41 @@ func TestTraceFieldLifecycle(t *testing.T) {
 	// keep is entered only from process, so its return must not reach unrelated().
 	if strings.Contains(got, "main.go:41") {
 		t.Errorf("return leaked to an unrelated caller:\n%s", got)
+	}
+}
+
+// The domain returns warnings; the CLI prints them to stderr with the old text.
+func TestTraceFieldPrintsWarnings(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // no index: call paths are skipped
+	ws, err := filepath.Abs("testdata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Separate pipes, each read meanwhile: a full pipe would block the trace.
+	capture := func() (*os.File, chan []byte) {
+		r, w, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan []byte)
+		go func() { b, _ := io.ReadAll(r); done <- b }()
+		return w, done
+	}
+	errW, errC := capture()
+	outW, outC := capture()
+	stderr, stdout := os.Stderr, os.Stdout
+	os.Stderr, os.Stdout = errW, outW
+	runTraceField(context.Background(), []string{"fieldproj:main.go:16", "--project", ws, "--max-projects", "1"})
+	os.Stderr, os.Stdout = stderr, stdout
+	errW.Close()
+	outW.Close()
+	out := <-errC
+	if tree := <-outC; !strings.Contains(string(tree), "[seed] main.go:16") {
+		t.Errorf("stdout has no tree:\n%s", tree)
+	}
+	for _, want := range []string{"loaded fieldproj: pkgs=", "call paths skipped: seed is not in the index (run: dotweavier index "} {
+		if !strings.Contains(string(out), "\n"+want) && !strings.HasPrefix(string(out), want) {
+			t.Errorf("missing line %q in\n%s", want, out)
+		}
 	}
 }

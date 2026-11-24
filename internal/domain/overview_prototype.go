@@ -5,6 +5,7 @@ package domain
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -51,6 +52,7 @@ type OverviewSource struct {
 	folders []string     // its registered folders, absolute
 	mu      sync.RWMutex // guards g: Sync swaps it while requests read it
 	g       *graph
+	warns   []string   // of the last merge, e.g. unreadable indexes
 	sync    sync.Mutex // one Sync at a time
 }
 
@@ -60,11 +62,18 @@ func LoadOverview(ws string) (*OverviewSource, error) {
 	if err != nil {
 		return nil, err
 	}
-	g, err := mergedGraph(fs)
+	g, warns, err := mergedGraph(fs)
 	if err != nil {
 		return nil, err
 	}
-	return &OverviewSource{ws: ws, folders: fs, g: g}, nil
+	return &OverviewSource{ws: ws, folders: fs, g: g, warns: warns}, nil
+}
+
+// Warnings are the warnings of the last merge of the indexes, e.g. an unreadable index.
+func (src *OverviewSource) Warnings() []string {
+	src.mu.RLock()
+	defer src.mu.RUnlock()
+	return src.warns
 }
 
 // Workspace is the name of the workspace this overview shows.
@@ -90,14 +99,14 @@ func (src *OverviewSource) FolderOf(addr string) (string, error) {
 }
 
 // mergedGraph merges the indexes of every project inside the absolute folders, joined and without tests.
-func mergedGraph(folders []string) (*graph, error) {
-	g, _, err := loadIndexes(folders)
+func mergedGraph(folders []string) (*graph, []string, error) {
+	g, _, warns, err := loadIndexes(folders)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	g.dropTests()
 	g.join()
-	return g, nil
+	return g, warns, nil
 }
 
 // DetectedProject is one project under the project folder and the state of its index.
@@ -164,7 +173,11 @@ func (src *OverviewSource) counts() (nodes, edges map[string]int, links map[stri
 
 // indexBuilt is when the index of the project in folder dir was built, if it has one.
 func indexBuilt(dir string) (time.Time, bool) {
-	_, _, built, err := readMeta(storePath(dir))
+	path, err := storePath(dir)
+	if err != nil {
+		return time.Time{}, false
+	}
+	_, _, built, err := readMeta(path)
 	return built, err == nil
 }
 
@@ -236,10 +249,11 @@ func changedSince(dir string, t time.Time) bool {
 
 // SyncResult is what Sync did for one project of the family.
 type SyncResult struct {
-	Project  string `json:"project"`
-	UpToDate bool   `json:"upToDate"`
-	Stats    string `json:"stats,omitempty"`
-	Error    string `json:"error,omitempty"`
+	Project  string   `json:"project"`
+	UpToDate bool     `json:"upToDate"`
+	Stats    string   `json:"stats,omitempty"`
+	Error    string   `json:"error,omitempty"`
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // Sync syncs a project and every project nested in its folder. Each keeps its
@@ -268,12 +282,14 @@ func (src *OverviewSource) Sync(project string) ([]SyncResult, error) {
 	if len(stale) == 0 {
 		return res, nil
 	}
-	if err := Index(src.ws, stale, func(name, st string, e error) {
-		res[at[name]].Stats = st
-		if e != nil {
-			res[at[name]].Error = e.Error()
+	// ponytail: not cancellable; pass the request's context if a sync must stop with its page.
+	if err := Index(context.Background(), IndexOptions{Workspace: src.ws, Names: stale, Progress: func(ir IndexResult) {
+		r := &res[at[ir.Project]]
+		r.Stats, r.Warnings = ir.Stats, ir.Warnings
+		if ir.Err != nil {
+			r.Error = ir.Err.Error()
 		}
-	}); err != nil {
+	}}); err != nil {
 		return nil, err
 	}
 	return res, src.remerge()
@@ -289,7 +305,11 @@ func (src *OverviewSource) Remove(project string) ([]string, error) {
 	}
 	var removed []string
 	for _, p := range fam {
-		if err := os.Remove(storePath(p.dir)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		path, err := storePath(p.dir)
+		if err != nil {
+			return removed, err
+		}
+		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return removed, err
 		}
 		removed = append(removed, p.Name)
@@ -316,7 +336,11 @@ func (src *OverviewSource) invalid() (map[string]string, error) {
 		return nil, err
 	}
 	for _, p := range ps {
-		delete(files, storePath(p.dir))
+		path, err := storePath(p.dir)
+		if err != nil {
+			return nil, err
+		}
+		delete(files, path)
 	}
 	return files, nil
 }
@@ -342,12 +366,12 @@ func (src *OverviewSource) RemoveInvalid() ([]string, error) {
 }
 
 func (src *OverviewSource) remerge() error {
-	g, err := mergedGraph(src.folders)
+	g, warns, err := mergedGraph(src.folders)
 	if err != nil {
 		return err
 	}
 	src.mu.Lock()
-	src.g = g
+	src.g, src.warns = g, warns
 	src.mu.Unlock()
 	return nil
 }

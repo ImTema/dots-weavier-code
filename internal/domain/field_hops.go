@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"fmt"
 	"go/types"
 	"strconv"
@@ -46,7 +47,7 @@ func hopsOf(g *graph, n int32) []Hop {
 // declaration may start with annotations, so the first line from addr on that
 // yields a trace is the signature. Every location in the result carries its
 // project, so the trees can be grafted into another project's trace.
-func TraceHop(ws, addr string, tests bool, maxProjects int) (*FieldTrace, error) {
+func TraceHop(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, error) {
 	i := strings.LastIndex(addr, ":")
 	line, err := strconv.Atoi(addr[i+1:])
 	if i < 0 || err != nil {
@@ -55,10 +56,10 @@ func TraceHop(ws, addr string, tests bool, maxProjects int) (*FieldTrace, error)
 	proj, _, _ := strings.Cut(addr, ":")
 	var r *FieldTrace
 	if strings.HasSuffix(addr[:i], ".go") {
-		r, err = traceGoHandler(ws, addr[:i], line, tests, maxProjects)
+		r, err = traceGoHandler(ctx, q, addr[:i], line)
 	} else {
 		for l := line; l < line+12; l++ { // annotations, then the signature
-			if r, err = TraceField(ws, addr[:i]+":"+strconv.Itoa(l), tests, maxProjects); err == nil {
+			if r, err = TraceField(ctx, q, addr[:i]+":"+strconv.Itoa(l)); err == nil {
 				break
 			}
 		}
@@ -71,8 +72,8 @@ func TraceHop(ws, addr string, tests bool, maxProjects int) (*FieldTrace, error)
 	return r, nil
 }
 
-func traceGoHandler(ws, loc string, line int, tests bool, maxProjects int) (*FieldTrace, error) {
-	projects, err := discover(ws)
+func traceGoHandler(ctx context.Context, q FieldQuery, loc string, line int) (*FieldTrace, error) {
+	projects, err := discover(q.Dir)
 	if err != nil {
 		return nil, err
 	}
@@ -86,11 +87,11 @@ func traceGoHandler(ws, loc string, line int, tests bool, maxProjects int) (*Fie
 	if err != nil {
 		return nil, err
 	}
-	t, err := traceField(gos, home, file, line, tests, maxProjects, requestParam)
+	t, err := traceField(ctx, gos, home, file, line, q.IncludeTests, q.maxProjects(), requestParam)
 	if err != nil {
 		return nil, err
 	}
-	return fieldTrace(ws, t, home, gos, file, line), nil
+	return fieldTrace(q.Dir, t, home, gos, file, line), nil
 }
 
 // requestParam accepts the parameters that carry a request into a handler.
@@ -124,7 +125,7 @@ func qualifyLocs(ss []*FieldStep, project string) {
 
 // FollowHop grafts the trace of hop k of the lifecycle step at path (indexes from
 // r.Uses down through Kids) under that step, behind a step of the hop's kind.
-func FollowHop(ws string, r *FieldTrace, path []int, k int, tests bool, maxProjects int) error {
+func FollowHop(ctx context.Context, q FieldQuery, r *FieldTrace, path []int, k int) error {
 	s, err := stepAt(r.Uses, path)
 	if err != nil {
 		return err
@@ -136,10 +137,11 @@ func FollowHop(ws string, r *FieldTrace, path []int, k int, tests bool, maxProje
 	if h.Followed {
 		return nil
 	}
-	sub, err := TraceHop(ws, h.Addr, tests, maxProjects)
+	sub, err := TraceHop(ctx, q, h.Addr)
 	if err != nil {
 		return err
 	}
+	r.Warnings = append(r.Warnings, sub.Warnings...)
 	s.Kids = append(s.Kids, hopStep(h, sub.Uses))
 	h.Followed = true
 	return nil
@@ -154,7 +156,7 @@ func hopStep(h *Hop, kids []*FieldStep) *FieldStep {
 // FollowHops follows every hop on the lifecycle side, then the hops in what it
 // grafted, depth services deep, at most budget hops in all.
 // ponytail: breadth-first with a flat budget; per-service limits if traces fan out.
-func FollowHops(ws string, r *FieldTrace, depth, budget int, tests bool, maxProjects int) (followed int, errs []error) {
+func FollowHops(ctx context.Context, fq FieldQuery, r *FieldTrace, depth, budget int) (followed int, errs []error) {
 	type at struct {
 		path  []int
 		level int // services from the seed: 1 for hops in the seed's own trace
@@ -173,6 +175,9 @@ func FollowHops(ws string, r *FieldTrace, depth, budget int, tests bool, maxProj
 	}
 	scan(r.Uses, nil, 1)
 	for len(queue) > 0 && followed < budget {
+		if err := ctx.Err(); err != nil {
+			return followed, append(errs, err)
+		}
 		q := queue[0]
 		queue = queue[1:]
 		if q.level > depth {
@@ -194,7 +199,7 @@ func FollowHops(ws string, r *FieldTrace, depth, budget int, tests bool, maxProj
 				continue
 			}
 			seen[h.Addr] = true
-			if err := FollowHop(ws, r, q.path, k, tests, maxProjects); err != nil {
+			if err := FollowHop(ctx, fq, r, q.path, k); err != nil {
 				errs = append(errs, fmt.Errorf("%s %s: %w", s.Hops[k].Kind, s.Hops[k].Method, err))
 				continue
 			}

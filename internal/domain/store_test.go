@@ -24,15 +24,34 @@ func TestStoreRoundTrip(t *testing.T) {
 	if err := save(in); err != nil { // re-index overwrites
 		t.Fatal(err)
 	}
-	out, err := load(storePath("/x"))
+	path := mustStorePath(t, "/x")
+	out, err := load(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Base(storePath("/x")) != "x.db" {
-		t.Errorf("path %s", storePath("/x"))
+	if filepath.Base(path) != "x.db" {
+		t.Errorf("path %s", path)
 	}
 	out.Graph.ids, in.Graph.ids = nil, nil
 	if !reflect.DeepEqual(in, out) {
 		t.Errorf("round trip mismatch:\n in %+v\nout %+v", in, out)
 	}
+}
+
+func mustStorePath(t *testing.T, dir string) string {
+	t.Helper()
+	p, err := storePath(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func mustStoresDir(t *testing.T) string {
+	t.Helper()
+	d, err := storesDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
 }

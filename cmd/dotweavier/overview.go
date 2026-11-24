@@ -217,6 +217,28 @@ func runOverview(args []string) {
 	// Field trace page, served so it can continue a trace: GET /ui/trace-field.html?t=RUN
 	// (the same static page the CLI writes), GET /trace-field-history/RUN.js, and
 	// POST /trace-field?addr=ADDR, which traces like the CLI, saves the run and returns its name.
+	// Trace path page for two symbol addresses, traced like `dotweavier trace path --format ui`
+	// over the active workspace: GET /ui/trace-path.html?a=ADDR&b=ADDR. Opened from a weaved path.
+	mux.HandleFunc("GET /ui/trace-path.html", func(w http.ResponseWriter, r *http.Request) {
+		src := active(w)
+		if src == nil {
+			return
+		}
+		a, b := r.URL.Query().Get("a"), r.URL.Query().Get("b")
+		res, err := domain.TracePath(domain.PathQuery{Workspace: src.Workspace(), A: a, B: b, MaxPaths: 10})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		warn(res.Warnings)
+		html, err := pathUI(res.Paths, a, b)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(html)
+	})
 	mux.HandleFunc("GET /ui/trace-field.html", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write([]byte(fieldUITemplate))

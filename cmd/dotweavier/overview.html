@@ -4,8 +4,8 @@
 <style>
 html,body{margin:0;height:100%;background:#02030a;color:#cdd5ff;font:12px/1.45 ui-monospace,Menlo,monospace;overflow:hidden}
 canvas{position:absolute;inset:0;display:block}
-#side{position:absolute;top:0;left:0;bottom:0;width:330px;box-sizing:border-box;padding:12px;overflow:auto;z-index:2;
-  background:linear-gradient(180deg,rgba(10,12,32,.92),rgba(5,6,18,.88));border-right:1px solid #1b2045}
+#side{position:absolute;top:0;left:0;width:330px;max-height:calc(100% - var(--legendH, 0px) - 16px);box-sizing:border-box;padding:12px;overflow:auto;z-index:2;
+  background:linear-gradient(180deg,rgba(10,12,32,.92),rgba(5,6,18,.88));border:1px solid #1b2045;border-width:0 1px 1px 0;border-bottom-right-radius:8px}
 h1{margin:0 0 4px;font-size:13px;letter-spacing:.2em;color:#fff}
 .muted{color:#5d6596;font-size:11px}
 #qp{width:100%;box-sizing:border-box;background:#0b0e24;border:1px solid #262c5c;color:#cdd5ff;padding:4px 6px;border-radius:6px;font:inherit;margin:0 0 4px}
@@ -21,15 +21,19 @@ label{display:block;color:#9aa2d0;cursor:pointer}
 #tip{position:absolute;pointer-events:none;z-index:3;background:rgba(8,10,28,.94);border:1px solid #2b3270;border-radius:6px;padding:6px 8px;display:none;max-width:520px}
 #tip b{color:#fff}
 .fname{position:absolute;z-index:1;pointer-events:none;transform:translate(8px,-50%);font-size:10px;text-shadow:0 0 4px #000,0 0 2px #000;white-space:nowrap}
+.wlbl{transform:translate(-50%,-50%);font-style:italic;color:#8b93c4}
 .lbl{position:absolute;z-index:1;pointer-events:none;transform:translate(-50%,-50%);color:#fff;font-size:11px;text-shadow:0 0 6px #000,0 0 3px #000;white-space:nowrap;opacity:.85}
 #sel{word-break:break-all}
 #sel .k{color:#58608f}
 #fps{position:absolute;right:10px;bottom:8px;z-index:2;color:#5d6596;text-align:right}
-#legend{position:absolute;left:340px;bottom:8px;z-index:2;padding:6px 9px;background:rgba(8,10,28,.85);border:1px solid #1b2045;border-radius:6px;color:#9aa2d0;font-size:11px;line-height:1.6;max-height:calc(100% - 60px);overflow:auto}
-#legend h2{margin:0 0 2px}
-body.noside #legend{left:10px}
+#legend{position:absolute;left:10px;bottom:8px;z-index:2;padding:6px 9px;background:rgba(8,10,28,.85);border:1px solid #1b2045;border-radius:6px;color:#9aa2d0;font-size:11px;line-height:1.6;max-height:calc(100% - 60px);overflow:auto}
+#legend h2{margin:6px 0 2px}
+#legend>h2:first-child{margin:0 0 2px}
+#legend .fold{float:none;margin:0 6px 0 0}
 #legend .ln{display:inline-block;width:18px;height:3px;border-radius:2px;vertical-align:middle;margin:0 6px 0 2px}
 #legend .key{padding-left:19px}
+#legend .ln.dot{background:repeating-linear-gradient(90deg,#8b93c4 0 2px,transparent 2px 5px)}
+#legend .ln.dash{background:repeating-linear-gradient(90deg,#8b93c4 0 6px,transparent 6px 9px)}
 #counts{color:#9aa2d0}
 #reset{float:right;margin-top:-2px;padding:3px 10px;border:1px solid #2b3270;border-radius:12px;color:#bfc7ff;cursor:pointer;font-size:11px}
 #reset:hover{background:rgba(255,90,90,.15);border-color:#ff5a5a}
@@ -54,9 +58,9 @@ body.noside #legend{left:10px}
 .fold:hover,.tab:hover{background:rgba(76,141,255,.18)}
 #pp h2 .fold{margin:0 0 0 auto}
 .tab{position:absolute;top:10px;z-index:3;display:none;padding:4px 9px;background:rgba(8,10,28,.92);border:1px solid #2b3270;border-radius:6px;color:#bfc7ff;cursor:pointer;font-size:11px;letter-spacing:.1em;user-select:none}
-#sideTab{left:10px}#ppTab{right:10px}
-body.noside #side,body.nopp #pp{display:none}
-body.noside #sideTab,body.nopp #ppTab{display:block}
+#sideTab{left:10px}#ppTab{right:10px}#legendTab{left:10px;top:auto;bottom:8px}
+body.noside #side,body.nopp #pp,body.nolegend #legend{display:none}
+body.noside #sideTab,body.nopp #ppTab,body.nolegend #legendTab{display:block}
 body.noside #empty{left:0}
 #pp .row input,#pp .sw{flex:none}
 #pp .err{color:#ff7a7a}
@@ -136,12 +140,13 @@ body.noside #empty{left:0}
   <div id="projects"></div>
   <div id="ppGrip" title="drag to resize · double-click to expand or shrink">◣</div></div>
 <div id="sideTab" class="tab" title="show the side panel">» DOTWEAVIER</div><div id="ppTab" class="tab" title="show the projects panel">PROJECTS «</div>
-<div id="tip"></div><div id="ctx"></div><div id="pmenu"></div><div id="labels"></div><div id="names"></div><div id="markers"></div><div id="legend"><h2>SHOW</h2>
-  <label><input type="checkbox" id="showCalls"> calls inside projects</label>
+<div id="tip"></div><div id="ctx"></div><div id="pmenu"></div><div id="labels"></div><div id="names"></div><div id="markers"></div><div id="legend"><h2><span id="legendHide" class="fold" title="hide this panel">«</span>LEGEND</h2><h2>SHOW</h2>
+  <label class="lk"><input type="checkbox" id="showCalls"> <span class="ln dot"></span>calls inside projects</label>
+  <label id="weavedRow" class="lk" title="one edge per call path between boundary nodes, drawn while calls inside projects are off"><input type="checkbox" id="showWeaved" checked> <span class="ln dash"></span>weaved paths <span class="n" id="weavedN"></span></label>
   <div id="linkToggles"></div>
   <label><input type="checkbox" id="showLabels" checked> project labels</label>
   <label><input type="checkbox" id="showNames" checked> function names when zoomed in</label>
-  <h2>PATH</h2><div id="pathKey"></div></div><div id="fps"><div id="counts"></div><div id="rate"></div></div>
+  <h2>PATH</h2><div id="pathKey"></div></div><div id="legendTab" class="tab" title="show the legend">» LEGEND</div><div id="fps"><div id="counts"></div><div id="rate"></div></div>
 <script type="module">
 import * as THREE from 'three';
 import {OrbitControls} from '/overview_assets/OrbitControls.js';
@@ -157,7 +162,7 @@ const linkLabel = (kind, m) => kind + (m ? ' ' + m : '');
 const linkShort = kind => (LINK[kind]?.[0] || kind).split(',')[0], linkColor = kind => LINK[kind]?.[1] || '#ff4fe8';
 const linkShown = JSON.parse(localStorage.getItem('dw.links') || '{}'); // kind -> false when hidden
 // The SHOW checkboxes keep their last state; restored before the first draw reads them.
-for (const id of ['showCalls', 'showLabels', 'showNames']) {
+for (const id of ['showCalls', 'showWeaved', 'showLabels', 'showNames']) {
   const cb = document.getElementById(id), v = localStorage.getItem('dw.' + id);
   if (v !== null) cb.checked = v === '1';
   cb.addEventListener('change', () => localStorage.setItem('dw.' + id, cb.checked ? '1' : '0'));
@@ -166,7 +171,7 @@ const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','
 const color = name => { let h = 2166136261; for (const ch of name) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return new THREE.Color().setHSL((h >>> 0) / 2**32, 0.75, 0.6); };
 const IN = new THREE.Color('#4ad8ff'), OUT = new THREE.Color('#ffb14a'), WHITE = new THREE.Color('#ffffff'), GRPC = new THREE.Color('#ff4fe8');
 const LINKCOL = Object.fromEntries(Object.entries(LINK).map(([k, v]) => [k, new THREE.Color(v[1])]));
-let CALL_OPACITY = 0.07; const GRPC_OPACITY = 0.85, DIM = 0.1;
+let CALL_OPACITY = 0.07; const GRPC_OPACITY = 0.85, WEAVED_OPACITY = 0.5, DIM = 0.1;
 
 const renderer = new THREE.WebGLRenderer({antialias: true});
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -241,19 +246,26 @@ const starMaterial = new THREE.ShaderMaterial({
       gl_FragColor = vec4(c, 1.0);
     }`,
 });
-function segments(pairs, colorOf, opacity) {
+// Every edge is a screen-space line (WebGL draws plain lines 1px wide whatever linewidth says).
+// width in px; dash = [dash, gap] in world units, sized to the layout: dotted calls, dashed weaved paths.
+function segments(pairs, colorOf, opacity, width, dash) {
   const pos = new Float32Array(pairs.length * 3), col = new Float32Array(pairs.length * 3);
   for (let k = 0; k < pairs.length; k++) {
     const i = pairs[k];
     pos.set([D.pos[3*i], D.pos[3*i+1], D.pos[3*i+2]], 3*k);
     const c = colorOf(k); col.set([c.r, c.g, c.b], 3*k);
   }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  return new THREE.LineSegments(g, new THREE.LineBasicMaterial({vertexColors: true, transparent: true, opacity,
-    blending: THREE.AdditiveBlending, depthWrite: false}));
+  const g = new LineSegmentsGeometry();
+  g.setPositions(pos); g.setColors(col);
+  const m = new LineMaterial({linewidth: width, vertexColors: true, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false,
+    ...(dash ? {dashed: true, dashSize: dash[0], gapSize: dash[1]} : {})});
+  m.resolution.set(innerWidth, innerHeight);
+  const o = new LineSegments2(g, m);
+  if (dash) o.computeLineDistances();
+  return o;
 }
+const EDGE_W = 1; // px, every edge
+const callDash = () => [R / 300, R / 150], weavedDash = () => [R / 40, R / 60];
 function drop(o) { if (o) { scene.remove(o); o.geometry.dispose(); o.material.dispose(); } return null; }
 
 // With "calls inside projects" off, only boundary nodes (ends of shown link hops) stay,
@@ -271,11 +283,16 @@ function applyCalls() {
     const ends = new Set();
     for (let k = 0; k < D.linkKinds.length; k++) if (links[D.linkKinds[k]]?.visible) ends.add(D.links[2*k]).add(D.links[2*k+1]);
     for (const i of ends) shown[i] = 1;
-    nearPairs = D.weavedPaths; // computed by the server, see weavedPaths in overview.go
-    for (const i of nearPairs) shown[i] = 1;
-    nearCalls = segments(nearPairs, k => pcol[D.proj[nearPairs[k]]], CALL_OPACITY);
-    scene.add(nearCalls);
+    for (const i of D.weavedPaths) shown[i] = 1; // computed by the server, see weavedPaths in overview.go
+    if ($('showWeaved').checked) {
+      nearPairs = D.weavedPaths;
+      nearCalls = segments(nearPairs, k => pcol[D.proj[nearPairs[k]]], WEAVED_OPACITY, EDGE_W, weavedDash());
+      scene.add(nearCalls);
+    }
   }
+  // Weaved paths stand in for the calls, so the toggle only matters while calls are off.
+  $('showWeaved').disabled = all; $('weavedRow').classList.toggle('muted', all);
+  $('weavedN').textContent = D.weavedPaths.length / 2;
   for (let i = 0; i < N; i++) stars.setMatrixAt(i, m4.compose(v.set(D.pos[3*i], D.pos[3*i+1], D.pos[3*i+2]), q4, s3.setScalar(starScale(i))));
   stars.instanceMatrix.needsUpdate = true;
   projected = false;
@@ -334,12 +351,15 @@ async function load(refit) {
   for (let i = 0; i < N; i++) stars.setColorAt(i, pcol[D.proj[i]]); // positions and sizes: applyCalls
   // Faint lines only read as structure when there are thousands; a few dozen need to be bright.
   CALL_OPACITY = Math.min(0.6, Math.max(0.09, 25 / Math.sqrt(D.edges.length / 2 || 1)));
-  calls = segments(D.edges, k => pcol[D.proj[D.edges[k]]], CALL_OPACITY);
+  // R first: call and weaved path dashes are sized to the layout.
+  R = 1;
+  for (let i = 0; i < N; i++) R = Math.max(R, Math.hypot(D.pos[3*i], D.pos[3*i+1], D.pos[3*i+2]));
+  calls = segments(D.edges, k => pcol[D.proj[D.edges[k]]], CALL_OPACITY, EDGE_W, callDash());
   scene.add(stars, calls);
   const byKind = {};
   for (let k = 0; k < D.linkKinds.length; k++) (byKind[D.linkKinds[k]] ??= []).push(D.links[2*k], D.links[2*k+1]);
   for (const kind in byKind) {
-    links[kind] = segments(byKind[kind], () => LINKCOL[kind] || GRPC, GRPC_OPACITY);
+    links[kind] = segments(byKind[kind], () => LINKCOL[kind] || GRPC, GRPC_OPACITY, EDGE_W);
     links[kind].visible = linkShown[kind] !== false;
     scene.add(links[kind]);
   }
@@ -350,8 +370,6 @@ async function load(refit) {
   for (let k = 0; k < D.edges.length; k += 2) { out[D.edges[k]].push([D.edges[k+1], 'call']); inn[D.edges[k+1]].push([D.edges[k], 'call']); }
   for (let k = 0; k < D.linkKinds.length; k++) { const s = D.links[2*k], t = D.links[2*k+1], m = linkLabel(D.linkKinds[k], D.methods[k]); out[s].push([t, m]); inn[t].push([s, m]); }
 
-  R = 1;
-  for (let i = 0; i < N; i++) R = Math.max(R, Math.hypot(D.pos[3*i], D.pos[3*i+1], D.pos[3*i+2]));
   if (refit) { const h = hub(); controls.target.copy(h); camera.position.set(h.x, h.y + R * 0.6, h.z + R * 2.2); }
   else flyTo(hub(), R * 2.3);
 
@@ -623,9 +641,9 @@ function setFocus(f) {
   }
   if (stars.instanceColor) stars.instanceColor.needsUpdate = true;
   calls.material.opacity = dim ? CALL_OPACITY * 0.25 : CALL_OPACITY;
-  if (nearCalls) nearCalls.material.opacity = calls.material.opacity;
+  if (nearCalls) nearCalls.material.opacity = dim ? WEAVED_OPACITY * 0.25 : WEAVED_OPACITY;
   for (const kind in links) links[kind].material.opacity = dim ? 0.15 : GRPC_OPACITY;
-  if (pairs.length) { hl = segments(pairs, k => cols[k], 0.95); scene.add(hl); }
+  if (pairs.length) { hl = segments(pairs, k => cols[k], 0.95, EDGE_W); scene.add(hl); }
   renderFocus();
   renderCounts(dim ? new Set([...lit, ...onPath]).size : 0, pairs.length / 2);
 }
@@ -678,12 +696,12 @@ function renderCounts(litNodes, litEdges) {
   const lc = {}; for (const kind of D.linkKinds) if (links[kind]?.visible) lc[kind] = (lc[kind] || 0) + 1;
   const eg = Object.values(lc).reduce((a, b) => a + b, 0);
   const r = paths[pathSel];
-  let t = `${shownN < N ? shownN.toLocaleString() + ' of ' : ''}${N.toLocaleString()}${D.total > N ? ' of ' + D.total.toLocaleString() : ''} nodes · ${(ec + eg).toLocaleString()} edges (${[ec.toLocaleString() + ' calls', ...Object.entries(lc).map(([kind, n]) => n.toLocaleString() + ' ' + linkShort(kind))].join(' + ')})`;
+  let t = `${shownN < N ? shownN.toLocaleString() + ' of ' : ''}${N.toLocaleString()}${D.total > N ? ' of ' + D.total.toLocaleString() : ''} nodes · ${(ec + eg).toLocaleString()} edges`;
   if (litNodes) t += ` · lit ${litNodes.toLocaleString()} nodes, ${(litEdges + (r ? r.via.length : 0)).toLocaleString()} edges`;
   $('counts').textContent = t;
 }
 const recount = () => setFocus(focus);
-$('showCalls').onchange = () => { applyCalls(); recount(); };
+$('showCalls').onchange = $('showWeaved').onchange = () => { applyCalls(); recount(); };
 // One checkbox per link kind, every known kind even with no hops in the layout, with its colour and count.
 function renderLinkToggles(byKind) {
   const kinds = Object.keys(LINK).concat(Object.keys(byKind).filter(k => !LINK[k]));
@@ -713,7 +731,7 @@ let projected = false, mouse = null, hover = -1;
 const MAX_NAMES = 150, NAME_OPACITY = 0.95, NAME_WHITE = 0.45; // colour mixed toward white for legibility
 let NAME_DIST = 150;
 let projGen = 0, namesGen = -1;
-const namePool = [], nameCol = new THREE.Color();
+const namePool = [], weavedPool = [], nameCol = new THREE.Color();
 function drawNames() {
   namesGen = projGen; NAME_DIST = R * 0.9;
   const on = $('showNames').checked, near = [];
@@ -730,6 +748,24 @@ function drawNames() {
     boxes.push([x0, y0, x1, y1]); kept.push(i);
   }
   near.length = 0; near.push(...kept);
+  const mids = [];
+  if (on) for (let k = 0; k < nearPairs.length && kept.length + mids.length < MAX_NAMES; k += 2) {
+    const a = nearPairs[k], b = nearPairs[k+1];
+    if (sz[a] <= 0 || sz[b] <= 0) continue; // ponytail: midpoint of the projected ends, close enough at name distance
+    const x = (sx[a] + sx[b]) / 2, y = (sy[a] + sy[b]) / 2, z = (sz[a] + sz[b]) / 2;
+    if (z >= NAME_DIST || x < 0 || x > innerWidth || y < 0 || y > innerHeight) continue;
+    const text = `weaved (${D.weavedHidden[k / 2]})`, hw = text.length * 2.8; // N: nodes it hides
+    const box = [x - hw, y - 7, x + hw, y + 7];
+    if (boxes.some(b => box[0] < b[2] && b[0] < box[2] && box[1] < b[3] && b[1] < box[3])) continue;
+    boxes.push(box); mids.push([x, y, z, text]);
+  }
+  while (weavedPool.length < mids.length) { const el = document.createElement('div'); el.className = 'fname wlbl'; $('names').appendChild(el); weavedPool.push(el); }
+  weavedPool.forEach((el, k) => {
+    const m = mids[k];
+    if (!m) { el.style.display = 'none'; return; }
+    el.style.display = ''; el.textContent = m[3]; el.style.left = m[0] + 'px'; el.style.top = m[1] + 'px';
+    el.style.opacity = NAME_OPACITY * Math.min(1, (NAME_DIST - m[2]) / (NAME_DIST * 0.3));
+  });
   while (namePool.length < near.length) { const el = document.createElement('div'); el.className = 'fname'; $('names').appendChild(el); namePool.push(el); }
   namePool.forEach((el, k) => {
     const i = near[k];
@@ -797,13 +833,13 @@ renderer.domElement.addEventListener('pointerup', e => {
   const r = pickPath(e.clientX, e.clientY);
   if (r >= 0) return selectPath(r);
   const ed = pickEdge(e.clientX, e.clientY);
-  if (ed && ed.via === 'weaved') { ends.a = nodeKey(ed.s); ends.b = nodeKey(ed.t); return findPaths(); }
+  if (ed && ed.via === 'weaved') return openWeavedMenu(ed.s, ed.t, e.clientX, e.clientY);
   setFocus(ed ? {edge: ed} : null);
 });
-addEventListener('keydown', e => { if (e.key === 'Escape') { if (pmenuFor !== null) closeProjectMenu(); else if (menuNode >= 0) closeMenu(); else setFocus(null); } if (e.key === 'f' && e.target === document.body) flyTo(hub(), R * 2.3); });
+addEventListener('keydown', e => { if (e.key === 'Escape') { if (pmenuFor !== null) closeProjectMenu(); else if (menuNode >= 0 || menuWeaved) closeMenu(); else setFocus(null); } if (e.key === 'f' && e.target === document.body) flyTo(hub(), R * 2.3); });
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); projected = false;
-  for (const o of pathObjs) o.material.resolution.set(innerWidth, innerHeight);
+  scene.traverse(o => o.material?.resolution?.set(innerWidth, innerHeight)); // every screen-space line
 });
 controls.addEventListener('change', () => projected = false);
 
@@ -887,10 +923,25 @@ for (const f of ['a', 'b']) {
   $('f' + f).querySelector('.x').onclick = () => { ends[f] = null; inp.value = ''; findPaths(); inp.focus(); };
 }
 
-// Star context menu: opens left of the cursor on a click.
-let menuNode = -1;
+// Star context menu: opens left of the cursor on a click. A weaved path gets its own menu in the same box.
+let menuNode = -1, menuWeaved = null;
+const placeMenu = (m, x, y) => {
+  m.style.display = 'block';
+  const w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.max(8, x - w - 14) + 'px';
+  m.style.top = Math.max(8, Math.min(innerHeight - h - 8, y - 20)) + 'px';
+  $('tip').style.display = 'none';
+};
+function openWeavedMenu(s, t, x, y) {
+  menuNode = -1; menuWeaved = [s, t];
+  const it = (act, ic, label) => `<div class="it" data-act="${act}"><span class="ic">${ic}</span>${label}</div>`;
+  $('ctx').innerHTML = `<div class="hd"><span class="muted">weaved path</span><br>${swatch(s)} <b>${esc(D.name[s])}</b><br>→ ${swatch(t)} <b>${esc(D.name[t])}</b></div>`
+    + it('trace', '⤴', 'Open in trace path view')
+    + it('paths', '⇢', 'Show paths here');
+  placeMenu($('ctx'), x, y);
+}
 function openMenu(i, x, y) {
-  menuNode = i;
+  menuNode = i; menuWeaved = null;
   const p = D.projects[D.proj[i]], pi = D.proj[i];
   const it = (act, ic, label) => `<div class="it" data-act="${act}"><span class="ic">${ic}</span>${label}</div>`;
   const m = $('ctx');
@@ -901,16 +952,17 @@ function openMenu(i, x, y) {
     + it('fly', '⌖', 'Fly here')
     + it('search', '⌕', `Search in ${esc(p)}`)
     + it('hide', '⊘', `Hide project ${esc(p)}`);
-  m.style.display = 'block';
-  const w = m.offsetWidth, h = m.offsetHeight;
-  m.style.left = Math.max(8, x - w - 14) + 'px';
-  m.style.top = Math.max(8, Math.min(innerHeight - h - 8, y - 20)) + 'px';
-  $('tip').style.display = 'none';
+  placeMenu(m, x, y);
 }
-function closeMenu() { menuNode = -1; $('ctx').style.display = 'none'; }
+function closeMenu() { menuNode = -1; menuWeaved = null; $('ctx').style.display = 'none'; }
 $('ctx').onclick = e => {
   const a = e.target.closest('[data-act]'); if (!a) return;
-  const i = menuNode; closeMenu();
+  const i = menuNode, wp = menuWeaved; closeMenu();
+  if (wp) {
+    const [sa, ta] = wp.map(nodeKey); // symbol addresses, project:rel/path.go:Type.Method
+    if (a.dataset.act === 'trace') return void window.open(`/ui/trace-path.html?a=${encodeURIComponent(sa)}&b=${encodeURIComponent(ta)}`, '_blank');
+    ends.a = sa; ends.b = ta; return findPaths();
+  }
   const p = D.projects[D.proj[i]];
   switch (a.dataset.act) {
     case 'focus': return setFocus({node: i});
@@ -1085,11 +1137,14 @@ function frame(now) {
 requestAnimationFrame(frame);
 // Panel collapse, remembered in this browser like the rest of the layout.
 const fold = (cls, on) => { document.body.classList.toggle(cls, on); localStorage.setItem('dw.' + cls, on ? '1' : ''); };
-for (const [cls, hide, tab] of [['noside', 'sideHide', 'sideTab'], ['nopp', 'ppHide', 'ppTab']]) {
+for (const [cls, hide, tab] of [['noside', 'sideHide', 'sideTab'], ['nopp', 'ppHide', 'ppTab'], ['nolegend', 'legendHide', 'legendTab']]) {
   if (localStorage.getItem('dw.' + cls)) document.body.classList.add(cls);
   $(hide).onclick = () => fold(cls, true);
   $(tab).onclick = () => fold(cls, false);
 }
+// The side panel stops above the legend, or above its tab when the legend is hidden.
+const legendH = new ResizeObserver(() => document.body.style.setProperty('--legendH', Math.max($('legend').offsetHeight, $('legendTab').offsetHeight) + 'px'));
+legendH.observe($('legend')); legendH.observe($('legendTab'));
 initWorkspace();
 </script>
 </body></html>

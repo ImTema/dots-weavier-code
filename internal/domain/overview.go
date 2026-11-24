@@ -22,26 +22,27 @@ import (
 
 // OverviewGraph is packed into parallel arrays: ~50k nodes stay a few MB of JSON.
 type OverviewGraph struct {
-	Projects    []string  `json:"projects"` // every indexed project, biggest first
-	Sizes       []int     `json:"sizes"`    // nodes per project
-	Hidden      []bool    `json:"hidden"`   // excluded from this layout: no nodes, no edges
-	Centers     []float32 `json:"centers"`  // x,y,z per project; 0 for hidden ones
-	Files       []string  `json:"files"`
-	Proj        []int32   `json:"proj"` // per node: index into Projects
-	File        []int32   `json:"file"` // per node: index into Files
-	Name        []string  `json:"name"`
-	ID          []int32   `json:"id"` // per node: stable graph node id, what /paths takes and returns
-	Line        []int32   `json:"line"`
-	Deg         []int32   `json:"deg"`         // in+out edges
-	Pos         []float32 `json:"pos"`         // x,y,z per node
-	Edges       []int32   `json:"edges"`       // s,t pairs, calls inside one project
-	Links       []int32   `json:"links"`       // s,t pairs, grpc/http/pubsub/lib hops (between projects)
-	Kinds       []string  `json:"linkKinds"`   // per link pair: edge kind, "grpc", "http", "pubsub", "pubsub:guess", "lib"
-	Methods     []string  `json:"methods"`     // per link pair: gRPC full method, "GET /path", pubsub key, or library function
-	WeavedPaths []int32   `json:"weavedPaths"` // s,t pairs: boundary node t reached from boundary node s along calls, see weavedPaths
-	LayoutMs    int64     `json:"layoutMs"`
-	Total       int       `json:"total"` // functions in the shown projects before the node cap
-	Limit       int       `json:"limit"` // the node cap; 0 means none
+	Projects     []string  `json:"projects"` // every indexed project, biggest first
+	Sizes        []int     `json:"sizes"`    // nodes per project
+	Hidden       []bool    `json:"hidden"`   // excluded from this layout: no nodes, no edges
+	Centers      []float32 `json:"centers"`  // x,y,z per project; 0 for hidden ones
+	Files        []string  `json:"files"`
+	Proj         []int32   `json:"proj"` // per node: index into Projects
+	File         []int32   `json:"file"` // per node: index into Files
+	Name         []string  `json:"name"`
+	ID           []int32   `json:"id"` // per node: stable graph node id, what /paths takes and returns
+	Line         []int32   `json:"line"`
+	Deg          []int32   `json:"deg"`          // in+out edges
+	Pos          []float32 `json:"pos"`          // x,y,z per node
+	Edges        []int32   `json:"edges"`        // s,t pairs, calls inside one project
+	Links        []int32   `json:"links"`        // s,t pairs, grpc/http/pubsub/lib hops (between projects)
+	Kinds        []string  `json:"linkKinds"`    // per link pair: edge kind, "grpc", "http", "pubsub", "pubsub:guess", "lib"
+	Methods      []string  `json:"methods"`      // per link pair: gRPC full method, "GET /path", pubsub key, or library function
+	WeavedPaths  []int32   `json:"weavedPaths"`  // s,t pairs: boundary node t reached from boundary node s along calls, see weavedPaths
+	WeavedHidden []int32   `json:"weavedHidden"` // per weaved path: how many drawn nodes lie on its call paths, between its ends
+	LayoutMs     int64     `json:"layoutMs"`
+	Total        int       `json:"total"` // functions in the shown projects before the node cap
+	Limit        int       `json:"limit"` // the node cap; 0 means none
 }
 
 // OverviewSource is every index merged once; Build lays it out per request and
@@ -389,7 +390,7 @@ func (src *OverviewSource) Build(show map[string]bool, limit int) *OverviewGraph
 	// Empty, not nil: an overview with nothing shown must still encode as [] for the page.
 	o := &OverviewGraph{Projects: []string{}, Sizes: []int{}, Hidden: []bool{}, Centers: []float32{}, Files: []string{},
 		Proj: []int32{}, File: []int32{}, Name: []string{}, ID: []int32{}, Line: []int32{}, Deg: []int32{}, Pos: []float32{},
-		Edges: []int32{}, Links: []int32{}, Kinds: []string{}, Methods: []string{}, WeavedPaths: []int32{}}
+		Edges: []int32{}, Links: []int32{}, Kinds: []string{}, Methods: []string{}, WeavedPaths: []int32{}, WeavedHidden: []int32{}}
 	idx := make([]int32, len(g.Nodes)) // graph node -> overview node, -1 when dropped
 	projOf := map[string]int32{}
 	fileOf := map[string]int32{}
@@ -446,7 +447,7 @@ func (src *OverviewSource) Build(show map[string]bool, limit int) *OverviewGraph
 			}
 		}
 	}
-	o.WeavedPaths = weavedPaths(boundaryNodes(g, idx, o), o.Edges)
+	o.WeavedPaths, o.WeavedHidden = weavedPaths(boundaryNodes(g, idx, o), o.Edges)
 	o.layout()
 	o.Total, o.Limit = total, limit
 	o.LayoutMs = time.Since(t0).Milliseconds()
@@ -830,16 +831,19 @@ func boundaryNodes(g *graph, idx []int32, o *OverviewGraph) []bool {
 
 // weavedPaths returns s,t pairs: for every boundary node s, each boundary node t reached
 // from s along calls without passing through another one. The overview
-// draws each pair as one edge instead of the calls between.
-// ponytail: one DFS per boundary node, O(boundary nodes x calls); fine at the 20k node cap.
-func weavedPaths(boundary []bool, calls []int32) []int32 {
+// draws each pair as one edge instead of the calls between. hidden has one count per
+// pair: the nodes between s and t on those call paths, which the edge stands for.
+// ponytail: one DFS per boundary node, plus one backward walk per pair; fine at the 20k node cap.
+func weavedPaths(boundary []bool, calls []int32) (pairs, hidden []int32) {
 	n := len(boundary)
-	out := make([][]int32, n)
+	out, in := make([][]int32, n), make([][]int32, n)
 	for k := 0; k < len(calls); k += 2 {
 		out[calls[k]] = append(out[calls[k]], calls[k+1])
+		in[calls[k+1]] = append(in[calls[k+1]], calls[k])
 	}
-	pairs := []int32{}
+	pairs, hidden = []int32{}, []int32{}
 	seen := make([]int32, n) // seen[i] == s+1: i already visited from s
+	back := make([]int32, n) // back[i] == pair number+1: i already counted for that pair
 	for s := range int32(n) {
 		if !boundary[s] {
 			continue
@@ -861,6 +865,24 @@ func weavedPaths(boundary []bool, calls []int32) []int32 {
 				}
 			}
 		}
+		// Hidden nodes of s->t: reached from s (seen) and reaching t, walking calls backwards from t.
+		for p := len(hidden); p < len(pairs)/2; p++ {
+			stamp, count := int32(p+1), int32(0)
+			stack := []int32{pairs[2*p+1]}
+			for len(stack) > 0 {
+				i := stack[len(stack)-1]
+				stack = stack[:len(stack)-1]
+				for _, c := range in[i] {
+					if boundary[c] || seen[c] != s+1 || back[c] == stamp {
+						continue
+					}
+					back[c] = stamp
+					count++
+					stack = append(stack, c)
+				}
+			}
+			hidden = append(hidden, count)
+		}
 	}
-	return pairs
+	return pairs, hidden
 }

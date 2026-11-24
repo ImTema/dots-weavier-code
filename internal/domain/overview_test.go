@@ -71,8 +71,11 @@ func TestSelectNodesRanksCrossProjectThenDegree(t *testing.T) {
 }
 
 func TestWeavedPaths(t *testing.T) {
-	// Boundary 0, 3, 4. 0 reaches 3 by two call paths; 4 only through 3; 6 is a dead end.
+	// Boundary 0, 3, 4. 0 reaches 3 by two call paths (through 1, 2 and through 5);
+	// 4 only through 3, directly; 6 is a dead end, so it hides behind no weaved path.
 	calls := []int32{0, 1, 1, 2, 2, 3, 0, 5, 5, 3, 3, 4, 0, 6}
 	boundary := []bool{0: true, 3: true, 4: true, 7: false}
-	assert.Equal(t, []int32{0, 3, 3, 4}, weavedPaths(boundary, calls))
+	pairs, hidden := weavedPaths(boundary, calls)
+	assert.Equal(t, []int32{0, 3, 3, 4}, pairs)
+	assert.Equal(t, []int32{3, 0}, hidden)
 }

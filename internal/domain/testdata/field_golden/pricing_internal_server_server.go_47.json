@@ -85,106 +85,130 @@
          "kids": [
           {
            "kind": "arg",
-           "loc": "fulfillment:internal/plan/planner.go:75",
-           "code": "tax, err := p.taxes.Tax(ctx, o.CustomerID, region, ins)",
-           "before": "if ins \u003e 0 {",
-           "after": "if err != nil {",
+           "loc": "fulfillment:internal/plan/quote.go:61",
+           "code": "func (p *Planner) askTax(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
+           "before": "// askTax is one call to pricing, bounded by taxTimeout.",
+           "after": "ctx, cancel := context.WithTimeout(ctx, taxTimeout)",
            "type": "string",
-           "fn": "Planner.Plan",
+           "fn": "Planner.askTax",
+           "via": "fulfillment:internal/plan/quote.go:64",
            "kids": [
             {
-             "kind": "field",
-             "name": "plan.Order.CustomerID",
+             "kind": "arg",
+             "loc": "fulfillment:internal/plan/quote.go:52",
+             "code": "func (p *Planner) taxOn(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
+             "before": "// a pricing restart drops the odd call. A cancelled ctx is not retried.",
+             "after": "tax, err := p.askTax(ctx, customerID, region, cents)",
              "type": "string",
+             "fn": "Planner.taxOn",
+             "via": "fulfillment:internal/plan/quote.go:53",
              "kids": [
               {
-               "kind": "store",
-               "loc": "fulfillment:internal/server/server.go:28",
-               "code": "CustomerID: req.GetCustomerId(),",
-               "before": "ID:         req.GetOrderId(),",
-               "after": "Units:      req.GetUnits(),",
+               "kind": "arg",
+               "loc": "fulfillment:internal/plan/quote.go:43",
+               "code": "tax, err := p.taxOn(ctx, o.CustomerID, region, ins)",
+               "before": "}",
+               "after": "if err != nil {",
                "type": "string",
-               "fn": "Server.Schedule",
+               "fn": "Planner.insure",
                "kids": [
                 {
-                 "kind": "return",
-                 "loc": "fulfillment:api/fulfillment/v1/fulfillment.pb.go:73",
-                 "code": "return x.CustomerId",
-                 "before": "if x != nil {",
-                 "after": "}",
+                 "kind": "field",
+                 "name": "plan.Order.CustomerID",
                  "type": "string",
-                 "fn": "ScheduleRequest.GetCustomerId",
                  "kids": [
                   {
-                   "kind": "field",
-                   "name": "fulfillmentv1.ScheduleRequest.CustomerId",
+                   "kind": "store",
+                   "loc": "fulfillment:internal/server/server.go:28",
+                   "code": "CustomerID: req.GetCustomerId(),",
+                   "before": "ID:         req.GetOrderId(),",
+                   "after": "Units:      req.GetUnits(),",
                    "type": "string",
+                   "fn": "Server.Schedule",
                    "kids": [
                     {
-                     "kind": "store",
-                     "loc": "fulfillment:internal/events/subscriber.go:82",
-                     "code": "CustomerId: e.GetCustomerId(),",
-                     "before": "OrderId:    e.GetOrderId(),",
-                     "after": "Units:      e.GetUnits(),",
+                     "kind": "return",
+                     "loc": "fulfillment:api/fulfillment/v1/fulfillment.pb.go:73",
+                     "code": "return x.CustomerId",
+                     "before": "if x != nil {",
+                     "after": "}",
                      "type": "string",
-                     "fn": "Subscriber.Handle",
+                     "fn": "ScheduleRequest.GetCustomerId",
                      "kids": [
                       {
                        "kind": "field",
-                       "name": "eventsv1.OrderPlaced.CustomerId",
+                       "name": "fulfillmentv1.ScheduleRequest.CustomerId",
                        "type": "string",
                        "kids": [
                         {
                          "kind": "store",
-                         "loc": "orders:internal/events/publisher.go:50",
+                         "loc": "fulfillment:internal/events/subscriber.go:82",
+                         "code": "CustomerId: e.GetCustomerId(),",
+                         "before": "OrderId:    e.GetOrderId(),",
+                         "after": "Units:      e.GetUnits(),",
+                         "type": "string",
+                         "fn": "Subscriber.Handle",
+                         "kids": [
+                          {
+                           "kind": "field",
+                           "name": "eventsv1.OrderPlaced.CustomerId",
+                           "type": "string",
+                           "kids": [
+                            {
+                             "kind": "store",
+                             "loc": "orders:internal/events/publisher.go:50",
+                             "code": "CustomerId: o.CustomerID,",
+                             "before": "OrderId:    o.ID,",
+                             "after": "TotalCents: o.TotalCents,",
+                             "type": "string",
+                             "fn": "Publisher.OrderPlaced"
+                            }
+                           ]
+                          }
+                         ]
+                        },
+                        {
+                         "kind": "store",
+                         "loc": "orders:internal/fulfiller/client.go:25",
                          "code": "CustomerId: o.CustomerID,",
                          "before": "OrderId:    o.ID,",
-                         "after": "TotalCents: o.TotalCents,",
+                         "after": "Units:      o.Units,",
                          "type": "string",
-                         "fn": "Publisher.OrderPlaced"
+                         "fn": "Client.Schedule",
+                         "kids": [
+                          {
+                           "kind": "field",
+                           "name": "order.Order.CustomerID",
+                           "type": "string",
+                           "kids": [
+                            {
+                             "kind": "store",
+                             "loc": "orders:internal/order/order.go:104",
+                             "code": "CustomerID:    c.ID,",
+                             "before": "ID:            fmt.Sprintf(\"o-%d\", s.seq.Add(1)),",
+                             "after": "ReservationID: resID,",
+                             "type": "string",
+                             "fn": "Service.Place"
+                            }
+                           ]
+                          }
+                         ]
                         }
                        ]
                       }
                      ]
                     },
                     {
-                     "kind": "store",
-                     "loc": "orders:internal/fulfiller/client.go:25",
-                     "code": "CustomerId: o.CustomerID,",
-                     "before": "OrderId:    o.ID,",
-                     "after": "Units:      o.Units,",
-                     "type": "string",
-                     "fn": "Client.Schedule",
-                     "kids": [
-                      {
-                       "kind": "field",
-                       "name": "order.Order.CustomerID",
-                       "type": "string",
-                       "kids": [
-                        {
-                         "kind": "store",
-                         "loc": "orders:internal/order/order.go:104",
-                         "code": "CustomerID:    c.ID,",
-                         "before": "ID:            fmt.Sprintf(\"o-%d\", s.seq.Add(1)),",
-                         "after": "ReservationID: resID,",
-                         "type": "string",
-                         "fn": "Service.Place"
-                        }
-                       ]
-                      }
-                     ]
+                     "kind": "return",
+                     "loc": "fulfillment:api/fulfillment/v1/fulfillment.pb.go:75",
+                     "code": "return \"\"",
+                     "before": "}",
+                     "after": "}",
+                     "type": "string"
                     }
                    ]
                   }
                  ]
-                },
-                {
-                 "kind": "return",
-                 "loc": "fulfillment:api/fulfillment/v1/fulfillment.pb.go:75",
-                 "code": "return \"\"",
-                 "before": "}",
-                 "after": "}",
-                 "type": "string"
                 }
                ]
               }

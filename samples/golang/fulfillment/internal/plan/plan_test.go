@@ -83,3 +83,21 @@ func TestPlan(t *testing.T) {
 }
 
 var errBoom = errors.New("boom")
+
+// flakyTaxes fails its first call, as pricing does while it restarts.
+type flakyTaxes struct{ calls int }
+
+func (f *flakyTaxes) Tax(_ context.Context, _, _ string, cents int64) (int64, error) {
+	if f.calls++; f.calls == 1 {
+		return 0, errBoom
+	}
+	return cents / 5, nil
+}
+
+func TestPlanRetriesTaxOnce(t *testing.T) {
+	taxes := &flakyTaxes{}
+	s, _, err := NewPlanner(&fakeRates{region: "UK"}, taxes).Plan(context.Background(), Order{ID: "o-1", CustomerID: "c3", Units: 12, TotalCents: 30000})
+	if err != nil || s.InsuranceCents != 360 || taxes.calls != 2 {
+		t.Fatalf("Plan = %+v, %v after %d tax calls; want 360 cents insurance after 2", s, err, taxes.calls)
+	}
+}

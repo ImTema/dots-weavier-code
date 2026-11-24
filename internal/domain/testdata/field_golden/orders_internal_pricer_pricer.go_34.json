@@ -444,151 +444,175 @@
                          "kids": [
                           {
                            "kind": "arg",
-                           "loc": "fulfillment:internal/plan/planner.go:75",
-                           "code": "tax, err := p.taxes.Tax(ctx, o.CustomerID, region, ins)",
-                           "before": "if ins \u003e 0 {",
-                           "after": "if err != nil {",
+                           "loc": "fulfillment:internal/plan/quote.go:61",
+                           "code": "func (p *Planner) askTax(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
+                           "before": "// askTax is one call to pricing, bounded by taxTimeout.",
+                           "after": "ctx, cancel := context.WithTimeout(ctx, taxTimeout)",
                            "type": "int64",
-                           "fn": "Planner.Plan",
+                           "fn": "Planner.askTax",
+                           "via": "fulfillment:internal/plan/quote.go:64",
                            "kids": [
                             {
-                             "kind": "return",
-                             "loc": "fulfillment:internal/plan/rules.go:49",
-                             "code": "return 0",
-                             "before": "if totalCents \u003c insuredCents {",
-                             "after": "}",
-                             "type": "int64"
-                            },
-                            {
-                             "kind": "return",
-                             "loc": "fulfillment:internal/plan/rules.go:51",
-                             "code": "return totalCents / 100",
-                             "before": "}",
-                             "after": "}",
+                             "kind": "arg",
+                             "loc": "fulfillment:internal/plan/quote.go:52",
+                             "code": "func (p *Planner) taxOn(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
+                             "before": "// a pricing restart drops the odd call. A cancelled ctx is not retried.",
+                             "after": "tax, err := p.askTax(ctx, customerID, region, cents)",
                              "type": "int64",
-                             "fn": "Premium",
+                             "fn": "Planner.taxOn",
+                             "via": "fulfillment:internal/plan/quote.go:53",
                              "kids": [
                               {
-                               "kind": "transform",
-                               "loc": "fulfillment:internal/plan/rules.go:47",
-                               "code": "func Premium(totalCents int64) int64 {",
-                               "before": "// 200.00, nothing below.",
-                               "after": "if totalCents \u003c insuredCents {",
+                               "kind": "arg",
+                               "loc": "fulfillment:internal/plan/quote.go:43",
+                               "code": "tax, err := p.taxOn(ctx, o.CustomerID, region, ins)",
+                               "before": "}",
+                               "after": "if err != nil {",
                                "type": "int64",
-                               "fn": "Premium",
+                               "fn": "Planner.insure",
                                "kids": [
                                 {
-                                 "kind": "arg",
-                                 "loc": "fulfillment:internal/plan/planner.go:73",
-                                 "code": "ins := Premium(o.TotalCents)",
+                                 "kind": "return",
+                                 "loc": "fulfillment:internal/plan/rules.go:49",
+                                 "code": "return 0",
+                                 "before": "if totalCents \u003c insuredCents {",
+                                 "after": "}",
+                                 "type": "int64"
+                                },
+                                {
+                                 "kind": "return",
+                                 "loc": "fulfillment:internal/plan/rules.go:51",
+                                 "code": "return totalCents / 100",
                                  "before": "}",
-                                 "after": "if ins \u003e 0 {",
+                                 "after": "}",
                                  "type": "int64",
-                                 "fn": "Planner.Plan",
+                                 "fn": "Premium",
                                  "kids": [
                                   {
-                                   "kind": "field",
-                                   "name": "plan.Order.TotalCents",
+                                   "kind": "transform",
+                                   "loc": "fulfillment:internal/plan/rules.go:47",
+                                   "code": "func Premium(totalCents int64) int64 {",
+                                   "before": "// 200.00, nothing below.",
+                                   "after": "if totalCents \u003c insuredCents {",
                                    "type": "int64",
+                                   "fn": "Premium",
                                    "kids": [
                                     {
-                                     "kind": "store",
-                                     "loc": "fulfillment:internal/server/server.go:30",
-                                     "code": "TotalCents: req.GetTotalCents(),",
-                                     "before": "Units:      req.GetUnits(),",
-                                     "after": "})",
+                                     "kind": "arg",
+                                     "loc": "fulfillment:internal/plan/quote.go:39",
+                                     "code": "ins := Premium(o.TotalCents)",
+                                     "before": "func (p *Planner) insure(ctx context.Context, o Order, region string) (int64, error) {",
+                                     "after": "if ins \u003c= 0 {",
                                      "type": "int64",
-                                     "fn": "Server.Schedule",
+                                     "fn": "Planner.insure",
                                      "kids": [
                                       {
-                                       "kind": "return",
-                                       "loc": "fulfillment:api/fulfillment/v1/fulfillment.pb.go:87",
-                                       "code": "return x.TotalCents",
-                                       "before": "if x != nil {",
-                                       "after": "}",
+                                       "kind": "field",
+                                       "name": "plan.Order.TotalCents",
                                        "type": "int64",
-                                       "fn": "ScheduleRequest.GetTotalCents",
                                        "kids": [
                                         {
-                                         "kind": "field",
-                                         "name": "fulfillmentv1.ScheduleRequest.TotalCents",
+                                         "kind": "store",
+                                         "loc": "fulfillment:internal/server/server.go:30",
+                                         "code": "TotalCents: req.GetTotalCents(),",
+                                         "before": "Units:      req.GetUnits(),",
+                                         "after": "})",
                                          "type": "int64",
+                                         "fn": "Server.Schedule",
                                          "kids": [
                                           {
-                                           "kind": "store",
-                                           "loc": "fulfillment:internal/events/subscriber.go:84",
-                                           "code": "TotalCents: e.GetTotalCents(),",
-                                           "before": "Units:      e.GetUnits(),",
-                                           "after": "})",
+                                           "kind": "return",
+                                           "loc": "fulfillment:api/fulfillment/v1/fulfillment.pb.go:87",
+                                           "code": "return x.TotalCents",
+                                           "before": "if x != nil {",
+                                           "after": "}",
                                            "type": "int64",
-                                           "fn": "Subscriber.Handle",
+                                           "fn": "ScheduleRequest.GetTotalCents",
                                            "kids": [
                                             {
                                              "kind": "field",
-                                             "name": "eventsv1.OrderPlaced.TotalCents",
+                                             "name": "fulfillmentv1.ScheduleRequest.TotalCents",
                                              "type": "int64",
                                              "kids": [
                                               {
                                                "kind": "store",
-                                               "loc": "internal/events/publisher.go:51",
-                                               "code": "TotalCents: o.TotalCents,",
-                                               "before": "CustomerId: o.CustomerID,",
-                                               "after": "Units:      o.Units,",
+                                               "loc": "fulfillment:internal/events/subscriber.go:84",
+                                               "code": "TotalCents: e.GetTotalCents(),",
+                                               "before": "Units:      e.GetUnits(),",
+                                               "after": "})",
                                                "type": "int64",
-                                               "fn": "Publisher.OrderPlaced"
-                                              }
-                                             ]
-                                            }
-                                           ]
-                                          },
-                                          {
-                                           "kind": "store",
-                                           "loc": "internal/fulfiller/client.go:27",
-                                           "code": "TotalCents: o.TotalCents,",
-                                           "before": "Units:      o.Units,",
-                                           "after": "})",
-                                           "type": "int64",
-                                           "fn": "Client.Schedule",
-                                           "kids": [
-                                            {
-                                             "kind": "field",
-                                             "name": "order.Order.TotalCents",
-                                             "type": "int64",
-                                             "kids": [
-                                              {
-                                               "kind": "store",
-                                               "loc": "internal/order/order.go:106",
-                                               "code": "TotalCents:    total,",
-                                               "before": "ReservationID: resID,",
-                                               "after": "Units:         units(req.Items),",
-                                               "type": "int64",
-                                               "fn": "Service.Place",
+                                               "fn": "Subscriber.Handle",
                                                "kids": [
                                                 {
-                                                 "kind": "return",
-                                                 "loc": "internal/pricer/pricer.go:32",
-                                                 "code": "return 0, fmt.Errorf(\"quote: %w\", err)",
-                                                 "before": "if err != nil {",
-                                                 "after": "}",
-                                                 "type": "int64"
+                                                 "kind": "field",
+                                                 "name": "eventsv1.OrderPlaced.TotalCents",
+                                                 "type": "int64",
+                                                 "kids": [
+                                                  {
+                                                   "kind": "store",
+                                                   "loc": "internal/events/publisher.go:51",
+                                                   "code": "TotalCents: o.TotalCents,",
+                                                   "before": "CustomerId: o.CustomerID,",
+                                                   "after": "Units:      o.Units,",
+                                                   "type": "int64",
+                                                   "fn": "Publisher.OrderPlaced"
+                                                  }
+                                                 ]
+                                                }
+                                               ]
+                                              },
+                                              {
+                                               "kind": "store",
+                                               "loc": "internal/fulfiller/client.go:27",
+                                               "code": "TotalCents: o.TotalCents,",
+                                               "before": "Units:      o.Units,",
+                                               "after": "})",
+                                               "type": "int64",
+                                               "fn": "Client.Schedule",
+                                               "kids": [
+                                                {
+                                                 "kind": "field",
+                                                 "name": "order.Order.TotalCents",
+                                                 "type": "int64",
+                                                 "kids": [
+                                                  {
+                                                   "kind": "store",
+                                                   "loc": "internal/order/order.go:106",
+                                                   "code": "TotalCents:    total,",
+                                                   "before": "ReservationID: resID,",
+                                                   "after": "Units:         units(req.Items),",
+                                                   "type": "int64",
+                                                   "fn": "Service.Place",
+                                                   "kids": [
+                                                    {
+                                                     "kind": "return",
+                                                     "loc": "internal/pricer/pricer.go:32",
+                                                     "code": "return 0, fmt.Errorf(\"quote: %w\", err)",
+                                                     "before": "if err != nil {",
+                                                     "after": "}",
+                                                     "type": "int64"
+                                                    }
+                                                   ]
+                                                  }
+                                                 ]
                                                 }
                                                ]
                                               }
                                              ]
                                             }
                                            ]
+                                          },
+                                          {
+                                           "kind": "return",
+                                           "loc": "fulfillment:api/fulfillment/v1/fulfillment.pb.go:89",
+                                           "code": "return 0",
+                                           "before": "}",
+                                           "after": "}",
+                                           "type": "int64"
                                           }
                                          ]
                                         }
                                        ]
-                                      },
-                                      {
-                                       "kind": "return",
-                                       "loc": "fulfillment:api/fulfillment/v1/fulfillment.pb.go:89",
-                                       "code": "return 0",
-                                       "before": "}",
-                                       "after": "}",
-                                       "type": "int64"
                                       }
                                      ]
                                     }
@@ -920,40 +944,69 @@
                   },
                   {
                    "kind": "read",
-                   "loc": "fulfillment:internal/plan/planner.go:73",
+                   "loc": "fulfillment:internal/plan/quote.go:39",
                    "code": "ins := Premium(o.TotalCents)",
-                   "before": "}",
-                   "after": "if ins \u003e 0 {",
+                   "before": "func (p *Planner) insure(ctx context.Context, o Order, region string) (int64, error) {",
+                   "after": "if ins \u003c= 0 {",
                    "type": "int64",
-                   "fn": "Planner.Plan",
+                   "fn": "Planner.insure",
                    "kids": [
                     {
-                     "kind": "field",
-                     "name": "plan.Shipment.InsuranceCents",
+                     "kind": "return",
+                     "loc": "fulfillment:internal/plan/quote.go:29",
+                     "code": "ins, err := p.insure(ctx, o, region)",
+                     "before": "}",
+                     "after": "if err != nil {",
                      "type": "int64",
+                     "fn": "Planner.quote",
                      "kids": [
                       {
-                       "kind": "read",
-                       "loc": "fulfillment:internal/server/server.go:45",
-                       "code": "InsuranceCents: sh.InsuranceCents,",
-                       "before": "ShippingCents:  sh.ShippingCents,",
-                       "after": "Duplicate:      dup,",
+                       "kind": "field",
+                       "name": "plan.costs.insurance",
                        "type": "int64",
-                       "fn": "Server.Schedule",
                        "kids": [
                         {
-                         "kind": "field",
-                         "name": "fulfillmentv1.ScheduleResponse.InsuranceCents",
+                         "kind": "read",
+                         "loc": "fulfillment:internal/plan/planner.go:81",
+                         "code": "InsuranceCents: c.insurance,",
+                         "before": "ShippingCents:  c.shipping,",
+                         "after": "}",
                          "type": "int64",
+                         "fn": "Planner.Plan",
                          "kids": [
                           {
-                           "kind": "read",
-                           "loc": "fulfillment:api/fulfillment/v1/fulfillment.pb.go:167",
-                           "code": "return x.InsuranceCents",
-                           "before": "if x != nil {",
-                           "after": "}",
+                           "kind": "field",
+                           "name": "plan.Shipment.InsuranceCents",
                            "type": "int64",
-                           "fn": "ScheduleResponse.GetInsuranceCents"
+                           "kids": [
+                            {
+                             "kind": "read",
+                             "loc": "fulfillment:internal/server/server.go:45",
+                             "code": "InsuranceCents: sh.InsuranceCents,",
+                             "before": "ShippingCents:  sh.ShippingCents,",
+                             "after": "Duplicate:      dup,",
+                             "type": "int64",
+                             "fn": "Server.Schedule",
+                             "kids": [
+                              {
+                               "kind": "field",
+                               "name": "fulfillmentv1.ScheduleResponse.InsuranceCents",
+                               "type": "int64",
+                               "kids": [
+                                {
+                                 "kind": "read",
+                                 "loc": "fulfillment:api/fulfillment/v1/fulfillment.pb.go:167",
+                                 "code": "return x.InsuranceCents",
+                                 "before": "if x != nil {",
+                                 "after": "}",
+                                 "type": "int64",
+                                 "fn": "ScheduleResponse.GetInsuranceCents"
+                                }
+                               ]
+                              }
+                             ]
+                            }
+                           ]
                           }
                          ]
                         }
@@ -963,234 +1016,237 @@
                     },
                     {
                      "kind": "transform",
-                     "loc": "fulfillment:internal/plan/planner.go:79",
-                     "code": "ins += tax",
+                     "loc": "fulfillment:internal/plan/quote.go:47",
+                     "code": "return ins + tax, nil",
                      "before": "}",
                      "after": "}",
                      "type": "int64",
-                     "fn": "Planner.Plan"
+                     "fn": "Planner.insure"
                     },
                     {
                      "kind": "arg",
-                     "loc": "fulfillment:internal/plan/rules.go:47",
-                     "code": "func Premium(totalCents int64) int64 {",
-                     "before": "// 200.00, nothing below.",
-                     "after": "if totalCents \u003c insuredCents {",
+                     "loc": "fulfillment:internal/plan/quote.go:52",
+                     "code": "func (p *Planner) taxOn(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
+                     "before": "// a pricing restart drops the odd call. A cancelled ctx is not retried.",
+                     "after": "tax, err := p.askTax(ctx, customerID, region, cents)",
                      "type": "int64",
-                     "fn": "Premium",
-                     "via": "fulfillment:internal/plan/planner.go:73",
+                     "fn": "Planner.taxOn",
+                     "via": "fulfillment:internal/plan/quote.go:43",
                      "kids": [
                       {
-                       "kind": "transform",
-                       "loc": "fulfillment:internal/plan/rules.go:51",
-                       "code": "return totalCents / 100",
-                       "before": "}",
-                       "after": "}",
+                       "kind": "arg",
+                       "loc": "fulfillment:internal/plan/quote.go:61",
+                       "code": "func (p *Planner) askTax(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
+                       "before": "// askTax is one call to pricing, bounded by taxTimeout.",
+                       "after": "ctx, cancel := context.WithTimeout(ctx, taxTimeout)",
                        "type": "int64",
-                       "fn": "Premium"
-                      }
-                     ]
-                    },
-                    {
-                     "kind": "arg",
-                     "loc": "fulfillment:internal/pricing/client.go:24",
-                     "code": "func (c *Client) Tax(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
-                     "before": "// cents and returns only its tax.",
-                     "after": "resp, err := c.rpc.Quote(ctx, \u0026pricingv1.QuoteRequest{",
-                     "type": "int64",
-                     "fn": "Client.Tax",
-                     "via": "fulfillment:internal/plan/planner.go:75",
-                     "kids": [
-                      {
-                       "kind": "field",
-                       "name": "pricingv1.Item.UnitCents",
-                       "type": "int64",
+                       "fn": "Planner.askTax",
+                       "via": "fulfillment:internal/plan/quote.go:53",
                        "kids": [
                         {
-                         "kind": "read",
-                         "loc": "pricing:api/pricing/v1/pricing.pb.go:72",
-                         "code": "return x.UnitCents",
-                         "before": "if x != nil {",
-                         "after": "}",
+                         "kind": "arg",
+                         "loc": "fulfillment:internal/pricing/client.go:24",
+                         "code": "func (c *Client) Tax(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
+                         "before": "// cents and returns only its tax.",
+                         "after": "resp, err := c.rpc.Quote(ctx, \u0026pricingv1.QuoteRequest{",
                          "type": "int64",
-                         "fn": "Item.GetUnitCents",
+                         "fn": "Client.Tax",
+                         "via": "fulfillment:internal/plan/quote.go:64",
                          "kids": [
                           {
-                           "kind": "return",
-                           "loc": "pricing:internal/server/server.go:54",
-                           "code": "lines = append(lines, quote.Line{SKU: it.GetSku(), UnitCents: it.GetUnitCents(), Qty: int64(it.GetQty())})",
-                           "before": "for _, it := range req.GetItems() {",
-                           "after": "}",
+                           "kind": "field",
+                           "name": "pricingv1.Item.UnitCents",
                            "type": "int64",
-                           "fn": "Server.Quote",
                            "kids": [
                             {
-                             "kind": "field",
-                             "name": "quote.Line.UnitCents",
+                             "kind": "read",
+                             "loc": "pricing:api/pricing/v1/pricing.pb.go:72",
+                             "code": "return x.UnitCents",
+                             "before": "if x != nil {",
+                             "after": "}",
                              "type": "int64",
+                             "fn": "Item.GetUnitCents",
                              "kids": [
                               {
-                               "kind": "read",
-                               "loc": "pricing:internal/quote/quote.go:74",
-                               "code": "} else if l.UnitCents \u003c 0 {",
-                               "before": "return 0, 0, fmt.Errorf(\"%w: sku %q qty %d\", ErrInvalidLine, l.SKU, l.Qty)",
-                               "after": "return 0, 0, fmt.Errorf(\"%w: sku %q negative price\", ErrInvalidLine, l.SKU)",
+                               "kind": "return",
+                               "loc": "pricing:internal/server/server.go:54",
+                               "code": "lines = append(lines, quote.Line{SKU: it.GetSku(), UnitCents: it.GetUnitCents(), Qty: int64(it.GetQty())})",
+                               "before": "for _, it := range req.GetItems() {",
+                               "after": "}",
                                "type": "int64",
-                               "fn": "subtotal"
-                              },
-                              {
-                               "kind": "read",
-                               "loc": "pricing:internal/quote/quote.go:77",
-                               "code": "cents += l.UnitCents * l.Qty",
-                               "before": "}",
-                               "after": "units += l.Qty",
-                               "type": "int64",
-                               "fn": "subtotal",
+                               "fn": "Server.Quote",
                                "kids": [
                                 {
-                                 "kind": "assign",
-                                 "loc": "pricing:internal/quote/quote.go:70",
-                                 "code": "func subtotal(lines []Line) (cents, units int64, err error) {",
-                                 "after": "for _, l := range lines {",
+                                 "kind": "field",
+                                 "name": "quote.Line.UnitCents",
                                  "type": "int64",
-                                 "fn": "subtotal",
                                  "kids": [
                                   {
-                                   "kind": "return",
-                                   "loc": "pricing:internal/quote/quote.go:52",
-                                   "code": "sub, units, err := subtotal(lines)",
-                                   "before": "}",
-                                   "after": "if err != nil {",
+                                   "kind": "read",
+                                   "loc": "pricing:internal/quote/quote.go:74",
+                                   "code": "} else if l.UnitCents \u003c 0 {",
+                                   "before": "return 0, 0, fmt.Errorf(\"%w: sku %q qty %d\", ErrInvalidLine, l.SKU, l.Qty)",
+                                   "after": "return 0, 0, fmt.Errorf(\"%w: sku %q negative price\", ErrInvalidLine, l.SKU)",
                                    "type": "int64",
-                                   "fn": "Calculate",
+                                   "fn": "subtotal"
+                                  },
+                                  {
+                                   "kind": "read",
+                                   "loc": "pricing:internal/quote/quote.go:77",
+                                   "code": "cents += l.UnitCents * l.Qty",
+                                   "before": "}",
+                                   "after": "units += l.Qty",
+                                   "type": "int64",
+                                   "fn": "subtotal",
                                    "kids": [
                                     {
-                                     "kind": "field",
-                                     "name": "quote.Quote.Subtotal",
+                                     "kind": "assign",
+                                     "loc": "pricing:internal/quote/quote.go:70",
+                                     "code": "func subtotal(lines []Line) (cents, units int64, err error) {",
+                                     "after": "for _, l := range lines {",
                                      "type": "int64",
+                                     "fn": "subtotal",
                                      "kids": [
                                       {
-                                       "kind": "read",
-                                       "loc": "pricing:internal/server/server.go:68",
-                                       "code": "SubtotalCents: q.Subtotal,",
-                                       "before": "return \u0026pricingv1.QuoteResponse{",
-                                       "after": "DiscountCents: q.Discount,",
+                                       "kind": "return",
+                                       "loc": "pricing:internal/quote/quote.go:52",
+                                       "code": "sub, units, err := subtotal(lines)",
+                                       "before": "}",
+                                       "after": "if err != nil {",
                                        "type": "int64",
-                                       "fn": "Server.Quote",
+                                       "fn": "Calculate",
                                        "kids": [
                                         {
                                          "kind": "field",
-                                         "name": "pricingv1.QuoteResponse.SubtotalCents",
+                                         "name": "quote.Quote.Subtotal",
                                          "type": "int64",
                                          "kids": [
                                           {
                                            "kind": "read",
-                                           "loc": "pricing:api/pricing/v1/pricing.pb.go:189",
-                                           "code": "return x.SubtotalCents",
-                                           "before": "if x != nil {",
-                                           "after": "}",
+                                           "loc": "pricing:internal/server/server.go:68",
+                                           "code": "SubtotalCents: q.Subtotal,",
+                                           "before": "return \u0026pricingv1.QuoteResponse{",
+                                           "after": "DiscountCents: q.Discount,",
                                            "type": "int64",
-                                           "fn": "QuoteResponse.GetSubtotalCents"
+                                           "fn": "Server.Quote",
+                                           "kids": [
+                                            {
+                                             "kind": "field",
+                                             "name": "pricingv1.QuoteResponse.SubtotalCents",
+                                             "type": "int64",
+                                             "kids": [
+                                              {
+                                               "kind": "read",
+                                               "loc": "pricing:api/pricing/v1/pricing.pb.go:189",
+                                               "code": "return x.SubtotalCents",
+                                               "before": "if x != nil {",
+                                               "after": "}",
+                                               "type": "int64",
+                                               "fn": "QuoteResponse.GetSubtotalCents"
+                                              }
+                                             ]
+                                            }
+                                           ]
                                           }
                                          ]
-                                        }
-                                       ]
-                                      }
-                                     ]
-                                    },
-                                    {
-                                     "kind": "arg",
-                                     "loc": "pricing:internal/discount/discount.go:62",
-                                     "code": "func Best(rules []Rule, subtotal, units int64) int64 {",
-                                     "before": "// Best returns the largest discount any rule grants. Rules do not stack.",
-                                     "after": "var best int64",
-                                     "type": "int64",
-                                     "fn": "Best",
-                                     "via": "pricing:internal/quote/quote.go:56",
-                                     "kids": [
-                                      {
-                                       "kind": "arg",
-                                       "loc": "pricing:internal/discount/discount.go:13",
-                                       "code": "func (r TierRule) Discount(subtotal, _ int64) int64 {",
-                                       "after": "if r.Percent \u003c= 0 {",
-                                       "type": "int64",
-                                       "fn": "TierRule.Discount",
-                                       "via": "pricing:internal/discount/discount.go:65",
-                                       "kids": [
+                                        },
                                         {
-                                         "kind": "transform",
-                                         "loc": "pricing:internal/discount/discount.go:17",
-                                         "code": "return subtotal * r.Percent / 100",
-                                         "before": "}",
-                                         "after": "}",
-                                         "type": "int64",
-                                         "fn": "TierRule.Discount"
-                                        }
-                                       ]
-                                      },
-                                      {
-                                       "kind": "arg",
-                                       "loc": "pricing:internal/discount/discount.go:23",
-                                       "code": "func (r VolumeRule) Discount(subtotal, units int64) int64 {",
-                                       "after": "if units \u003c r.MinUnits {",
-                                       "type": "int64",
-                                       "fn": "VolumeRule.Discount",
-                                       "via": "pricing:internal/discount/discount.go:65",
-                                       "kids": [
-                                        {
-                                         "kind": "return",
-                                         "loc": "pricing:internal/discount/discount.go:65",
-                                         "code": "if d := r.Discount(subtotal, units); d \u003e best {",
-                                         "before": "for _, r := range rules {",
-                                         "after": "best = d",
+                                         "kind": "arg",
+                                         "loc": "pricing:internal/discount/discount.go:62",
+                                         "code": "func Best(rules []Rule, subtotal, units int64) int64 {",
+                                         "before": "// Best returns the largest discount any rule grants. Rules do not stack.",
+                                         "after": "var best int64",
                                          "type": "int64",
                                          "fn": "Best",
+                                         "via": "pricing:internal/quote/quote.go:56",
                                          "kids": [
                                           {
-                                           "kind": "assign",
-                                           "loc": "pricing:internal/discount/discount.go:63",
-                                           "code": "var best int64",
-                                           "before": "func Best(rules []Rule, subtotal, units int64) int64 {",
-                                           "after": "for _, r := range rules {",
+                                           "kind": "arg",
+                                           "loc": "pricing:internal/discount/discount.go:13",
+                                           "code": "func (r TierRule) Discount(subtotal, _ int64) int64 {",
+                                           "after": "if r.Percent \u003c= 0 {",
                                            "type": "int64",
-                                           "fn": "Best",
+                                           "fn": "TierRule.Discount",
+                                           "via": "pricing:internal/discount/discount.go:65",
+                                           "kids": [
+                                            {
+                                             "kind": "transform",
+                                             "loc": "pricing:internal/discount/discount.go:17",
+                                             "code": "return subtotal * r.Percent / 100",
+                                             "before": "}",
+                                             "after": "}",
+                                             "type": "int64",
+                                             "fn": "TierRule.Discount"
+                                            }
+                                           ]
+                                          },
+                                          {
+                                           "kind": "arg",
+                                           "loc": "pricing:internal/discount/discount.go:23",
+                                           "code": "func (r VolumeRule) Discount(subtotal, units int64) int64 {",
+                                           "after": "if units \u003c r.MinUnits {",
+                                           "type": "int64",
+                                           "fn": "VolumeRule.Discount",
+                                           "via": "pricing:internal/discount/discount.go:65",
                                            "kids": [
                                             {
                                              "kind": "return",
-                                             "loc": "pricing:internal/quote/quote.go:56",
-                                             "code": "d := discount.Best(discount.Rules(c.Tier, c.PriorOrders), sub, units)",
-                                             "before": "}",
-                                             "after": "t, err := tax.Amount(c.Region, sub-d)",
+                                             "loc": "pricing:internal/discount/discount.go:65",
+                                             "code": "if d := r.Discount(subtotal, units); d \u003e best {",
+                                             "before": "for _, r := range rules {",
+                                             "after": "best = d",
                                              "type": "int64",
-                                             "fn": "Calculate",
+                                             "fn": "Best",
                                              "kids": [
                                               {
-                                               "kind": "field",
-                                               "name": "quote.Quote.Discount",
+                                               "kind": "assign",
+                                               "loc": "pricing:internal/discount/discount.go:63",
+                                               "code": "var best int64",
+                                               "before": "func Best(rules []Rule, subtotal, units int64) int64 {",
+                                               "after": "for _, r := range rules {",
                                                "type": "int64",
+                                               "fn": "Best",
                                                "kids": [
                                                 {
-                                                 "kind": "read",
-                                                 "loc": "pricing:internal/server/server.go:69",
-                                                 "code": "DiscountCents: q.Discount,",
-                                                 "before": "SubtotalCents: q.Subtotal,",
-                                                 "after": "TaxCents:      q.Tax,",
+                                                 "kind": "return",
+                                                 "loc": "pricing:internal/quote/quote.go:56",
+                                                 "code": "d := discount.Best(discount.Rules(c.Tier, c.PriorOrders), sub, units)",
+                                                 "before": "}",
+                                                 "after": "t, err := tax.Amount(c.Region, sub-d)",
                                                  "type": "int64",
-                                                 "fn": "Server.Quote",
+                                                 "fn": "Calculate",
                                                  "kids": [
                                                   {
                                                    "kind": "field",
-                                                   "name": "pricingv1.QuoteResponse.DiscountCents",
+                                                   "name": "quote.Quote.Discount",
                                                    "type": "int64",
                                                    "kids": [
                                                     {
                                                      "kind": "read",
-                                                     "loc": "pricing:api/pricing/v1/pricing.pb.go:196",
-                                                     "code": "return x.DiscountCents",
-                                                     "before": "if x != nil {",
-                                                     "after": "}",
+                                                     "loc": "pricing:internal/server/server.go:69",
+                                                     "code": "DiscountCents: q.Discount,",
+                                                     "before": "SubtotalCents: q.Subtotal,",
+                                                     "after": "TaxCents:      q.Tax,",
                                                      "type": "int64",
-                                                     "fn": "QuoteResponse.GetDiscountCents"
+                                                     "fn": "Server.Quote",
+                                                     "kids": [
+                                                      {
+                                                       "kind": "field",
+                                                       "name": "pricingv1.QuoteResponse.DiscountCents",
+                                                       "type": "int64",
+                                                       "kids": [
+                                                        {
+                                                         "kind": "read",
+                                                         "loc": "pricing:api/pricing/v1/pricing.pb.go:196",
+                                                         "code": "return x.DiscountCents",
+                                                         "before": "if x != nil {",
+                                                         "after": "}",
+                                                         "type": "int64",
+                                                         "fn": "QuoteResponse.GetDiscountCents"
+                                                        }
+                                                       ]
+                                                      }
+                                                     ]
                                                     }
                                                    ]
                                                   }
@@ -1201,141 +1257,172 @@
                                              ]
                                             }
                                            ]
-                                          }
-                                         ]
-                                        }
-                                       ]
-                                      },
-                                      {
-                                       "kind": "arg",
-                                       "loc": "pricing:internal/discount/discount.go:39",
-                                       "code": "func (r LoyaltyRule) Discount(subtotal, _ int64) int64 {",
-                                       "after": "if r.Orders \u003c r.MinOrders {",
-                                       "type": "int64",
-                                       "fn": "LoyaltyRule.Discount",
-                                       "via": "pricing:internal/discount/discount.go:65",
-                                       "kids": [
-                                        {
-                                         "kind": "transform",
-                                         "loc": "pricing:internal/discount/discount.go:43",
-                                         "code": "return subtotal * r.Percent / 100",
-                                         "before": "}",
-                                         "after": "}",
-                                         "type": "int64",
-                                         "fn": "LoyaltyRule.Discount"
-                                        }
-                                       ]
-                                      }
-                                     ]
-                                    },
-                                    {
-                                     "kind": "transform",
-                                     "loc": "pricing:internal/quote/quote.go:57",
-                                     "code": "t, err := tax.Amount(c.Region, sub-d)",
-                                     "before": "d := discount.Best(discount.Rules(c.Tier, c.PriorOrders), sub, units)",
-                                     "after": "if err != nil {",
-                                     "type": "int64",
-                                     "fn": "Calculate",
-                                     "kids": [
-                                      {
-                                       "kind": "field",
-                                       "name": "quote.Quote.Tax",
-                                       "type": "int64",
-                                       "kids": [
-                                        {
-                                         "kind": "read",
-                                         "loc": "pricing:internal/server/server.go:70",
-                                         "code": "TaxCents:      q.Tax,",
-                                         "before": "DiscountCents: q.Discount,",
-                                         "after": "ShippingCents: q.Shipping,",
-                                         "type": "int64",
-                                         "fn": "Server.Quote",
-                                         "kids": [
+                                          },
                                           {
-                                           "kind": "field",
-                                           "name": "pricingv1.QuoteResponse.TaxCents",
+                                           "kind": "arg",
+                                           "loc": "pricing:internal/discount/discount.go:39",
+                                           "code": "func (r LoyaltyRule) Discount(subtotal, _ int64) int64 {",
+                                           "after": "if r.Orders \u003c r.MinOrders {",
                                            "type": "int64",
+                                           "fn": "LoyaltyRule.Discount",
+                                           "via": "pricing:internal/discount/discount.go:65",
                                            "kids": [
                                             {
-                                             "kind": "read",
-                                             "loc": "fulfillment:internal/pricing/client.go:33",
-                                             "code": "return resp.GetTaxCents(), nil",
+                                             "kind": "transform",
+                                             "loc": "pricing:internal/discount/discount.go:43",
+                                             "code": "return subtotal * r.Percent / 100",
                                              "before": "}",
                                              "after": "}",
                                              "type": "int64",
-                                             "fn": "Client.Tax",
-                                             "kids": [
-                                              {
-                                               "kind": "return",
-                                               "loc": "fulfillment:internal/plan/planner.go:75",
-                                               "code": "tax, err := p.taxes.Tax(ctx, o.CustomerID, region, ins)",
-                                               "before": "if ins \u003e 0 {",
-                                               "after": "if err != nil {",
-                                               "type": "int64",
-                                               "fn": "Planner.Plan"
-                                              }
-                                             ]
-                                            },
-                                            {
-                                             "kind": "read",
-                                             "loc": "pricing:api/pricing/v1/pricing.pb.go:203",
-                                             "code": "return x.TaxCents",
-                                             "before": "if x != nil {",
-                                             "after": "}",
-                                             "type": "int64",
-                                             "fn": "QuoteResponse.GetTaxCents"
+                                             "fn": "LoyaltyRule.Discount"
                                             }
                                            ]
                                           }
                                          ]
-                                        }
-                                       ]
-                                      },
-                                      {
-                                       "kind": "arg",
-                                       "loc": "pricing:internal/tax/tax.go:16",
-                                       "code": "func Amount(region string, cents int64) (int64, error) {",
-                                       "before": "// Amount returns the tax on cents in region. An empty region is untaxed.",
-                                       "after": "bp, err := rate(region)",
-                                       "type": "int64",
-                                       "fn": "Amount",
-                                       "via": "pricing:internal/quote/quote.go:57",
-                                       "kids": [
+                                        },
                                         {
                                          "kind": "transform",
-                                         "loc": "pricing:internal/tax/tax.go:24",
-                                         "code": "return cents * bp / 10000, nil",
-                                         "before": "}",
-                                         "after": "}",
+                                         "loc": "pricing:internal/quote/quote.go:57",
+                                         "code": "t, err := tax.Amount(c.Region, sub-d)",
+                                         "before": "d := discount.Best(discount.Rules(c.Tier, c.PriorOrders), sub, units)",
+                                         "after": "if err != nil {",
                                          "type": "int64",
-                                         "fn": "Amount"
-                                        }
-                                       ]
-                                      }
-                                     ]
-                                    },
-                                    {
-                                     "kind": "transform",
-                                     "loc": "pricing:internal/quote/quote.go:66",
-                                     "code": "Total:    sub - d + t + shippingCents,",
-                                     "before": "Shipping: shippingCents,",
-                                     "after": "}, nil",
-                                     "type": "int64",
-                                     "fn": "Calculate",
-                                     "kids": [
-                                      {
-                                       "kind": "field",
-                                       "name": "quote.Quote.Total",
-                                       "type": "int64",
-                                       "kids": [
+                                         "fn": "Calculate",
+                                         "kids": [
+                                          {
+                                           "kind": "field",
+                                           "name": "quote.Quote.Tax",
+                                           "type": "int64",
+                                           "kids": [
+                                            {
+                                             "kind": "read",
+                                             "loc": "pricing:internal/server/server.go:70",
+                                             "code": "TaxCents:      q.Tax,",
+                                             "before": "DiscountCents: q.Discount,",
+                                             "after": "ShippingCents: q.Shipping,",
+                                             "type": "int64",
+                                             "fn": "Server.Quote",
+                                             "kids": [
+                                              {
+                                               "kind": "field",
+                                               "name": "pricingv1.QuoteResponse.TaxCents",
+                                               "type": "int64",
+                                               "kids": [
+                                                {
+                                                 "kind": "read",
+                                                 "loc": "fulfillment:internal/pricing/client.go:33",
+                                                 "code": "return resp.GetTaxCents(), nil",
+                                                 "before": "}",
+                                                 "after": "}",
+                                                 "type": "int64",
+                                                 "fn": "Client.Tax",
+                                                 "kids": [
+                                                  {
+                                                   "kind": "return",
+                                                   "loc": "fulfillment:internal/plan/quote.go:64",
+                                                   "code": "return p.taxes.Tax(ctx, customerID, region, cents)",
+                                                   "before": "defer cancel()",
+                                                   "after": "}",
+                                                   "type": "int64",
+                                                   "fn": "Planner.askTax",
+                                                   "kids": [
+                                                    {
+                                                     "kind": "return",
+                                                     "loc": "fulfillment:internal/plan/quote.go:53",
+                                                     "code": "tax, err := p.askTax(ctx, customerID, region, cents)",
+                                                     "before": "func (p *Planner) taxOn(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
+                                                     "after": "if err != nil \u0026\u0026 ctx.Err() == nil {",
+                                                     "type": "int64",
+                                                     "fn": "Planner.taxOn",
+                                                     "kids": [
+                                                      {
+                                                       "kind": "return",
+                                                       "loc": "fulfillment:internal/plan/quote.go:43",
+                                                       "code": "tax, err := p.taxOn(ctx, o.CustomerID, region, ins)",
+                                                       "before": "}",
+                                                       "after": "if err != nil {",
+                                                       "type": "int64",
+                                                       "fn": "Planner.insure"
+                                                      }
+                                                     ]
+                                                    },
+                                                    {
+                                                     "kind": "return",
+                                                     "loc": "fulfillment:internal/plan/quote.go:55",
+                                                     "code": "tax, err = p.askTax(ctx, customerID, region, cents)",
+                                                     "before": "if err != nil \u0026\u0026 ctx.Err() == nil {",
+                                                     "after": "}",
+                                                     "type": "int64",
+                                                     "fn": "Planner.taxOn"
+                                                    }
+                                                   ]
+                                                  }
+                                                 ]
+                                                },
+                                                {
+                                                 "kind": "read",
+                                                 "loc": "pricing:api/pricing/v1/pricing.pb.go:203",
+                                                 "code": "return x.TaxCents",
+                                                 "before": "if x != nil {",
+                                                 "after": "}",
+                                                 "type": "int64",
+                                                 "fn": "QuoteResponse.GetTaxCents"
+                                                }
+                                               ]
+                                              }
+                                             ]
+                                            }
+                                           ]
+                                          },
+                                          {
+                                           "kind": "arg",
+                                           "loc": "pricing:internal/tax/tax.go:16",
+                                           "code": "func Amount(region string, cents int64) (int64, error) {",
+                                           "before": "// Amount returns the tax on cents in region. An empty region is untaxed.",
+                                           "after": "bp, err := rate(region)",
+                                           "type": "int64",
+                                           "fn": "Amount",
+                                           "via": "pricing:internal/quote/quote.go:57",
+                                           "kids": [
+                                            {
+                                             "kind": "transform",
+                                             "loc": "pricing:internal/tax/tax.go:24",
+                                             "code": "return cents * bp / 10000, nil",
+                                             "before": "}",
+                                             "after": "}",
+                                             "type": "int64",
+                                             "fn": "Amount"
+                                            }
+                                           ]
+                                          }
+                                         ]
+                                        },
                                         {
-                                         "kind": "read",
-                                         "loc": "pricing:internal/server/server.go:72",
-                                         "code": "TotalCents:    q.Total,",
-                                         "before": "ShippingCents: q.Shipping,",
+                                         "kind": "transform",
+                                         "loc": "pricing:internal/quote/quote.go:66",
+                                         "code": "Total:    sub - d + t + shippingCents,",
+                                         "before": "Shipping: shippingCents,",
                                          "after": "}, nil",
                                          "type": "int64",
-                                         "fn": "Server.Quote"
+                                         "fn": "Calculate",
+                                         "kids": [
+                                          {
+                                           "kind": "field",
+                                           "name": "quote.Quote.Total",
+                                           "type": "int64",
+                                           "kids": [
+                                            {
+                                             "kind": "read",
+                                             "loc": "pricing:internal/server/server.go:72",
+                                             "code": "TotalCents:    q.Total,",
+                                             "before": "ShippingCents: q.Shipping,",
+                                             "after": "}, nil",
+                                             "type": "int64",
+                                             "fn": "Server.Quote"
+                                            }
+                                           ]
+                                          }
+                                         ]
                                         }
                                        ]
                                       }
@@ -1354,6 +1441,27 @@
                          ]
                         }
                        ]
+                      }
+                     ]
+                    },
+                    {
+                     "kind": "arg",
+                     "loc": "fulfillment:internal/plan/rules.go:47",
+                     "code": "func Premium(totalCents int64) int64 {",
+                     "before": "// 200.00, nothing below.",
+                     "after": "if totalCents \u003c insuredCents {",
+                     "type": "int64",
+                     "fn": "Premium",
+                     "via": "fulfillment:internal/plan/quote.go:39",
+                     "kids": [
+                      {
+                       "kind": "transform",
+                       "loc": "fulfillment:internal/plan/rules.go:51",
+                       "code": "return totalCents / 100",
+                       "before": "}",
+                       "after": "}",
+                       "type": "int64",
+                       "fn": "Premium"
                       }
                      ]
                     }

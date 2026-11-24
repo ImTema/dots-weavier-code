@@ -93,19 +93,27 @@ edge golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedul
 edge golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce$1 -call -> golang/fulfillment:internal/server/server.go:New
 edge golang/fulfillment:internal/plan/plan_test.go:TestPlan -call -> golang/fulfillment:internal/plan/planner.go:NewPlanner
 edge golang/fulfillment:internal/plan/plan_test.go:TestPlan -call -> golang/fulfillment:internal/plan/planner.go:Planner.Plan
+edge golang/fulfillment:internal/plan/plan_test.go:TestPlanRetriesTaxOnce -call -> golang/fulfillment:internal/plan/planner.go:NewPlanner
+edge golang/fulfillment:internal/plan/plan_test.go:TestPlanRetriesTaxOnce -call -> golang/fulfillment:internal/plan/planner.go:Planner.Plan
 edge golang/fulfillment:internal/plan/plan_test.go:TestRules -call -> golang/fulfillment:internal/plan/rules.go:Carrier
 edge golang/fulfillment:internal/plan/plan_test.go:TestRules -call -> golang/fulfillment:internal/plan/rules.go:Premium
 edge golang/fulfillment:internal/plan/plan_test.go:TestRules -call -> golang/fulfillment:internal/plan/rules.go:Warehouse
 edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -call -> golang/fulfillment:internal/plan/planner.go:Planner.find
+edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -call -> golang/fulfillment:internal/plan/quote.go:Planner.quote
 edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -call -> golang/fulfillment:internal/plan/rules.go:Carrier
-edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -call -> golang/fulfillment:internal/plan/rules.go:Premium
-edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -call -> golang/fulfillment:internal/plan/rules.go:Warehouse
-edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -iface:sure -> golang/fulfillment:internal/events/subscriber_test.go:countingRates.Rate
-edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -iface:sure -> golang/fulfillment:internal/events/subscriber_test.go:noTax.Tax
-edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -iface:sure -> golang/fulfillment:internal/plan/plan_test.go:fakeRates.Rate
-edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -iface:sure -> golang/fulfillment:internal/plan/plan_test.go:fakeTaxes.Tax
-edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -iface:sure -> golang/fulfillment:internal/pricing/client.go:Client.Tax
-edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -iface:sure -> golang/fulfillment:internal/shipping/client.go:Client.Rate
+edge golang/fulfillment:internal/plan/quote.go:Planner.askTax -iface:sure -> golang/fulfillment:internal/events/subscriber_test.go:noTax.Tax
+edge golang/fulfillment:internal/plan/quote.go:Planner.askTax -iface:sure -> golang/fulfillment:internal/plan/plan_test.go:fakeTaxes.Tax
+edge golang/fulfillment:internal/plan/quote.go:Planner.askTax -iface:sure -> golang/fulfillment:internal/plan/plan_test.go:flakyTaxes.Tax
+edge golang/fulfillment:internal/plan/quote.go:Planner.askTax -iface:sure -> golang/fulfillment:internal/pricing/client.go:Client.Tax
+edge golang/fulfillment:internal/plan/quote.go:Planner.insure -call -> golang/fulfillment:internal/plan/quote.go:Planner.taxOn
+edge golang/fulfillment:internal/plan/quote.go:Planner.insure -call -> golang/fulfillment:internal/plan/rules.go:Premium
+edge golang/fulfillment:internal/plan/quote.go:Planner.quote -call -> golang/fulfillment:internal/plan/quote.go:Planner.insure
+edge golang/fulfillment:internal/plan/quote.go:Planner.quote -call -> golang/fulfillment:internal/plan/rules.go:Warehouse
+edge golang/fulfillment:internal/plan/quote.go:Planner.quote -iface:sure -> golang/fulfillment:internal/events/subscriber_test.go:countingRates.Rate
+edge golang/fulfillment:internal/plan/quote.go:Planner.quote -iface:sure -> golang/fulfillment:internal/plan/plan_test.go:fakeRates.Rate
+edge golang/fulfillment:internal/plan/quote.go:Planner.quote -iface:sure -> golang/fulfillment:internal/shipping/client.go:Client.Rate
+edge golang/fulfillment:internal/plan/quote.go:Planner.taxOn -call -> golang/fulfillment:internal/plan/quote.go:Planner.askTax
+edge golang/fulfillment:internal/plan/quote.go:Planner.taxOn -iface:guess -> external: context.Context.Err
 edge golang/fulfillment:internal/pricing/client_test.go:TestTax -call -> golang/fulfillment:internal/pricing/client.go:Client.Tax
 edge golang/fulfillment:internal/pricing/client_test.go:TestTax -call -> golang/fulfillment:internal/pricing/client.go:New
 edge golang/fulfillment:internal/pricing/client_test.go:TestTax -iface:guess -> external: net.Addr.String
@@ -156,8 +164,8 @@ node external: io.ReadCloser.Close 0-0 test=false
 node external: net.Addr.String 0-0 test=false
 node external: net.Listener.Addr 0-0 test=false
 node external: reflect.Type.PkgPath 0-0 test=false
-node golang/fulfillment:../../../../../Library/Caches/go-build/27/27e1cad72d187946a02b85af70dce464a76c07bb43d85c95f4c2d20cfcefb6c8-d:init#1 39-43 test=true
-node golang/fulfillment:../../../../../Library/Caches/go-build/27/27e1cad72d187946a02b85af70dce464a76c07bb43d85c95f4c2d20cfcefb6c8-d:main 45-50 test=true
+node golang/fulfillment:../../../../../Library/Caches/go-build/9e/9eefda4323c1214cd537dac7ccb2539dad3d91a9e4a63cd6661dfbc23c566972-d:init#1 41-45 test=true
+node golang/fulfillment:../../../../../Library/Caches/go-build/9e/9eefda4323c1214cd537dac7ccb2539dad3d91a9e4a63cd6661dfbc23c566972-d:main 47-52 test=true
 node golang/fulfillment:../../../../../Library/Caches/go-build/b0/b051e388ed65a1403b7301d8207d12554039fa3da7cfddf153eed9cc55b0618c-d:init#1 39-43 test=true
 node golang/fulfillment:../../../../../Library/Caches/go-build/b0/b051e388ed65a1403b7301d8207d12554039fa3da7cfddf153eed9cc55b0618c-d:main 45-50 test=true
 node golang/fulfillment:../../../../../Library/Caches/go-build/ba/bad6896769dd909f611bead4fad1f29ec4a0d73a79feb88a5a481dc27a20552f-d:init#1 39-43 test=true
@@ -211,12 +219,18 @@ node golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedul
 node golang/fulfillment:internal/events/subscriber_test.go:countingRates.Rate 25-28 test=true
 node golang/fulfillment:internal/events/subscriber_test.go:noTax.Tax 32-32 test=true
 node golang/fulfillment:internal/plan/plan_test.go:TestPlan 51-83 test=true
+node golang/fulfillment:internal/plan/plan_test.go:TestPlanRetriesTaxOnce 97-103 test=true
 node golang/fulfillment:internal/plan/plan_test.go:TestRules 9-33 test=true
 node golang/fulfillment:internal/plan/plan_test.go:fakeRates.Rate 40-43 test=true
 node golang/fulfillment:internal/plan/plan_test.go:fakeTaxes.Tax 47-49 test=true
+node golang/fulfillment:internal/plan/plan_test.go:flakyTaxes.Tax 90-95 test=true
 node golang/fulfillment:internal/plan/planner.go:NewPlanner 50-52 test=false
-node golang/fulfillment:internal/plan/planner.go:Planner.Plan 55-97 test=false
-node golang/fulfillment:internal/plan/planner.go:Planner.find 99-104 test=false
+node golang/fulfillment:internal/plan/planner.go:Planner.Plan 55-85 test=false
+node golang/fulfillment:internal/plan/planner.go:Planner.find 87-92 test=false
+node golang/fulfillment:internal/plan/quote.go:Planner.askTax 61-65 test=false
+node golang/fulfillment:internal/plan/quote.go:Planner.insure 38-48 test=false
+node golang/fulfillment:internal/plan/quote.go:Planner.quote 20-34 test=false
+node golang/fulfillment:internal/plan/quote.go:Planner.taxOn 52-58 test=false
 node golang/fulfillment:internal/plan/rules.go:Carrier 34-43 test=false
 node golang/fulfillment:internal/plan/rules.go:Premium 47-52 test=false
 node golang/fulfillment:internal/plan/rules.go:Warehouse 20-25 test=false

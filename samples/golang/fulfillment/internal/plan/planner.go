@@ -62,21 +62,9 @@ func (p *Planner) Plan(ctx context.Context, o Order) (Shipment, bool, error) {
 		return s, true, nil
 	}
 
-	region, ship, err := p.rates.Rate(ctx, o.CustomerID, o.Units)
-	if err != nil {
-		return Shipment{}, false, fmt.Errorf("shipping rate: %w", err)
-	}
-	wh, err := Warehouse(region)
+	c, err := p.quote(ctx, o)
 	if err != nil {
 		return Shipment{}, false, err
-	}
-	ins := Premium(o.TotalCents)
-	if ins > 0 {
-		tax, err := p.taxes.Tax(ctx, o.CustomerID, region, ins)
-		if err != nil {
-			return Shipment{}, false, fmt.Errorf("insurance tax: %w", err)
-		}
-		ins += tax
 	}
 
 	p.mu.Lock()
@@ -87,10 +75,10 @@ func (p *Planner) Plan(ctx context.Context, o Order) (Shipment, bool, error) {
 	s := Shipment{
 		ID:             fmt.Sprintf("s-%d", len(p.byOrder)+1),
 		OrderID:        o.ID,
-		Warehouse:      wh,
-		Carrier:        Carrier(o.Units, ship),
-		ShippingCents:  ship,
-		InsuranceCents: ins,
+		Warehouse:      c.warehouse,
+		Carrier:        Carrier(o.Units, c.shipping),
+		ShippingCents:  c.shipping,
+		InsuranceCents: c.insurance,
 	}
 	p.byOrder[o.ID] = s
 	return s, false, nil

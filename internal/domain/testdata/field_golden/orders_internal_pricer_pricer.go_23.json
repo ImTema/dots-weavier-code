@@ -302,11 +302,12 @@
                     },
                     {
                      "kind": "read",
-                     "loc": "fulfillment:internal/plan/planner.go:65",
+                     "loc": "fulfillment:internal/plan/quote.go:21",
                      "code": "region, ship, err := p.rates.Rate(ctx, o.CustomerID, o.Units)",
+                     "before": "func (p *Planner) quote(ctx context.Context, o Order) (costs, error) {",
                      "after": "if err != nil {",
                      "type": "string",
-                     "fn": "Planner.Plan",
+                     "fn": "Planner.quote",
                      "kids": [
                       {
                        "kind": "arg",
@@ -316,7 +317,7 @@
                        "after": "u, err := url.Parse(c.base)",
                        "type": "string",
                        "fn": "Client.Rate",
-                       "via": "fulfillment:internal/plan/planner.go:65",
+                       "via": "fulfillment:internal/plan/quote.go:21",
                        "kids": [
                         {
                          "kind": "container",
@@ -393,22 +394,46 @@
                     },
                     {
                      "kind": "read",
-                     "loc": "fulfillment:internal/plan/planner.go:75",
-                     "code": "tax, err := p.taxes.Tax(ctx, o.CustomerID, region, ins)",
-                     "before": "if ins \u003e 0 {",
+                     "loc": "fulfillment:internal/plan/quote.go:43",
+                     "code": "tax, err := p.taxOn(ctx, o.CustomerID, region, ins)",
+                     "before": "}",
                      "after": "if err != nil {",
                      "type": "string",
-                     "fn": "Planner.Plan",
+                     "fn": "Planner.insure",
                      "kids": [
                       {
                        "kind": "arg",
-                       "loc": "fulfillment:internal/pricing/client.go:24",
-                       "code": "func (c *Client) Tax(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
-                       "before": "// cents and returns only its tax.",
-                       "after": "resp, err := c.rpc.Quote(ctx, \u0026pricingv1.QuoteRequest{",
+                       "loc": "fulfillment:internal/plan/quote.go:52",
+                       "code": "func (p *Planner) taxOn(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
+                       "before": "// a pricing restart drops the odd call. A cancelled ctx is not retried.",
+                       "after": "tax, err := p.askTax(ctx, customerID, region, cents)",
                        "type": "string",
-                       "fn": "Client.Tax",
-                       "via": "fulfillment:internal/plan/planner.go:75"
+                       "fn": "Planner.taxOn",
+                       "via": "fulfillment:internal/plan/quote.go:43",
+                       "kids": [
+                        {
+                         "kind": "arg",
+                         "loc": "fulfillment:internal/plan/quote.go:61",
+                         "code": "func (p *Planner) askTax(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
+                         "before": "// askTax is one call to pricing, bounded by taxTimeout.",
+                         "after": "ctx, cancel := context.WithTimeout(ctx, taxTimeout)",
+                         "type": "string",
+                         "fn": "Planner.askTax",
+                         "via": "fulfillment:internal/plan/quote.go:53",
+                         "kids": [
+                          {
+                           "kind": "arg",
+                           "loc": "fulfillment:internal/pricing/client.go:24",
+                           "code": "func (c *Client) Tax(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
+                           "before": "// cents and returns only its tax.",
+                           "after": "resp, err := c.rpc.Quote(ctx, \u0026pricingv1.QuoteRequest{",
+                           "type": "string",
+                           "fn": "Client.Tax",
+                           "via": "fulfillment:internal/plan/quote.go:64"
+                          }
+                         ]
+                        }
+                       ]
                       }
                      ]
                     }

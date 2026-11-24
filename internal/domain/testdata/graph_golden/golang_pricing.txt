@@ -132,6 +132,8 @@ impl lib (*example.com/samples/pricing/api/pricing/v1.QuoteResponse).String <- g
 impl lib (example.com/samples/pricing/api/pricing/v1.UnimplementedPricingServiceServer).Quote <- golang/pricing:api/pricing/v1/pricing_grpc.pb.go:UnimplementedPricingServiceServer.Quote
 impl lib example.com/samples/pricing/api/pricing/v1.NewPricingServiceClient <- golang/pricing:api/pricing/v1/pricing_grpc.pb.go:NewPricingServiceClient
 impl lib example.com/samples/pricing/api/pricing/v1.RegisterPricingServiceServer <- golang/pricing:api/pricing/v1/pricing_grpc.pb.go:RegisterPricingServiceServer
+impl topic order-placed <- golang/pricing:internal/events/subscriber.go:Subscriber.Run$1
+impl type example.com/samples/orders/api/events/v1.OrderPlaced <- golang/pricing:internal/events/subscriber.go:Subscriber.Handle
 node external: context.Context.Done 0-0 test=false
 node external: context.Context.Err 0-0 test=false
 node external: error.Error 0-0 test=false

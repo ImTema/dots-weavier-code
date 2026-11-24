@@ -24,6 +24,8 @@ golang/pricing:internal/events/subscriber.go:Subscriber.Run -iface:guess-> golan
 
 == golang/orders::Service.Place -> golang/pricing::Subscriber.Handle tests=false
 A=golang/orders:internal/order/order.go:Service.Place:73 B=golang/pricing:internal/events/subscriber.go:Subscriber.Handle:65 exhausted=true
+golang/orders:internal/order/order.go:Service.Place -iface:sure-> golang/orders:internal/events/publisher.go:Publisher.OrderPlaced -pubsub topic order-placed-> golang/pricing:internal/events/subscriber.go:Subscriber.Run$1 -call-> golang/pricing:internal/events/subscriber.go:Subscriber.Handle  (1/1 sure)
+golang/orders:internal/order/order.go:Service.Place -iface:sure-> golang/orders:internal/events/publisher.go:Publisher.OrderPlaced -pubsub:guess type example.com/samples/orders/api/events/v1.OrderPlaced-> golang/pricing:internal/events/subscriber.go:Subscriber.Handle  (1/1 sure)
 
 == golang/orders::Service.Place -> java/inventory::StockLedger.reserve tests=false
 A=golang/orders:internal/order/order.go:Service.Place:73 B=java/inventory:src/main/java/com/example/inventory/stock/StockLedger.java:StockLedger.reserve:21 exhausted=true

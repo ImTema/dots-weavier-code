@@ -1,4 +1,6 @@
 edge golang/orders:cmd/orders/main.go:run -lib example.com/samples/pricing/api/pricing/v1.NewPricingServiceClient-> golang/pricing:api/pricing/v1/pricing_grpc.pb.go:NewPricingServiceClient
+edge golang/orders:internal/events/publisher.go:Publisher.OrderPlaced -pubsub topic order-placed-> golang/pricing:internal/events/subscriber.go:Subscriber.Run$1
+edge golang/orders:internal/events/publisher.go:Publisher.OrderPlaced -pubsub:guess type example.com/samples/orders/api/events/v1.OrderPlaced-> golang/pricing:internal/events/subscriber.go:Subscriber.Handle
 edge golang/orders:internal/inventory/client.go:Client.Release -grpc /inventory.v1.InventoryService/Release-> java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.release
 edge golang/orders:internal/inventory/client.go:Client.Reserve -grpc /inventory.v1.InventoryService/Reserve-> java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.reserve
 edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Release -grpc /inventory.v1.InventoryService/Release-> java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.release

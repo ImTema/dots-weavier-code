@@ -3,14 +3,15 @@ package domain
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // isolate gives the test its own HOME (so its own ~/.dotweavier) while keeping
@@ -18,9 +19,7 @@ import (
 func isolate(t *testing.T) {
 	t.Helper()
 	out, err := exec.Command("go", "env", "GOPATH", "GOMODCACHE", "GOCACHE").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	for i, v := range strings.Fields(string(out)) {
 		t.Setenv([]string{"GOPATH", "GOMODCACHE", "GOCACHE"}[i], v)
 	}
@@ -31,16 +30,12 @@ func isolate(t *testing.T) {
 func goProject(t *testing.T, dir, name string) string {
 	t.Helper()
 	p := filepath.Join(dir, name)
-	if err := os.MkdirAll(p, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.MkdirAll(p, 0o755))
 	for f, body := range map[string]string{
 		"go.mod":     "module " + name + "\n\ngo 1.22\n",
 		name + ".go": "package " + name + "\n\nfunc A() {}\n",
 	} {
-		if err := os.WriteFile(filepath.Join(p, f), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.WriteFile(filepath.Join(p, f), []byte(body), 0o644))
 	}
 	return p
 }
@@ -49,9 +44,7 @@ func goProject(t *testing.T, dir, name string) string {
 func stderrOf(t *testing.T, f func()) string {
 	t.Helper()
 	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	old := os.Stderr
 	os.Stderr = w
 	done := make(chan string)
@@ -62,65 +55,56 @@ func stderrOf(t *testing.T, f func()) string {
 	return <-done
 }
 
+// hasPrefix reports whether one of ss starts with prefix.
+func hasPrefix(ss []string, prefix string) bool {
+	for _, s := range ss {
+		if strings.HasPrefix(s, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestCancelledFieldTraceStops(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	_, err := TraceField(ctx, FieldQuery{Dir: "testdata"}, "fieldcases:main.go:26")
-	if !errors.Is(err, context.Canceled) {
-		t.Errorf("err = %v, want context.Canceled", err)
-	}
+	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestCancelledIndexWritesNoIndex(t *testing.T) {
 	isolate(t)
 	dir := goProject(t, t.TempDir(), "a")
-	if _, err := InitWorkspace(filepath.Dir(dir), ""); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
+	_, err := InitWorkspace(filepath.Dir(dir), "")
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := Index(ctx, IndexOptions{}); !errors.Is(err, context.Canceled) {
-		t.Errorf("err = %v, want context.Canceled", err)
-	}
-	if _, ok := indexBuilt(dir); ok {
-		t.Error("a cancelled index wrote an index")
-	}
+	assert.ErrorIs(t, Index(ctx, IndexOptions{}), context.Canceled)
+	_, ok := indexBuilt(dir)
+	assert.False(t, ok, "a cancelled index wrote an index")
 }
 
 // A field trace reports what it skipped in its result and prints nothing.
 func TestFieldTraceReturnsWarnings(t *testing.T) {
 	isolate(t) // no index: the seed has no call paths
 	var r *FieldTrace
+	var err error
 	out := stderrOf(t, func() {
-		var err error
-		if r, err = TraceField(context.Background(), FieldQuery{Dir: "testdata"}, "fieldcases:main.go:26"); err != nil {
-			t.Fatal(err)
-		}
+		r, err = TraceField(t.Context(), FieldQuery{Dir: "testdata"}, "fieldcases:main.go:26")
 	})
-	if out != "" {
-		t.Errorf("domain wrote to stderr: %q", out)
-	}
-	if !slices.ContainsFunc(r.Warnings, func(w string) bool {
-		return strings.HasPrefix(w, "call paths skipped: seed is not in the index (run: dotweavier index ")
-	}) {
-		t.Errorf("warnings %q, want call paths skipped", r.Warnings)
-	}
-	if !slices.ContainsFunc(r.Warnings, func(w string) bool { return strings.HasPrefix(w, "loaded fieldcases: pkgs=") }) {
-		t.Errorf("warnings %q, want the project's load stats", r.Warnings)
-	}
+	require.NoError(t, err)
+	assert.Empty(t, out, "domain wrote to stderr")
+	assert.True(t, hasPrefix(r.Warnings, "call paths skipped: seed is not in the index (run: dotweavier index "), "warnings %q", r.Warnings)
+	assert.True(t, hasPrefix(r.Warnings, "loaded fieldcases: pkgs="), "warnings %q", r.Warnings)
 }
 
 // A field reached in a shared package would load the projects importing it; past
 // MaxProjects they are named in a warning instead.
 func TestFieldTraceWarnsAboutProjectsNotLoaded(t *testing.T) {
 	isolate(t)
-	r, err := TraceField(context.Background(), FieldQuery{Dir: "../../samples/golang", MaxProjects: 1}, "orders:internal/pricer/pricer.go:23")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.ContainsFunc(r.Warnings, func(w string) bool { return strings.HasPrefix(w, "not loaded (--max-projects 1): ") }) {
-		t.Errorf("warnings %q, want a project not loaded", r.Warnings)
-	}
+	r, err := TraceField(t.Context(), FieldQuery{Dir: "../../samples/golang", MaxProjects: 1}, "orders:internal/pricer/pricer.go:23")
+	require.NoError(t, err)
+	assert.True(t, hasPrefix(r.Warnings, "not loaded (--max-projects 1): "), "warnings %q", r.Warnings)
 }
 
 // An index that cannot be read is skipped with a warning; the trace runs over the rest.
@@ -129,30 +113,20 @@ func TestPathTraceWarnsAboutUnreadableIndex(t *testing.T) {
 	ws := t.TempDir()
 	goProject(t, ws, "a")
 	b := goProject(t, ws, "b")
-	if _, err := InitWorkspace(ws, ""); err != nil {
-		t.Fatal(err)
-	}
-	if err := Index(context.Background(), IndexOptions{}); err != nil {
-		t.Fatal(err)
-	}
+	_, err := InitWorkspace(ws, "")
+	require.NoError(t, err)
+	require.NoError(t, Index(t.Context(), IndexOptions{}))
 	db, err := sql.Open("sqlite", mustStorePath(t, b))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`DROP TABLE nodes`); err != nil { // meta still names b's folder
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	_, err = db.Exec(`DROP TABLE nodes`) // meta still names b's folder
+	require.NoError(t, err)
 	db.Close()
 	r, err := TracePath(PathQuery{A: "a::A", B: "a::A", MaxPaths: 1})
-	if err != nil {
-		t.Fatal(err)
+	require.NoError(t, err)
+	if assert.Len(t, r.Warnings, 1) {
+		assert.True(t, strings.HasPrefix(r.Warnings[0], "skip index "+mustStorePath(t, b)+": "), "warnings %q, want b's index skipped", r.Warnings)
 	}
-	if len(r.Warnings) != 1 || !strings.HasPrefix(r.Warnings[0], "skip index "+mustStorePath(t, b)+": ") {
-		t.Errorf("warnings %q, want b's index skipped", r.Warnings)
-	}
-	if r.Indexes != 1 {
-		t.Errorf("trace ran over %d indexes, want a's only", r.Indexes)
-	}
+	assert.Equal(t, 1, r.Indexes, "want a's index only")
 }
 
 // Without a home folder dotweavier has nowhere to keep state: it fails instead of
@@ -162,10 +136,6 @@ func TestNoHomeFolderIsAnError(t *testing.T) {
 	t.Setenv("HOME", "")
 	dir := goProject(t, t.TempDir(), "a")
 	t.Chdir(t.TempDir())
-	if err := IndexProject(context.Background(), dir, "", nil); err == nil {
-		t.Error("indexing without a home folder: want an error")
-	}
-	if _, err := os.Stat(".dotweavier"); err == nil {
-		t.Error("wrote .dotweavier into the current folder")
-	}
+	assert.Error(t, IndexProject(t.Context(), dir, "", nil), "indexing without a home folder")
+	assert.NoDirExists(t, ".dotweavier", "wrote .dotweavier into the current folder")
 }

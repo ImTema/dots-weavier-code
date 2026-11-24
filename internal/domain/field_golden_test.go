@@ -1,14 +1,15 @@
 package domain
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
 	"flag"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files under testdata/")
@@ -53,33 +54,22 @@ func TestTraceFieldGolden(t *testing.T) {
 	} {
 		name := strings.NewReplacer("/", "_", ":", "_").Replace(c.addr)
 		t.Run(name, func(t *testing.T) {
-			r, err := TraceField(context.Background(), FieldQuery{Dir: c.ws}, c.addr)
-			if err != nil {
-				t.Fatal(err)
-			}
+			r, err := TraceField(t.Context(), FieldQuery{Dir: c.ws}, c.addr)
+			require.NoError(t, err)
 			strip(r.Origin)
 			strip(r.Uses)
 			r.Warnings = nil // timings and absolute paths; pinned by the warning tests instead
 			got, err := json.MarshalIndent(r, "", " ")
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			file := filepath.Join("testdata", "field_golden", name+".json")
 			if *update {
-				if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.WriteFile(file, got, 0o644); err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o755))
+				require.NoError(t, os.WriteFile(file, got, 0o644))
 				return
 			}
 			want, err := os.ReadFile(file)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !bytes.Equal(got, want) {
-				t.Errorf("%s changed; diff it against %s (go test -run TestTraceFieldGolden -update rewrites it)", c.addr, file)
+			require.NoError(t, err)
+			if !assert.Equal(t, string(want), string(got), "%s changed; diff it against %s.got (go test -run TestTraceFieldGolden -update rewrites it)", c.addr, file) {
 				_ = os.WriteFile(file+".got", got, 0o644)
 			}
 		})

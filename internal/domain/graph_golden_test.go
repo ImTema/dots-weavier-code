@@ -1,15 +1,15 @@
 package domain
 
 import (
-	"bytes"
-	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestGraphGolden pins graph.go end to end over samples/: what extract stores per
@@ -17,43 +17,25 @@ import (
 // are written by name, not number, so the files survive reordering. Run with
 // -update after an intended change.
 func TestGraphGolden(t *testing.T) {
-	// The store lives under HOME; keep Go's caches where they are, or packages
-	// re-downloads every module into a temp dir it then cannot delete.
-	out, err := exec.Command("go", "env", "GOPATH", "GOMODCACHE", "GOCACHE").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i, v := range strings.Fields(string(out)) {
-		t.Setenv([]string{"GOPATH", "GOMODCACHE", "GOCACHE"}[i], v)
-	}
-	t.Setenv("HOME", t.TempDir())
-	if _, err := InitWorkspace("../../samples", ""); err != nil {
-		t.Fatal(err)
-	}
-	if err := Index(context.Background(), IndexOptions{Progress: func(r IndexResult) {
-		if r.Err != nil {
-			t.Errorf("index %s: %v", r.Project, r.Err)
-		}
-	}}); err != nil {
-		t.Fatal(err)
-	}
-	ws, _ := filepath.Abs("../../samples")
+	isolate(t)
+	_, err := InitWorkspace("../../samples", "")
+	require.NoError(t, err)
+	require.NoError(t, Index(t.Context(), IndexOptions{Progress: func(r IndexResult) {
+		assert.NoError(t, r.Err, "index %s", r.Project)
+	}}))
+	ws, err := filepath.Abs("../../samples")
+	require.NoError(t, err)
 	files, err := filepath.Glob(filepath.Join(mustStoresDir(t), "*.db"))
-	if err != nil || len(files) == 0 {
-		t.Fatalf("no stores: %v", err)
-	}
+	require.NoError(t, err)
+	require.NotEmpty(t, files, "no stores")
 	for _, f := range files {
 		s, err := load(f)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		golden(t, strings.ReplaceAll(s.Project, "/", "_")+".txt", dumpGraph(&s.Graph, false))
 	}
 
 	g, _, _, err := loadIndexes([]string{ws})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	g.join()
 	golden(t, "joined.txt", dumpGraph(g, true))
 
@@ -121,20 +103,13 @@ func golden(t *testing.T, name, got string) {
 	t.Helper()
 	file := filepath.Join("testdata", "graph_golden", name)
 	if *update {
-		if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(file, []byte(got), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o755))
+		require.NoError(t, os.WriteFile(file, []byte(got), 0o644))
 		return
 	}
 	want, err := os.ReadFile(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal([]byte(got), want) {
-		t.Errorf("%s changed; diff it against %s.got (go test -run TestGraphGolden -update rewrites it)", file, file)
+	require.NoError(t, err)
+	if !assert.Equal(t, string(want), got, "%s changed; diff it against %s.got (go test -run TestGraphGolden -update rewrites it)", file, file) {
 		_ = os.WriteFile(file+".got", []byte(got), 0o644)
 	}
 }

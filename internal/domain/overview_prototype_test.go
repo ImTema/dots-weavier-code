@@ -4,9 +4,11 @@ package domain
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestChangedSince(t *testing.T) {
@@ -14,20 +16,12 @@ func TestChangedSince(t *testing.T) {
 	old := time.Now().Add(-time.Hour)
 	write := func(rel string, mtime time.Time) {
 		p := filepath.Join(dir, rel)
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, nil, 0o644); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Chtimes(p, mtime, mtime); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		require.NoError(t, os.WriteFile(p, nil, 0o644))
+		require.NoError(t, os.Chtimes(p, mtime, mtime))
 	}
 	setDir := func(rel string, mtime time.Time) {
-		if err := os.Chtimes(filepath.Join(dir, rel), mtime, mtime); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.Chtimes(filepath.Join(dir, rel), mtime, mtime))
 	}
 	write("go.mod", old)
 	write("pkg/a.go", old)
@@ -40,18 +34,12 @@ func TestChangedSince(t *testing.T) {
 	}
 	built := old.Add(time.Minute)
 
-	if changedSince(dir, built) {
-		t.Fatal("unchanged project reported as changed")
-	}
+	assert.False(t, changedSince(dir, built), "unchanged project reported as changed")
 	write("pkg/a.go", time.Now())
-	if !changedSince(dir, built) {
-		t.Fatal("edited .go file not detected")
-	}
+	assert.True(t, changedSince(dir, built), "edited .go file not detected")
 	write("pkg/a.go", old)
 	setDir("pkg", time.Now()) // a file was added or removed in pkg
-	if !changedSince(dir, built) {
-		t.Fatal("directory change not detected")
-	}
+	assert.True(t, changedSince(dir, built), "directory change not detected")
 }
 
 func TestSelectNodesRanksCrossProjectThenDegree(t *testing.T) {
@@ -72,9 +60,7 @@ func TestSelectNodesRanksCrossProjectThenDegree(t *testing.T) {
 	g.link(2, 1, direct, "")
 	g.link(4, 5, grpcHop, "/s/M")
 	keep, total := selectNodes(g, map[string]bool{}, 3)
-	if total != 6 {
-		t.Fatalf("total = %d, want 6 (test node excluded)", total)
-	}
+	assert.Equal(t, 6, total, "test node excluded")
 	var got []string
 	for i, k := range keep {
 		if k {
@@ -82,7 +68,5 @@ func TestSelectNodesRanksCrossProjectThenDegree(t *testing.T) {
 		}
 	}
 	// client and server cross projects; then hub has the most edges.
-	if want := []string{"hub", "client", "server"}; !slices.Equal(got, want) {
-		t.Fatalf("kept %v, want %v", got, want)
-	}
+	assert.Equal(t, []string{"hub", "client", "server"}, got)
 }

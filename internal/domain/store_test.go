@@ -2,9 +2,11 @@ package domain
 
 import (
 	"path/filepath"
-	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStoreRoundTrip(t *testing.T) {
@@ -18,40 +20,26 @@ func TestStoreRoundTrip(t *testing.T) {
 	g.Calls = []grpcCall{{From: a, Method: "/s.S/M", Ext: "ext"}}
 	g.Impls["/s.S/M"] = []int32{b, c}
 	in := &stored{Project: "org/p", Dir: "/x", Built: time.Now().Round(0), Graph: g}
-	if err := save(in); err != nil {
-		t.Fatal(err)
-	}
-	if err := save(in); err != nil { // re-index overwrites
-		t.Fatal(err)
-	}
+	require.NoError(t, save(in))
+	require.NoError(t, save(in)) // re-index overwrites
 	path := mustStorePath(t, "/x")
 	out, err := load(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if filepath.Base(path) != "x.db" {
-		t.Errorf("path %s", path)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, "x.db", filepath.Base(path))
 	out.Graph.ids, in.Graph.ids = nil, nil
-	if !reflect.DeepEqual(in, out) {
-		t.Errorf("round trip mismatch:\n in %+v\nout %+v", in, out)
-	}
+	assert.Equal(t, in, out)
 }
 
 func mustStorePath(t *testing.T, dir string) string {
 	t.Helper()
 	p, err := storePath(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return p
 }
 
 func mustStoresDir(t *testing.T) string {
 	t.Helper()
 	d, err := storesDir()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return d
 }

@@ -2,8 +2,10 @@ package domain
 
 import (
 	"math"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // A module joins the outermost shown project containing it, even when it is listed
@@ -13,16 +15,11 @@ func TestModuleGroups(t *testing.T) {
 	shown := []int{0, 1, 2, 3, 4, 5, 6} // "other" is not shown
 	radius := []float64{2, 10, 8, 3, 4, 1, 5}
 	groups, ring := moduleGroups(names, shown, radius, 6)
-	want := [][]int{{1, 0, 3, 4}, {2}, {5}, {6}}
-	if !reflect.DeepEqual(groups, want) {
-		t.Fatalf("groups %v, want %v", groups, want)
-	}
-	if r := ring[1]; r.dist != 10+4+6 || r.outer != r.dist+4 {
-		t.Errorf("apid ring %+v, want modules clear of the project", r)
-	}
-	if r := ring[2]; r.dist != 0 || r.outer != 8 {
-		t.Errorf("scoring ring %+v, want just the project", r)
-	}
+	require.Equal(t, [][]int{{1, 0, 3, 4}, {2}, {5}, {6}}, groups)
+	assert.Equal(t, 10.0+4+6, ring[1].dist, "apid ring: modules clear of the project")
+	assert.Equal(t, ring[1].dist+4, ring[1].outer, "apid ring: modules clear of the project")
+	assert.Equal(t, 0.0, ring[2].dist, "scoring ring: just the project")
+	assert.Equal(t, 8.0, ring[2].outer, "scoring ring: just the project")
 	// Many modules: the ring grows so neighbours do not overlap.
 	many := []string{"p"}
 	sh, rad := []int{0}, []float64{1}
@@ -31,7 +28,5 @@ func TestModuleGroups(t *testing.T) {
 		sh, rad = append(sh, i+1), append(rad, 3)
 	}
 	_, ring = moduleGroups(many, sh, rad, 6)
-	if d := ring[0].dist; 2*math.Pi*d < 40*(2*3+6)-1e-9 {
-		t.Errorf("ring of 40 modules has circumference %.1f, too short", 2*math.Pi*d)
-	}
+	assert.GreaterOrEqual(t, 2*math.Pi*ring[0].dist, 40*(2*3+6)-1e-9, "ring of 40 modules too short")
 }

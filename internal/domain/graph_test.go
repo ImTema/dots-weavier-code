@@ -1,8 +1,10 @@
 package domain
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTraceRanksFewerGuessesFirst(t *testing.T) {
@@ -18,19 +20,20 @@ func TestTraceRanksFewerGuessesFirst(t *testing.T) {
 	g.link(b, a, direct, "") // cycle must not produce non-simple paths
 
 	paths, exhausted := g.trace(a, b, 10)
-	if !exhausted || len(paths) != 3 {
-		t.Fatalf("got %d paths, exhausted=%v", len(paths), exhausted)
-	}
-	want := []string{
+	assert.True(t, exhausted)
+	assert.Equal(t, []string{
 		"p:f.go:A -call-> p:f.go:Z -grpc /s.S/M-> p:f.go:B",
 		"p:f.go:A -call-> p:f.go:X -iface:sure-> p:f.go:Y -call-> p:f.go:B  (1/1 sure)",
 		"p:f.go:A -iface:guess-> p:f.go:B  (0/1 sure)",
+	}, pathStrings(g, paths))
+}
+
+func pathStrings(g *graph, paths []*state) []string {
+	var out []string
+	for _, p := range paths {
+		out = append(out, g.path(p).String())
 	}
-	for i, p := range paths {
-		if got := g.path(p).String(); got != want[i] {
-			t.Errorf("path %d:\n got %s\nwant %s", i, got, want[i])
-		}
-	}
+	return out
 }
 
 func TestParseAddr(t *testing.T) {
@@ -39,13 +42,12 @@ func TestParseAddr(t *testing.T) {
 		"billing:internal/a/b.go:Server.Approve": {Project: "billing", File: "internal/a/b.go", Name: "Server.Approve"},
 		"billing-system:service/x.go:243":        {Project: "billing-system", File: "service/x.go", Line: 243},
 	} {
-		if got, err := parseAddr(in); err != nil || got != want {
-			t.Errorf("parseAddr(%q) = %+v, %v; want %+v", in, got, err, want)
-		}
+		got, err := parseAddr(in)
+		require.NoError(t, err, in)
+		assert.Equal(t, want, got, in)
 	}
-	if _, err := parseAddr("nope"); err == nil || !strings.Contains(err.Error(), "bad address") {
-		t.Errorf("want bad address error, got %v", err)
-	}
+	_, err := parseAddr("nope")
+	assert.ErrorContains(t, err, "bad address")
 }
 
 func TestJoinPubsub(t *testing.T) {
@@ -59,19 +61,9 @@ func TestJoinPubsub(t *testing.T) {
 	g.join()
 
 	paths, _ := g.trace(pub, dec, 10)
-	want := []string{
+	assert.Equal(t, []string{
 		"a:f.go:Pub -pubsub topic t-> b:f.go:Run$1 -call-> b:f.go:Handle",
 		"a:f.go:Pub -pubsub:guess type M-> b:f.go:Handle",
-	}
-	if len(paths) != len(want) {
-		t.Fatalf("got %d paths, want %d", len(paths), len(want))
-	}
-	for i, p := range paths {
-		if got := g.path(p).String(); got != want[i] {
-			t.Errorf("path %d:\n got %s\nwant %s", i, got, want[i])
-		}
-	}
-	if len(g.Out[pub]) != 2 { // unmatched type N adds no external node
-		t.Errorf("edges from Pub = %v", g.Out[pub])
-	}
+	}, pathStrings(g, paths))
+	assert.Len(t, g.Out[pub], 2, "unmatched type N adds no external node")
 }

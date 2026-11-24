@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package fulfillment.v1;
+
+option go_package = "example.com/samples/fulfillment/api/fulfillment/v1;fulfillmentv1";
+
+// FulfillmentService plans the shipment of a placed order.
+service FulfillmentService {
+  // Schedule is idempotent on order_id: a second call returns the first shipment.
+  rpc Schedule(ScheduleRequest) returns (ScheduleResponse);
+}
+
+message ScheduleRequest {
+  string order_id = 1;
+  string customer_id = 2;
+  int64 units = 3;
+  int64 total_cents = 4;
+}
+
+message ScheduleResponse {
+  string shipment_id = 1;
+  string warehouse = 2;
+  string carrier = 3;
+  // Delivery price from the Kotlin shipping service.
+  int64 shipping_cents = 4;
+  // Insurance premium including its tax, which pricing computes. 0 when uninsured.
+  int64 insurance_cents = 5;
+  // True when the order was already scheduled and this is that shipment.
+  bool duplicate = 6;
+}

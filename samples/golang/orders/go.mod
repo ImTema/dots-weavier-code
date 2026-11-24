@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	cloud.google.com/go/pubsub/v2 v2.9.0
+	example.com/samples/fulfillment v0.0.0
 	example.com/samples/pricing v0.0.0
 	google.golang.org/api v0.304.0
 	google.golang.org/grpc v1.85.0
@@ -46,4 +47,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261012220534-4341edf3f941 // indirect
 )
 
-replace example.com/samples/pricing => ../pricing
+replace (
+	example.com/samples/fulfillment => ../fulfillment
+	example.com/samples/pricing => ../pricing
+)

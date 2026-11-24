@@ -1,0 +1,232 @@
+call golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:RegisterFulfillmentServiceServer lib (*google.golang.org/grpc.Server).RegisterService ext=
+call golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:UnimplementedFulfillmentServiceServer.Schedule lib google.golang.org/grpc/status.Error ext=
+call golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:fulfillmentServiceClient.Schedule /fulfillment.v1.FulfillmentService/Schedule ext=grpc /fulfillment.v1.FulfillmentService/Schedule
+call golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:fulfillmentServiceClient.Schedule lib google.golang.org/grpc.StaticMethod ext=
+call golang/fulfillment:cmd/fulfillment/main.go:consume lib google.golang.org/grpc/status.Code ext=
+call golang/fulfillment:cmd/fulfillment/main.go:run lib (*cloud.google.com/go/pubsub/v2.Client).Close ext=
+call golang/fulfillment:cmd/fulfillment/main.go:run lib (*google.golang.org/grpc.ClientConn).Close ext=
+call golang/fulfillment:cmd/fulfillment/main.go:run lib (*google.golang.org/grpc.Server).Serve ext=
+call golang/fulfillment:cmd/fulfillment/main.go:run lib cloud.google.com/go/pubsub/v2.NewClient ext=
+call golang/fulfillment:cmd/fulfillment/main.go:run lib example.com/samples/pricing/api/pricing/v1.NewPricingServiceClient ext=
+call golang/fulfillment:cmd/fulfillment/main.go:run lib google.golang.org/grpc.ConnectionTimeout ext=
+call golang/fulfillment:cmd/fulfillment/main.go:run lib google.golang.org/grpc.NewClient ext=
+call golang/fulfillment:cmd/fulfillment/main.go:run lib google.golang.org/grpc.NewServer ext=
+call golang/fulfillment:cmd/fulfillment/main.go:run lib google.golang.org/grpc.WithTransportCredentials ext=
+call golang/fulfillment:cmd/fulfillment/main.go:run lib google.golang.org/grpc/credentials/insecure.NewCredentials ext=
+call golang/fulfillment:cmd/fulfillment/main.go:run$2 lib (*google.golang.org/grpc.Server).GracefulStop ext=
+call golang/fulfillment:internal/events/subscriber.go:EnsureSubscription lib (*cloud.google.com/go/pubsub/v2.Client).Project ext=
+call golang/fulfillment:internal/events/subscriber.go:EnsureSubscription lib (*cloud.google.com/go/pubsub/v2/apiv1.SubscriptionAdminClient).CreateSubscription ext=
+call golang/fulfillment:internal/events/subscriber.go:EnsureSubscription lib google.golang.org/grpc/status.Code ext=
+call golang/fulfillment:internal/events/subscriber.go:NewSubscriber lib (*cloud.google.com/go/pubsub/v2.Client).Subscriber ext=
+call golang/fulfillment:internal/events/subscriber.go:Subscriber.Handle lib (*example.com/samples/orders/api/events/v1.OrderPlaced).GetCustomerId ext=
+call golang/fulfillment:internal/events/subscriber.go:Subscriber.Handle lib (*example.com/samples/orders/api/events/v1.OrderPlaced).GetOrderId ext=
+call golang/fulfillment:internal/events/subscriber.go:Subscriber.Handle lib (*example.com/samples/orders/api/events/v1.OrderPlaced).GetTotalCents ext=
+call golang/fulfillment:internal/events/subscriber.go:Subscriber.Handle lib (*example.com/samples/orders/api/events/v1.OrderPlaced).GetUnits ext=
+call golang/fulfillment:internal/events/subscriber.go:Subscriber.Handle lib google.golang.org/grpc/status.Code ext=
+call golang/fulfillment:internal/events/subscriber.go:Subscriber.Handle lib google.golang.org/protobuf/proto.Unmarshal ext=
+call golang/fulfillment:internal/events/subscriber.go:Subscriber.Run lib (*cloud.google.com/go/pubsub/v2.Subscriber).Receive ext=
+call golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce lib (*cloud.google.com/go/pubsub/v2.Client).Close ext=
+call golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce lib (*cloud.google.com/go/pubsub/v2/apiv1.TopicAdminClient).CreateTopic ext=
+call golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce lib (*cloud.google.com/go/pubsub/v2/pstest.Server).Close ext=
+call golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce lib (*cloud.google.com/go/pubsub/v2/pstest.Server).Publish ext=
+call golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce lib cloud.google.com/go/pubsub/v2.NewClient ext=
+call golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce lib cloud.google.com/go/pubsub/v2/pstest.NewServer ext=
+call golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce lib google.golang.org/api/option.WithEndpoint ext=
+call golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce lib google.golang.org/api/option.WithGRPCDialOption ext=
+call golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce lib google.golang.org/api/option.WithoutAuthentication ext=
+call golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce lib google.golang.org/grpc.WithTransportCredentials ext=
+call golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce lib google.golang.org/grpc/credentials/insecure.NewCredentials ext=
+call golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce lib google.golang.org/protobuf/proto.Marshal ext=
+call golang/fulfillment:internal/pricing/client.go:Client.Tax /pricing.v1.PricingService/Quote ext=pricingv1.PricingServiceClient.Quote
+call golang/fulfillment:internal/pricing/client.go:Client.Tax lib (*example.com/samples/pricing/api/pricing/v1.QuoteResponse).GetTaxCents ext=
+call golang/fulfillment:internal/pricing/client_test.go:TestTax lib (*google.golang.org/grpc.ClientConn).Close ext=
+call golang/fulfillment:internal/pricing/client_test.go:TestTax lib (*google.golang.org/grpc.Server).Serve ext=
+call golang/fulfillment:internal/pricing/client_test.go:TestTax lib (*google.golang.org/grpc.Server).Stop ext=
+call golang/fulfillment:internal/pricing/client_test.go:TestTax lib example.com/samples/pricing/api/pricing/v1.NewPricingServiceClient ext=
+call golang/fulfillment:internal/pricing/client_test.go:TestTax lib example.com/samples/pricing/api/pricing/v1.RegisterPricingServiceServer ext=
+call golang/fulfillment:internal/pricing/client_test.go:TestTax lib google.golang.org/grpc.NewClient ext=
+call golang/fulfillment:internal/pricing/client_test.go:TestTax lib google.golang.org/grpc.NewServer ext=
+call golang/fulfillment:internal/pricing/client_test.go:TestTax lib google.golang.org/grpc.WithTransportCredentials ext=
+call golang/fulfillment:internal/pricing/client_test.go:TestTax lib google.golang.org/grpc/credentials/insecure.NewCredentials ext=
+call golang/fulfillment:internal/pricing/client_test.go:fakePricing.Quote lib (*example.com/samples/pricing/api/pricing/v1.Item).GetUnitCents ext=
+call golang/fulfillment:internal/pricing/client_test.go:fakePricing.Quote lib (*example.com/samples/pricing/api/pricing/v1.QuoteRequest).GetItems ext=
+call golang/fulfillment:internal/pricing/client_test.go:fakePricing.Quote lib (*example.com/samples/pricing/api/pricing/v1.QuoteRequest).GetRegion ext=
+call golang/fulfillment:internal/pricing/client_test.go:fakePricing.Quote lib google.golang.org/grpc/status.Error ext=
+call golang/fulfillment:internal/server/server.go:Server.Schedule lib google.golang.org/grpc/status.Error ext=
+edge golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.Descriptor -call -> golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:file_api_fulfillment_v1_fulfillment_proto_rawDescGZIP
+edge golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.Descriptor -call -> golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:file_api_fulfillment_v1_fulfillment_proto_rawDescGZIP
+edge golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:file_api_fulfillment_v1_fulfillment_proto_init -iface:guess -> external: reflect.Type.PkgPath
+edge golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:init#1 -call -> golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:file_api_fulfillment_v1_fulfillment_proto_init
+edge golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:RegisterFulfillmentServiceServer -iface:guess -> golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:UnimplementedFulfillmentServiceServer.testEmbeddedByValue
+edge golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:_FulfillmentService_Schedule_Handler -iface:guess -> golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:UnimplementedFulfillmentServiceServer.Schedule
+edge golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:_FulfillmentService_Schedule_Handler -iface:guess -> golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:_FulfillmentService_Schedule_Handler$1
+edge golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:_FulfillmentService_Schedule_Handler -iface:guess -> golang/fulfillment:internal/server/server.go:Server.Schedule
+edge golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:_FulfillmentService_Schedule_Handler$1 -iface:guess -> golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:UnimplementedFulfillmentServiceServer.Schedule
+edge golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:_FulfillmentService_Schedule_Handler$1 -iface:guess -> golang/fulfillment:internal/server/server.go:Server.Schedule
+edge golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:fulfillmentServiceClient.Schedule -iface:guess -> external: grpc.ClientConnInterface.Invoke
+edge golang/fulfillment:cmd/fulfillment/main.go:consume -call -> golang/fulfillment:internal/events/subscriber.go:EnsureSubscription
+edge golang/fulfillment:cmd/fulfillment/main.go:consume -call -> golang/fulfillment:internal/events/subscriber.go:NewSubscriber
+edge golang/fulfillment:cmd/fulfillment/main.go:consume -call -> golang/fulfillment:internal/events/subscriber.go:Subscriber.Run
+edge golang/fulfillment:cmd/fulfillment/main.go:consume -iface:guess -> external: context.Context.Done
+edge golang/fulfillment:cmd/fulfillment/main.go:main -call -> golang/fulfillment:cmd/fulfillment/main.go:run
+edge golang/fulfillment:cmd/fulfillment/main.go:run -call -> golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:RegisterFulfillmentServiceServer
+edge golang/fulfillment:cmd/fulfillment/main.go:run -call -> golang/fulfillment:cmd/fulfillment/main.go:run$1
+edge golang/fulfillment:cmd/fulfillment/main.go:run -call -> golang/fulfillment:cmd/fulfillment/main.go:run$2
+edge golang/fulfillment:cmd/fulfillment/main.go:run -call -> golang/fulfillment:internal/plan/planner.go:NewPlanner
+edge golang/fulfillment:cmd/fulfillment/main.go:run -call -> golang/fulfillment:internal/pricing/client.go:New
+edge golang/fulfillment:cmd/fulfillment/main.go:run -call -> golang/fulfillment:internal/server/server.go:New
+edge golang/fulfillment:cmd/fulfillment/main.go:run -call -> golang/fulfillment:internal/shipping/client.go:NewClient
+edge golang/fulfillment:cmd/fulfillment/main.go:run$1 -call -> golang/fulfillment:cmd/fulfillment/main.go:consume
+edge golang/fulfillment:cmd/fulfillment/main.go:run$2 -iface:guess -> external: context.Context.Done
+edge golang/fulfillment:internal/events/subscriber.go:Subscriber.Handle -call -> golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.GetDuplicate
+edge golang/fulfillment:internal/events/subscriber.go:Subscriber.Handle -call -> golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.GetShipmentId
+edge golang/fulfillment:internal/events/subscriber.go:Subscriber.Handle -call -> golang/fulfillment:internal/server/server.go:Server.Schedule
+edge golang/fulfillment:internal/events/subscriber.go:Subscriber.Run -iface:guess -> external: context.Context.Err
+edge golang/fulfillment:internal/events/subscriber.go:Subscriber.Run -iface:guess -> golang/fulfillment:internal/events/subscriber.go:Subscriber.Run$1
+edge golang/fulfillment:internal/events/subscriber.go:Subscriber.Run$1 -call -> golang/fulfillment:internal/events/subscriber.go:Subscriber.Handle
+edge golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce -call -> golang/fulfillment:internal/events/subscriber.go:EnsureSubscription
+edge golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce -call -> golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce$1
+edge golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce -iface:guess -> external: context.Context.Err
+edge golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce$1 -call -> golang/fulfillment:internal/events/subscriber.go:NewSubscriber
+edge golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce$1 -call -> golang/fulfillment:internal/events/subscriber.go:Subscriber.Run
+edge golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce$1 -call -> golang/fulfillment:internal/plan/planner.go:NewPlanner
+edge golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce$1 -call -> golang/fulfillment:internal/server/server.go:New
+edge golang/fulfillment:internal/plan/plan_test.go:TestPlan -call -> golang/fulfillment:internal/plan/planner.go:NewPlanner
+edge golang/fulfillment:internal/plan/plan_test.go:TestPlan -call -> golang/fulfillment:internal/plan/planner.go:Planner.Plan
+edge golang/fulfillment:internal/plan/plan_test.go:TestRules -call -> golang/fulfillment:internal/plan/rules.go:Carrier
+edge golang/fulfillment:internal/plan/plan_test.go:TestRules -call -> golang/fulfillment:internal/plan/rules.go:Premium
+edge golang/fulfillment:internal/plan/plan_test.go:TestRules -call -> golang/fulfillment:internal/plan/rules.go:Warehouse
+edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -call -> golang/fulfillment:internal/plan/planner.go:Planner.find
+edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -call -> golang/fulfillment:internal/plan/rules.go:Carrier
+edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -call -> golang/fulfillment:internal/plan/rules.go:Premium
+edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -call -> golang/fulfillment:internal/plan/rules.go:Warehouse
+edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -iface:sure -> golang/fulfillment:internal/events/subscriber_test.go:countingRates.Rate
+edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -iface:sure -> golang/fulfillment:internal/events/subscriber_test.go:noTax.Tax
+edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -iface:sure -> golang/fulfillment:internal/plan/plan_test.go:fakeRates.Rate
+edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -iface:sure -> golang/fulfillment:internal/plan/plan_test.go:fakeTaxes.Tax
+edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -iface:sure -> golang/fulfillment:internal/pricing/client.go:Client.Tax
+edge golang/fulfillment:internal/plan/planner.go:Planner.Plan -iface:sure -> golang/fulfillment:internal/shipping/client.go:Client.Rate
+edge golang/fulfillment:internal/pricing/client_test.go:TestTax -call -> golang/fulfillment:internal/pricing/client.go:Client.Tax
+edge golang/fulfillment:internal/pricing/client_test.go:TestTax -call -> golang/fulfillment:internal/pricing/client.go:New
+edge golang/fulfillment:internal/pricing/client_test.go:TestTax -iface:guess -> external: net.Addr.String
+edge golang/fulfillment:internal/pricing/client_test.go:TestTax -iface:guess -> external: net.Listener.Addr
+edge golang/fulfillment:internal/server/server.go:Server.Schedule -call -> golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.GetCustomerId
+edge golang/fulfillment:internal/server/server.go:Server.Schedule -call -> golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.GetOrderId
+edge golang/fulfillment:internal/server/server.go:Server.Schedule -call -> golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.GetTotalCents
+edge golang/fulfillment:internal/server/server.go:Server.Schedule -call -> golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.GetUnits
+edge golang/fulfillment:internal/server/server.go:Server.Schedule -call -> golang/fulfillment:internal/plan/planner.go:Planner.Plan
+edge golang/fulfillment:internal/server/server.go:Server.Schedule -iface:guess -> external: error.Error
+edge golang/fulfillment:internal/shipping/client.go:Client.Rate -iface:guess -> external: io.ReadCloser.Close
+edge golang/fulfillment:internal/shipping/client_test.go:TestRate -call -> golang/fulfillment:internal/shipping/client.go:Client.Rate
+edge golang/fulfillment:internal/shipping/client_test.go:TestRate -call -> golang/fulfillment:internal/shipping/client.go:NewClient
+edge golang/fulfillment:internal/shipping/client_test.go:TestRate$1 -iface:guess -> external: http.ResponseWriter.Write
+impl /fulfillment.v1.FulfillmentService/Schedule <- golang/fulfillment:internal/server/server.go:Server.Schedule
+impl /pricing.v1.PricingService/Quote <- golang/fulfillment:internal/pricing/client_test.go:fakePricing.Quote
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleRequest).Descriptor <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.Descriptor
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleRequest).GetCustomerId <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.GetCustomerId
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleRequest).GetOrderId <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.GetOrderId
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleRequest).GetTotalCents <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.GetTotalCents
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleRequest).GetUnits <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.GetUnits
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleRequest).ProtoMessage <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.ProtoMessage
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleRequest).ProtoReflect <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.ProtoReflect
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleRequest).Reset <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.Reset
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleRequest).String <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.String
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleResponse).Descriptor <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.Descriptor
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleResponse).GetCarrier <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.GetCarrier
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleResponse).GetDuplicate <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.GetDuplicate
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleResponse).GetInsuranceCents <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.GetInsuranceCents
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleResponse).GetShipmentId <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.GetShipmentId
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleResponse).GetShippingCents <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.GetShippingCents
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleResponse).GetWarehouse <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.GetWarehouse
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleResponse).ProtoMessage <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.ProtoMessage
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleResponse).ProtoReflect <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.ProtoReflect
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleResponse).Reset <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.Reset
+impl lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleResponse).String <- golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.String
+impl lib (example.com/samples/fulfillment/api/fulfillment/v1.UnimplementedFulfillmentServiceServer).Schedule <- golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:UnimplementedFulfillmentServiceServer.Schedule
+impl lib example.com/samples/fulfillment/api/fulfillment/v1.NewFulfillmentServiceClient <- golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:NewFulfillmentServiceClient
+impl lib example.com/samples/fulfillment/api/fulfillment/v1.RegisterFulfillmentServiceServer <- golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:RegisterFulfillmentServiceServer
+impl topic order-placed <- golang/fulfillment:internal/events/subscriber.go:Subscriber.Run$1
+impl type example.com/samples/orders/api/events/v1.OrderPlaced <- golang/fulfillment:internal/events/subscriber.go:Subscriber.Handle
+node external: context.Context.Done 0-0 test=false
+node external: context.Context.Err 0-0 test=false
+node external: error.Error 0-0 test=false
+node external: grpc.ClientConnInterface.Invoke 0-0 test=false
+node external: http.ResponseWriter.Write 0-0 test=false
+node external: io.ReadCloser.Close 0-0 test=false
+node external: net.Addr.String 0-0 test=false
+node external: net.Listener.Addr 0-0 test=false
+node external: reflect.Type.PkgPath 0-0 test=false
+node golang/fulfillment:../../../../../Library/Caches/go-build/27/27e1cad72d187946a02b85af70dce464a76c07bb43d85c95f4c2d20cfcefb6c8-d:init#1 39-43 test=true
+node golang/fulfillment:../../../../../Library/Caches/go-build/27/27e1cad72d187946a02b85af70dce464a76c07bb43d85c95f4c2d20cfcefb6c8-d:main 45-50 test=true
+node golang/fulfillment:../../../../../Library/Caches/go-build/b0/b051e388ed65a1403b7301d8207d12554039fa3da7cfddf153eed9cc55b0618c-d:init#1 39-43 test=true
+node golang/fulfillment:../../../../../Library/Caches/go-build/b0/b051e388ed65a1403b7301d8207d12554039fa3da7cfddf153eed9cc55b0618c-d:main 45-50 test=true
+node golang/fulfillment:../../../../../Library/Caches/go-build/ba/bad6896769dd909f611bead4fad1f29ec4a0d73a79feb88a5a481dc27a20552f-d:init#1 39-43 test=true
+node golang/fulfillment:../../../../../Library/Caches/go-build/ba/bad6896769dd909f611bead4fad1f29ec4a0d73a79feb88a5a481dc27a20552f-d:main 45-50 test=true
+node golang/fulfillment:../../../../../Library/Caches/go-build/f7/f726b2953fc67785dfa599f520a7604940e882c53207217e063bf009002d14db-d:init#1 39-43 test=true
+node golang/fulfillment:../../../../../Library/Caches/go-build/f7/f726b2953fc67785dfa599f520a7604940e882c53207217e063bf009002d14db-d:main 45-50 test=true
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.Descriptor 60-62 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.GetCustomerId 71-76 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.GetOrderId 64-69 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.GetTotalCents 85-90 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.GetUnits 78-83 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.ProtoMessage 45-45 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.ProtoReflect 47-57 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.Reset 34-39 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.String 41-43 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.Descriptor 133-135 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.GetCarrier 151-156 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.GetDuplicate 172-177 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.GetInsuranceCents 165-170 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.GetShipmentId 137-142 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.GetShippingCents 158-163 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.GetWarehouse 144-149 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.ProtoMessage 118-118 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.ProtoReflect 120-130 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.Reset 107-112 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.String 114-116 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:file_api_fulfillment_v1_fulfillment_proto_init 230-251 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:file_api_fulfillment_v1_fulfillment_proto_rawDescGZIP 207-212 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:file_api_fulfillment_v1_fulfillment_proto_rawDescGZIP$1 208-0 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:init#1 229-229 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:NewFulfillmentServiceClient 39-41 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:RegisterFulfillmentServiceServer 84-93 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:UnimplementedFulfillmentServiceServer.Schedule 71-73 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:UnimplementedFulfillmentServiceServer.mustEmbedUnimplementedFulfillmentServiceServer 74-74 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:UnimplementedFulfillmentServiceServer.testEmbeddedByValue 75-75 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:_FulfillmentService_Schedule_Handler 95-111 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:_FulfillmentService_Schedule_Handler$1 107-0 test=false
+node golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:fulfillmentServiceClient.Schedule 43-51 test=false
+node golang/fulfillment:cmd/fulfillment/main.go:consume 87-104 test=false
+node golang/fulfillment:cmd/fulfillment/main.go:main 32-37 test=false
+node golang/fulfillment:cmd/fulfillment/main.go:run 39-83 test=false
+node golang/fulfillment:cmd/fulfillment/main.go:run$1 71-0 test=false
+node golang/fulfillment:cmd/fulfillment/main.go:run$2 77-0 test=false
+node golang/fulfillment:internal/events/subscriber.go:EnsureSubscription 25-37 test=false
+node golang/fulfillment:internal/events/subscriber.go:NewSubscriber 48-50 test=false
+node golang/fulfillment:internal/events/subscriber.go:Subscriber.Handle 75-93 test=false
+node golang/fulfillment:internal/events/subscriber.go:Subscriber.Run 55-71 test=false
+node golang/fulfillment:internal/events/subscriber.go:Subscriber.Run$1 56-0 test=false
+node golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce 34-80 test=true
+node golang/fulfillment:internal/events/subscriber_test.go:TestSubscriberSchedulesOnce$1 66-0 test=true
+node golang/fulfillment:internal/events/subscriber_test.go:countingRates.Rate 25-28 test=true
+node golang/fulfillment:internal/events/subscriber_test.go:noTax.Tax 32-32 test=true
+node golang/fulfillment:internal/plan/plan_test.go:TestPlan 51-83 test=true
+node golang/fulfillment:internal/plan/plan_test.go:TestRules 9-33 test=true
+node golang/fulfillment:internal/plan/plan_test.go:fakeRates.Rate 40-43 test=true
+node golang/fulfillment:internal/plan/plan_test.go:fakeTaxes.Tax 47-49 test=true
+node golang/fulfillment:internal/plan/planner.go:NewPlanner 50-52 test=false
+node golang/fulfillment:internal/plan/planner.go:Planner.Plan 55-97 test=false
+node golang/fulfillment:internal/plan/planner.go:Planner.find 99-104 test=false
+node golang/fulfillment:internal/plan/rules.go:Carrier 34-43 test=false
+node golang/fulfillment:internal/plan/rules.go:Premium 47-52 test=false
+node golang/fulfillment:internal/plan/rules.go:Warehouse 20-25 test=false
+node golang/fulfillment:internal/pricing/client.go:Client.Tax 24-34 test=false
+node golang/fulfillment:internal/pricing/client.go:New 20-20 test=false
+node golang/fulfillment:internal/pricing/client_test.go:TestTax 28-50 test=true
+node golang/fulfillment:internal/pricing/client_test.go:fakePricing.Quote 21-26 test=true
+node golang/fulfillment:internal/server/server.go:New 22-22 test=false
+node golang/fulfillment:internal/server/server.go:Server.Schedule 25-48 test=false
+node golang/fulfillment:internal/shipping/client.go:Client.Rate 33-57 test=false
+node golang/fulfillment:internal/shipping/client.go:NewClient 20-22 test=false
+node golang/fulfillment:internal/shipping/client_test.go:TestRate 12-29 test=true
+node golang/fulfillment:internal/shipping/client_test.go:TestRate$1 13-0 test=true

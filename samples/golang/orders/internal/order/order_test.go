@@ -47,9 +47,19 @@ func (e *recordingEvents) OrderPlaced(_ context.Context, o order.Order) error {
 	return nil
 }
 
+// fakeScheduler fails for orders over 5000 cents.
+type fakeScheduler struct{}
+
+func (fakeScheduler) Schedule(_ context.Context, o order.Order) (string, error) {
+	if o.TotalCents > 5000 {
+		return "", errors.New("fulfillment down")
+	}
+	return "s-" + o.ID, nil
+}
+
 func TestPlaceReleasesWhenPricingFails(t *testing.T) {
 	res := &fakeReserver{}
-	svc := order.NewService(customer.NewStore(customer.Seed()), res, failingPricer{}, &recordingEvents{})
+	svc := order.NewService(customer.NewStore(customer.Seed()), res, failingPricer{}, &recordingEvents{}, fakeScheduler{})
 	_, err := svc.Place(context.Background(), api.PlaceOrderRequest{
 		CustomerID: "c1",
 		Items:      []api.Item{{SKU: "a", UnitCents: 100, Qty: 1}},
@@ -65,7 +75,7 @@ func TestPlaceReleasesWhenPricingFails(t *testing.T) {
 func TestPlace(t *testing.T) {
 	store := customer.NewStore(customer.Seed())
 	events := &recordingEvents{}
-	svc := order.NewService(store, &fakeReserver{}, fixedPricer(1234), events)
+	svc := order.NewService(store, &fakeReserver{}, fixedPricer(1234), events, fakeScheduler{})
 	item := []api.Item{{SKU: "a", UnitCents: 100, Qty: 1}}
 
 	tests := []struct {
@@ -89,6 +99,9 @@ func TestPlace(t *testing.T) {
 			if tt.wantErr != nil {
 				return
 			}
+			if o.ShipmentID != "s-"+o.ID {
+				t.Fatalf("shipment = %q, want s-%s", o.ShipmentID, o.ID)
+			}
 			if o.TotalCents != 1234 {
 				t.Fatalf("total = %d, want 1234", o.TotalCents)
 			}
@@ -96,5 +109,13 @@ func TestPlace(t *testing.T) {
 				t.Fatalf("published %+v, want order %s with 1 unit", last, o.ID)
 			}
 		})
+	}
+}
+
+func TestPlaceSurvivesFailedSchedule(t *testing.T) {
+	svc := order.NewService(customer.NewStore(customer.Seed()), &fakeReserver{}, fixedPricer(9999), &recordingEvents{}, fakeScheduler{})
+	o, err := svc.Place(context.Background(), api.PlaceOrderRequest{CustomerID: "c1", Items: []api.Item{{SKU: "a", UnitCents: 100, Qty: 1}}})
+	if err != nil || o.ShipmentID != "" {
+		t.Fatalf("Place = %+v, %v; want the order without a shipment", o, err)
 	}
 }

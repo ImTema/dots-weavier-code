@@ -75,6 +75,127 @@
        "kids": [
         {
          "kind": "store",
+         "loc": "fulfillment:internal/pricing/client.go:24",
+         "code": "func (c *Client) Tax(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
+         "before": "// cents and returns only its tax.",
+         "after": "resp, err := c.rpc.Quote(ctx, \u0026pricingv1.QuoteRequest{",
+         "type": "string",
+         "fn": "Client.Tax",
+         "via": "fulfillment:internal/pricing/client.go:26",
+         "kids": [
+          {
+           "kind": "arg",
+           "loc": "fulfillment:internal/plan/planner.go:75",
+           "code": "tax, err := p.taxes.Tax(ctx, o.CustomerID, region, ins)",
+           "before": "if ins \u003e 0 {",
+           "after": "if err != nil {",
+           "type": "string",
+           "fn": "Planner.Plan",
+           "kids": [
+            {
+             "kind": "field",
+             "name": "plan.Order.CustomerID",
+             "type": "string",
+             "kids": [
+              {
+               "kind": "store",
+               "loc": "fulfillment:internal/server/server.go:28",
+               "code": "CustomerID: req.GetCustomerId(),",
+               "before": "ID:         req.GetOrderId(),",
+               "after": "Units:      req.GetUnits(),",
+               "type": "string",
+               "fn": "Server.Schedule",
+               "kids": [
+                {
+                 "kind": "return",
+                 "loc": "fulfillment:api/fulfillment/v1/fulfillment.pb.go:73",
+                 "code": "return x.CustomerId",
+                 "before": "if x != nil {",
+                 "after": "}",
+                 "type": "string",
+                 "fn": "ScheduleRequest.GetCustomerId",
+                 "kids": [
+                  {
+                   "kind": "field",
+                   "name": "fulfillmentv1.ScheduleRequest.CustomerId",
+                   "type": "string",
+                   "kids": [
+                    {
+                     "kind": "store",
+                     "loc": "fulfillment:internal/events/subscriber.go:82",
+                     "code": "CustomerId: e.GetCustomerId(),",
+                     "before": "OrderId:    e.GetOrderId(),",
+                     "after": "Units:      e.GetUnits(),",
+                     "type": "string",
+                     "fn": "Subscriber.Handle",
+                     "kids": [
+                      {
+                       "kind": "field",
+                       "name": "eventsv1.OrderPlaced.CustomerId",
+                       "type": "string",
+                       "kids": [
+                        {
+                         "kind": "store",
+                         "loc": "orders:internal/events/publisher.go:50",
+                         "code": "CustomerId: o.CustomerID,",
+                         "before": "OrderId:    o.ID,",
+                         "after": "TotalCents: o.TotalCents,",
+                         "type": "string",
+                         "fn": "Publisher.OrderPlaced"
+                        }
+                       ]
+                      }
+                     ]
+                    },
+                    {
+                     "kind": "store",
+                     "loc": "orders:internal/fulfiller/client.go:25",
+                     "code": "CustomerId: o.CustomerID,",
+                     "before": "OrderId:    o.ID,",
+                     "after": "Units:      o.Units,",
+                     "type": "string",
+                     "fn": "Client.Schedule",
+                     "kids": [
+                      {
+                       "kind": "field",
+                       "name": "order.Order.CustomerID",
+                       "type": "string",
+                       "kids": [
+                        {
+                         "kind": "store",
+                         "loc": "orders:internal/order/order.go:104",
+                         "code": "CustomerID:    c.ID,",
+                         "before": "ID:            fmt.Sprintf(\"o-%d\", s.seq.Add(1)),",
+                         "after": "ReservationID: resID,",
+                         "type": "string",
+                         "fn": "Service.Place"
+                        }
+                       ]
+                      }
+                     ]
+                    }
+                   ]
+                  }
+                 ]
+                },
+                {
+                 "kind": "return",
+                 "loc": "fulfillment:api/fulfillment/v1/fulfillment.pb.go:75",
+                 "code": "return \"\"",
+                 "before": "}",
+                 "after": "}",
+                 "type": "string"
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "kind": "store",
          "loc": "orders:internal/pricer/pricer.go:23",
          "code": "CustomerId: c.ID,",
          "before": "req := \u0026pricingv1.QuoteRequest{",

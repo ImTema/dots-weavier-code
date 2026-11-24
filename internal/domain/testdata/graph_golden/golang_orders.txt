@@ -1,6 +1,7 @@
 call golang/orders:cmd/orders/main.go:run lib (*cloud.google.com/go/pubsub/v2.Client).Close ext=
 call golang/orders:cmd/orders/main.go:run lib (*google.golang.org/grpc.ClientConn).Close ext=
 call golang/orders:cmd/orders/main.go:run lib cloud.google.com/go/pubsub/v2.NewClient ext=
+call golang/orders:cmd/orders/main.go:run lib example.com/samples/fulfillment/api/fulfillment/v1.NewFulfillmentServiceClient ext=
 call golang/orders:cmd/orders/main.go:run lib example.com/samples/pricing/api/pricing/v1.NewPricingServiceClient ext=
 call golang/orders:cmd/orders/main.go:run lib google.golang.org/grpc.NewClient ext=
 call golang/orders:cmd/orders/main.go:run lib google.golang.org/grpc.WithTransportCredentials ext=
@@ -27,6 +28,8 @@ call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib google.
 call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib google.golang.org/grpc.WithTransportCredentials ext=
 call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib google.golang.org/grpc/credentials/insecure.NewCredentials ext=
 call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib google.golang.org/protobuf/proto.Unmarshal ext=
+call golang/orders:internal/fulfiller/client.go:Client.Schedule /fulfillment.v1.FulfillmentService/Schedule ext=fulfillmentv1.FulfillmentServiceClient.Schedule
+call golang/orders:internal/fulfiller/client.go:Client.Schedule lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleResponse).GetShipmentId ext=
 call golang/orders:internal/inventory/client.go:Client.Release /inventory.v1.InventoryService/Release ext=inventoryv1.InventoryServiceClient.Release
 call golang/orders:internal/inventory/client.go:Client.Reserve /inventory.v1.InventoryService/Reserve ext=inventoryv1.InventoryServiceClient.Reserve
 call golang/orders:internal/inventory/client.go:Client.Reserve lib google.golang.org/grpc/status.Code ext=
@@ -51,6 +54,7 @@ edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/custom
 edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/events/publisher.go:EnsureTopic
 edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/events/publisher.go:NewPublisher
 edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/events/publisher.go:Publisher.Stop
+edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/fulfiller/client.go:New
 edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/httpapi/httpapi.go:Handler.Routes
 edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/httpapi/httpapi.go:New
 edge golang/orders:cmd/orders/main.go:run -call -> golang/orders:internal/inventory/client.go:New
@@ -109,11 +113,13 @@ edge golang/orders:internal/order/order.go:Service.Place -call -> golang/orders:
 edge golang/orders:internal/order/order.go:Service.Place -call -> golang/orders:internal/order/order.go:Validate
 edge golang/orders:internal/order/order.go:Service.Place -call -> golang/orders:internal/order/order.go:units
 edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/events/publisher.go:Publisher.OrderPlaced
+edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/fulfiller/client.go:Client.Schedule
 edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/inventory/client.go:Client.Release
 edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/inventory/client.go:Client.Reserve
 edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/order/order_test.go:failingPricer.Price
 edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/order/order_test.go:fakeReserver.Release
 edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/order/order_test.go:fakeReserver.Reserve
+edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/order/order_test.go:fakeScheduler.Schedule
 edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/order/order_test.go:fixedPricer.Price
 edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/order/order_test.go:recordingEvents.OrderPlaced
 edge golang/orders:internal/order/order.go:Service.Place -iface:sure -> golang/orders:internal/pricer/pricer.go:Client.Price
@@ -126,6 +132,10 @@ edge golang/orders:internal/order/order_test.go:TestPlaceReleasesWhenPricingFail
 edge golang/orders:internal/order/order_test.go:TestPlaceReleasesWhenPricingFails -call -> golang/orders:internal/customer/store.go:Seed
 edge golang/orders:internal/order/order_test.go:TestPlaceReleasesWhenPricingFails -call -> golang/orders:internal/order/order.go:NewService
 edge golang/orders:internal/order/order_test.go:TestPlaceReleasesWhenPricingFails -call -> golang/orders:internal/order/order.go:Service.Place
+edge golang/orders:internal/order/order_test.go:TestPlaceSurvivesFailedSchedule -call -> golang/orders:internal/customer/store.go:NewStore
+edge golang/orders:internal/order/order_test.go:TestPlaceSurvivesFailedSchedule -call -> golang/orders:internal/customer/store.go:Seed
+edge golang/orders:internal/order/order_test.go:TestPlaceSurvivesFailedSchedule -call -> golang/orders:internal/order/order.go:NewService
+edge golang/orders:internal/order/order_test.go:TestPlaceSurvivesFailedSchedule -call -> golang/orders:internal/order/order.go:Service.Place
 impl http GET /customers/{} <- golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer
 impl http POST /orders <- golang/orders:internal/httpapi/httpapi.go:Handler.placeOrder
 impl lib (*example.com/samples/orders/api/events/v1.OrderPlaced).Descriptor <- golang/orders:api/events/v1/events.pb.go:OrderPlaced.Descriptor
@@ -148,10 +158,10 @@ node external: io.ReadCloser.Close 0-0 test=false
 node external: reflect.Type.PkgPath 0-0 test=false
 node golang/orders:../../../../../Library/Caches/go-build/26/26b4470d0b03dee05a3ceeab7c68ffb926c790da0f79cd9ac5b08044f90e819d-d:init#1 39-43 test=true
 node golang/orders:../../../../../Library/Caches/go-build/26/26b4470d0b03dee05a3ceeab7c68ffb926c790da0f79cd9ac5b08044f90e819d-d:main 45-50 test=true
-node golang/orders:../../../../../Library/Caches/go-build/4f/4fdc5b22565863adc7e5de648b73960b61315ede573ab2e9617b5bd546b365e8-d:init#1 41-45 test=true
-node golang/orders:../../../../../Library/Caches/go-build/4f/4fdc5b22565863adc7e5de648b73960b61315ede573ab2e9617b5bd546b365e8-d:main 47-52 test=true
 node golang/orders:../../../../../Library/Caches/go-build/d6/d6a45433c7dcff4187429771ff2f7c42e31be28f35bf2a988a1b1f561fff7021-d:init#1 39-43 test=true
 node golang/orders:../../../../../Library/Caches/go-build/d6/d6a45433c7dcff4187429771ff2f7c42e31be28f35bf2a988a1b1f561fff7021-d:main 45-50 test=true
+node golang/orders:../../../../../Library/Caches/go-build/e6/e6d09601fe790fdc956d4bc1f0dd2aae5bdea192285b4960492aa19460d3a322-d:init#1 43-47 test=true
+node golang/orders:../../../../../Library/Caches/go-build/e6/e6d09601fe790fdc956d4bc1f0dd2aae5bdea192285b4960492aa19460d3a322-d:main 49-54 test=true
 node golang/orders:api/events/v1/events.pb.go:OrderPlaced.Descriptor 64-66 test=false
 node golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetCustomerId 75-80 test=false
 node golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetOrderId 68-73 test=false
@@ -166,9 +176,9 @@ node golang/orders:api/events/v1/events.pb.go:file_events_v1_events_proto_init 1
 node golang/orders:api/events/v1/events.pb.go:file_events_v1_events_proto_rawDescGZIP 122-127 test=false
 node golang/orders:api/events/v1/events.pb.go:file_events_v1_events_proto_rawDescGZIP$1 123-0 test=false
 node golang/orders:api/events/v1/events.pb.go:init#1 143-143 test=false
-node golang/orders:cmd/orders/main.go:main 32-37 test=false
-node golang/orders:cmd/orders/main.go:run 39-111 test=false
-node golang/orders:cmd/orders/main.go:run$1 94-0 test=false
+node golang/orders:cmd/orders/main.go:main 34-39 test=false
+node golang/orders:cmd/orders/main.go:run 41-120 test=false
+node golang/orders:cmd/orders/main.go:run$1 103-0 test=false
 node golang/orders:internal/customer/store.go:IsVIP 53-60 test=false
 node golang/orders:internal/customer/store.go:NewStore 22-28 test=false
 node golang/orders:internal/customer/store.go:Seed 31-37 test=false
@@ -178,6 +188,8 @@ node golang/orders:internal/events/publisher.go:NewPublisher 26-28 test=false
 node golang/orders:internal/events/publisher.go:Publisher.OrderPlaced 44-66 test=false
 node golang/orders:internal/events/publisher.go:Publisher.Stop 69-69 test=false
 node golang/orders:internal/events/publisher_test.go:TestOrderPlaced 20-64 test=true
+node golang/orders:internal/fulfiller/client.go:Client.Schedule 22-33 test=false
+node golang/orders:internal/fulfiller/client.go:New 18-18 test=false
 node golang/orders:internal/httpapi/httpapi.go:Handler.Routes 31-36 test=false
 node golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer 61-71 test=false
 node golang/orders:internal/httpapi/httpapi.go:Handler.placeOrder 38-58 test=false
@@ -242,16 +254,18 @@ node golang/orders:internal/notify/notify.go:NewSMS 56-56 test=false
 node golang/orders:internal/notify/notify.go:SMS.Notify 58-65 test=false
 node golang/orders:internal/notify/notify.go:Send 27-35 test=false
 node golang/orders:internal/notify/notify.go:WithNotifier 21-23 test=false
-node golang/orders:internal/order/order.go:NewService 66-68 test=false
-node golang/orders:internal/order/order.go:Service.Place 73-111 test=false
-node golang/orders:internal/order/order.go:Validate 122-136 test=false
-node golang/orders:internal/order/order.go:units 113-119 test=false
-node golang/orders:internal/order/order_test.go:TestPlace 65-100 test=true
-node golang/orders:internal/order/order_test.go:TestPlace$1 84-0 test=true
-node golang/orders:internal/order/order_test.go:TestPlaceReleasesWhenPricingFails 50-63 test=true
+node golang/orders:internal/order/order.go:NewService 74-76 test=false
+node golang/orders:internal/order/order.go:Service.Place 82-123 test=false
+node golang/orders:internal/order/order.go:Validate 134-148 test=false
+node golang/orders:internal/order/order.go:units 125-131 test=false
+node golang/orders:internal/order/order_test.go:TestPlace 75-113 test=true
+node golang/orders:internal/order/order_test.go:TestPlace$1 94-0 test=true
+node golang/orders:internal/order/order_test.go:TestPlaceReleasesWhenPricingFails 60-73 test=true
+node golang/orders:internal/order/order_test.go:TestPlaceSurvivesFailedSchedule 115-121 test=true
 node golang/orders:internal/order/order_test.go:failingPricer.Price 21-23 test=true
 node golang/orders:internal/order/order_test.go:fakeReserver.Release 37-40 test=true
 node golang/orders:internal/order/order_test.go:fakeReserver.Reserve 28-35 test=true
+node golang/orders:internal/order/order_test.go:fakeScheduler.Schedule 53-58 test=true
 node golang/orders:internal/order/order_test.go:fixedPricer.Price 15-17 test=true
 node golang/orders:internal/order/order_test.go:recordingEvents.OrderPlaced 45-48 test=true
 node golang/orders:internal/pricer/pricer.go:Client.Price 21-35 test=false

@@ -18,8 +18,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	fulfillmentv1 "example.com/samples/fulfillment/api/fulfillment/v1"
 	"example.com/samples/orders/internal/customer"
 	"example.com/samples/orders/internal/events"
+	"example.com/samples/orders/internal/fulfiller"
 	"example.com/samples/orders/internal/httpapi"
 	"example.com/samples/orders/internal/inventory"
 	inventoryv1 "example.com/samples/orders/internal/inventorypb/inventory/v1"
@@ -40,6 +42,7 @@ func run() error {
 	addr := flag.String("addr", ":8080", "HTTP listen address")
 	pricingAddr := flag.String("pricing", "127.0.0.1:9090", "pricing gRPC address")
 	inventoryAddr := flag.String("inventory", "127.0.0.1:9091", "inventory gRPC address")
+	fulfillmentAddr := flag.String("fulfillment", "127.0.0.1:9092", "fulfillment gRPC address")
 	project := flag.String("pubsub-project", "samples-local", "Pub/Sub project ID; set PUBSUB_EMULATOR_HOST to use an emulator")
 	sms := flag.Bool("sms", false, "notify by SMS instead of email")
 	flag.Parse()
@@ -58,6 +61,11 @@ func run() error {
 		return fmt.Errorf("dial inventory: %w", err)
 	}
 	defer inventoryConn.Close()
+	fulfillmentConn, err := grpc.NewClient(*fulfillmentAddr, creds)
+	if err != nil {
+		return fmt.Errorf("dial fulfillment: %w", err)
+	}
+	defer fulfillmentConn.Close()
 
 	ps, err := pubsub.NewClient(ctx, *project)
 	if err != nil {
@@ -81,7 +89,8 @@ func run() error {
 	svc := order.NewService(store,
 		inventory.New(inventoryv1.NewInventoryServiceClient(inventoryConn)),
 		pricer.New(pricingv1.NewPricingServiceClient(pricingConn)),
-		publisher)
+		publisher,
+		fulfiller.New(fulfillmentv1.NewFulfillmentServiceClient(fulfillmentConn)))
 	srv := &http.Server{
 		Addr:              *addr,
 		Handler:           httpapi.New(svc, store, n).Routes(),

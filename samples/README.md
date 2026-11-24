@@ -1,14 +1,15 @@
 # Samples
 
-Four small services in three languages that call each other over gRPC,
+Five small services in three languages that call each other over gRPC,
 HTTP and Pub/Sub. They give
 dotweavier a known target: every hop between and inside the projects is listed
 here, so a trace can be checked against what the code really does.
 
 | Service     | Language          | Path                     | Serves                                        | Calls                                    |
 |-------------|-------------------|--------------------------|-----------------------------------------------|------------------------------------------|
-| `orders`    | Go                | `golang/orders`          | HTTP `:8080`: `POST /orders`, `GET /customers/{id}` | inventory (gRPC), pricing (gRPC); publishes `order-placed` |
+| `orders`    | Go                | `golang/orders`          | HTTP `:8080`: `POST /orders`, `GET /customers/{id}` | inventory (gRPC), pricing (gRPC), fulfillment (gRPC); publishes `order-placed` |
 | `pricing`   | Go                | `golang/pricing`         | gRPC `:9090`: `pricing.v1.PricingService`     | orders (HTTP), shipping (HTTP); subscribes to `order-placed` |
+| `fulfillment` | Go              | `golang/fulfillment`     | gRPC `:9092`: `fulfillment.v1.FulfillmentService` | pricing (gRPC), shipping (HTTP); subscribes to `order-placed` |
 | `inventory` | Java 25, Quarkus  | `java/inventory`         | gRPC `:9091`: `inventory.v1.InventoryService` | orders (HTTP)                            |
 | `shipping`  | Kotlin, Ktor      | `kotlin/shipping`        | HTTP `:8081`: `GET /rates`                    | orders (HTTP)                            |
 
@@ -22,6 +23,10 @@ pricing   ──HTTP──▶ orders      GET /customers/{id}
 pricing   ──HTTP──▶ shipping    GET /rates
 shipping  ──HTTP──▶ orders      GET /customers/{id}
 orders    ──Pub/Sub──▶ pricing  topic order-placed, subscription pricing-order-placed
+orders    ──gRPC──▶ fulfillment Schedule
+orders    ──Pub/Sub──▶ fulfillment  topic order-placed, subscription fulfillment-order-placed
+fulfillment ──gRPC──▶ pricing   Quote (tax on the insurance premium)
+fulfillment ──HTTP──▶ shipping  GET /rates
 ```
 
 Every hop between projects:
@@ -35,6 +40,10 @@ Every hop between projects:
 | gRPC | Go `orders` `pricer.Client.Price`          | Go `pricing` `server.Server.Quote`             | `golang/pricing/api/pricing/v1/pricing.proto` |
 | HTTP | Go `pricing` `customers.Client.Tier`       | Go `orders` `GET /customers/{id}`              | `golang/orders/api` |
 | Pub/Sub | Go `orders` `events.Publisher.OrderPlaced` | Go `pricing` `events.Subscriber.Handle`     | `golang/orders/api/events/v1/events.proto` (`OrderPlaced`, topic const in `topic.go`) |
+| gRPC | Go `orders` `fulfiller.Client.Schedule`    | Go `fulfillment` `server.Server.Schedule`      | `golang/fulfillment/api/fulfillment/v1/fulfillment.proto` |
+| Pub/Sub | Go `orders` `events.Publisher.OrderPlaced` | Go `fulfillment` `events.Subscriber.Handle` | `golang/orders/api/events/v1/events.proto` |
+| gRPC | Go `fulfillment` `pricing.Client.Tax`      | Go `pricing` `server.Server.Quote`             | `golang/pricing/api/pricing/v1/pricing.proto` |
+| HTTP | Go `fulfillment` `shipping.Client.Rate`    | Kotlin `shipping` `GET /rates`                 | `RateResponse` in `kotlin/shipping/.../http/Routes.kt` |
 
 The inventory proto lives with its owner, the Java service. Go `orders`
 generates its client from that file (`golang/orders/buf.gen.inventory.yaml`)
@@ -51,9 +60,14 @@ publisher, `orders`; `pricing` imports it.
    (for the discount) and `shipping` for the delivery price. `shipping` asks
    `orders` for the region and tier.
 4. If pricing fails, `orders` releases the reservation.
-5. `orders` publishes `OrderPlaced` to Pub/Sub, notifies the customer and
-   returns the order. A failed publish is logged and does not fail the order.
-6. `pricing` consumes the event and counts the customer's orders. From the
+5. `orders` publishes `OrderPlaced` to Pub/Sub, asks `fulfillment` to schedule
+   the shipment, notifies the customer and returns the order. A failed publish
+   or schedule is logged and does not fail the order. `fulfillment` asks
+   `shipping` for the rate and region, and `pricing` for the tax on the
+   insurance premium.
+6. `fulfillment` also consumes the event and schedules the order if the
+   direct call was lost; it dedupes on the order ID.
+7. `pricing` consumes the event and counts the customer's orders. From the
    fourth order on, a customer qualifies for a 10% loyalty discount.
 
 Business rules are in each service's README.
@@ -70,6 +84,7 @@ export PUBSUB_EMULATOR_HOST=localhost:8085   # in each Go service's shell
 (cd java/inventory && ./mvnw package && java -jar target/quarkus-app/quarkus-run.jar)
 (cd kotlin/shipping && ./gradlew run)
 (cd golang/pricing && go run ./cmd/pricing)
+(cd golang/fulfillment && go run ./cmd/fulfillment)
 (cd golang/orders && go run ./cmd/orders)
 
 curl -XPOST localhost:8080/orders \
@@ -98,6 +113,7 @@ fourth 14210 once the loyalty discount applies.
 ```sh
 (cd golang/orders && go test ./...)
 (cd golang/pricing && go test ./...)
+(cd golang/fulfillment && go test ./...)
 (cd java/inventory && ./mvnw test)
 (cd kotlin/shipping && ./gradlew test)
 ```

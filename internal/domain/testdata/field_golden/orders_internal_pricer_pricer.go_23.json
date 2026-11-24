@@ -105,7 +105,7 @@
       },
       {
        "kind": "read",
-       "loc": "internal/order/order.go:81",
+       "loc": "internal/order/order.go:90",
        "code": "resID, err := s.reserver.Reserve(ctx, c.ID, req.Items)",
        "before": "}",
        "after": "if err != nil {",
@@ -120,7 +120,7 @@
          "after": "req := \u0026inventoryv1.ReserveRequest{",
          "type": "string",
          "fn": "Client.Reserve",
-         "via": "internal/order/order.go:81",
+         "via": "internal/order/order.go:90",
          "kids": [
           {
            "kind": "field",
@@ -144,7 +144,7 @@
       },
       {
        "kind": "read",
-       "loc": "internal/order/order.go:95",
+       "loc": "internal/order/order.go:104",
        "code": "CustomerID:    c.ID,",
        "before": "ID:            fmt.Sprintf(\"o-%d\", s.seq.Add(1)),",
        "after": "ReservationID: resID,",
@@ -178,6 +178,15 @@
                "after": "}",
                "type": "string",
                "fn": "OrderPlaced.GetCustomerId"
+              },
+              {
+               "kind": "read",
+               "loc": "fulfillment:internal/events/subscriber.go:82",
+               "code": "CustomerId: e.GetCustomerId(),",
+               "before": "OrderId:    e.GetOrderId(),",
+               "after": "Units:      e.GetUnits(),",
+               "type": "string",
+               "fn": "Subscriber.Handle"
               },
               {
                "kind": "read",
@@ -238,6 +247,174 @@
                  "type": "string",
                  "fn": "Ledger.Orders",
                  "via": "pricing:internal/events/subscriber.go:72"
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          },
+          {
+           "kind": "read",
+           "loc": "internal/fulfiller/client.go:25",
+           "code": "CustomerId: o.CustomerID,",
+           "before": "OrderId:    o.ID,",
+           "after": "Units:      o.Units,",
+           "type": "string",
+           "fn": "Client.Schedule",
+           "kids": [
+            {
+             "kind": "field",
+             "name": "fulfillmentv1.ScheduleRequest.CustomerId",
+             "type": "string",
+             "kids": [
+              {
+               "kind": "read",
+               "loc": "fulfillment:api/fulfillment/v1/fulfillment.pb.go:73",
+               "code": "return x.CustomerId",
+               "before": "if x != nil {",
+               "after": "}",
+               "type": "string",
+               "fn": "ScheduleRequest.GetCustomerId",
+               "kids": [
+                {
+                 "kind": "return",
+                 "loc": "fulfillment:internal/server/server.go:28",
+                 "code": "CustomerID: req.GetCustomerId(),",
+                 "before": "ID:         req.GetOrderId(),",
+                 "after": "Units:      req.GetUnits(),",
+                 "type": "string",
+                 "fn": "Server.Schedule",
+                 "kids": [
+                  {
+                   "kind": "field",
+                   "name": "plan.Order.CustomerID",
+                   "type": "string",
+                   "kids": [
+                    {
+                     "kind": "read",
+                     "loc": "fulfillment:internal/plan/planner.go:56",
+                     "code": "if o.ID == \"\" || o.CustomerID == \"\" {",
+                     "before": "func (p *Planner) Plan(ctx context.Context, o Order) (Shipment, bool, error) {",
+                     "after": "return Shipment{}, false, fmt.Errorf(\"%w: missing order or customer\", ErrInvalid)",
+                     "type": "string",
+                     "fn": "Planner.Plan"
+                    },
+                    {
+                     "kind": "read",
+                     "loc": "fulfillment:internal/plan/planner.go:65",
+                     "code": "region, ship, err := p.rates.Rate(ctx, o.CustomerID, o.Units)",
+                     "after": "if err != nil {",
+                     "type": "string",
+                     "fn": "Planner.Plan",
+                     "kids": [
+                      {
+                       "kind": "arg",
+                       "loc": "fulfillment:internal/shipping/client.go:33",
+                       "code": "func (c *Client) Rate(ctx context.Context, customerID string, units int64) (string, int64, error) {",
+                       "before": "// and returns the customer's region with the delivery price.",
+                       "after": "u, err := url.Parse(c.base)",
+                       "type": "string",
+                       "fn": "Client.Rate",
+                       "via": "fulfillment:internal/plan/planner.go:65",
+                       "kids": [
+                        {
+                         "kind": "container",
+                         "loc": "fulfillment:internal/shipping/client.go:39",
+                         "code": "u.RawQuery = url.Values{\"customer_id\": {customerID}, \"units\": {strconv.FormatInt(units, 10)}}.Encode()",
+                         "before": "u = u.JoinPath(\"rates\")",
+                         "after": "req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)",
+                         "type": "[1]string",
+                         "fn": "Client.Rate",
+                         "kids": [
+                          {
+                           "kind": "transform",
+                           "loc": "fulfillment:internal/shipping/client.go:40",
+                           "code": "req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)",
+                           "before": "u.RawQuery = url.Values{\"customer_id\": {customerID}, \"units\": {strconv.FormatInt(units, 10)}}.Encode()",
+                           "after": "if err != nil {",
+                           "type": "string",
+                           "fn": "Client.Rate",
+                           "kids": [
+                            {
+                             "kind": "transform",
+                             "loc": "fulfillment:internal/shipping/client.go:44",
+                             "code": "resp, err := c.http.Do(req)",
+                             "before": "}",
+                             "after": "if err != nil {",
+                             "type": "*http.Response",
+                             "fn": "Client.Rate",
+                             "kids": [
+                              {
+                               "kind": "container",
+                               "loc": "fulfillment:internal/shipping/client.go:48",
+                               "code": "defer resp.Body.Close()",
+                               "before": "}",
+                               "after": "if resp.StatusCode != http.StatusOK {",
+                               "type": "*io.ReadCloser",
+                               "fn": "Client.Rate"
+                              },
+                              {
+                               "kind": "container",
+                               "loc": "fulfillment:internal/shipping/client.go:49",
+                               "code": "if resp.StatusCode != http.StatusOK {",
+                               "before": "defer resp.Body.Close()",
+                               "after": "return \"\", 0, fmt.Errorf(\"get rate: unexpected status %s\", resp.Status)",
+                               "type": "*int",
+                               "fn": "Client.Rate"
+                              },
+                              {
+                               "kind": "container",
+                               "loc": "fulfillment:internal/shipping/client.go:50",
+                               "code": "return \"\", 0, fmt.Errorf(\"get rate: unexpected status %s\", resp.Status)",
+                               "before": "if resp.StatusCode != http.StatusOK {",
+                               "after": "}",
+                               "type": "*string",
+                               "fn": "Client.Rate"
+                              },
+                              {
+                               "kind": "container",
+                               "loc": "fulfillment:internal/shipping/client.go:53",
+                               "code": "if err := json.NewDecoder(resp.Body).Decode(\u0026r); err != nil {",
+                               "before": "var r rate",
+                               "after": "return \"\", 0, fmt.Errorf(\"decode rate: %w\", err)",
+                               "type": "*io.ReadCloser",
+                               "fn": "Client.Rate"
+                              }
+                             ]
+                            }
+                           ]
+                          }
+                         ]
+                        }
+                       ]
+                      }
+                     ]
+                    },
+                    {
+                     "kind": "read",
+                     "loc": "fulfillment:internal/plan/planner.go:75",
+                     "code": "tax, err := p.taxes.Tax(ctx, o.CustomerID, region, ins)",
+                     "before": "if ins \u003e 0 {",
+                     "after": "if err != nil {",
+                     "type": "string",
+                     "fn": "Planner.Plan",
+                     "kids": [
+                      {
+                       "kind": "arg",
+                       "loc": "fulfillment:internal/pricing/client.go:24",
+                       "code": "func (c *Client) Tax(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
+                       "before": "// cents and returns only its tax.",
+                       "after": "resp, err := c.rpc.Quote(ctx, \u0026pricingv1.QuoteRequest{",
+                       "type": "string",
+                       "fn": "Client.Tax",
+                       "via": "fulfillment:internal/plan/planner.go:75"
+                      }
+                     ]
+                    }
+                   ]
+                  }
+                 ]
                 }
                ]
               }

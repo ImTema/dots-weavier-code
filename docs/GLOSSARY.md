@@ -6,6 +6,10 @@ dotweavier is a CLI that indexes many code projects into one typed graph and tra
 
 ### Sources
 
+**Workspace**:
+The folder that projects are found under. A project's name is its path relative to its workspace, so `golang/orders` in the `samples` workspace, or `scoring-system` in `scoring-workspace`.
+_Avoid_: project folder, root, monorepo
+
 **Project**:
 A single folder that is indexed on its own, recognised by its manifest: `go.mod` for Go; `pom.xml`, `build.gradle(.kts)` or `settings.gradle(.kts)` for Java and Kotlin. A folder with its own manifest inside a project is not part of that project's index: it is a **Module** of it.
 _Avoid_: workspace, repo, service, monorepo

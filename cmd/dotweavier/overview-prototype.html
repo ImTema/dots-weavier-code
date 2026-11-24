@@ -45,6 +45,15 @@ label{display:block;color:#9aa2d0;cursor:pointer}
 #pp .cnt .g{color:#ff4fe8}
 #ppGrip{position:absolute;left:0;bottom:0;width:16px;height:16px;cursor:nesw-resize;color:#5d6596;font-size:12px;line-height:16px;text-align:center;user-select:none}
 #ppGrip:hover{color:#fff}
+/* Collapsible panels: a » / « button hides one, a tab at the screen edge brings it back. */
+.fold{float:right;margin:-2px 0 0 6px;padding:1px 7px;border:1px solid #2b3270;border-radius:12px;color:#bfc7ff;cursor:pointer;font-size:11px;user-select:none}
+.fold:hover,.tab:hover{background:rgba(76,141,255,.18)}
+#pp h2 .fold{margin:0 0 0 auto}
+.tab{position:absolute;top:10px;z-index:3;display:none;padding:4px 9px;background:rgba(8,10,28,.92);border:1px solid #2b3270;border-radius:6px;color:#bfc7ff;cursor:pointer;font-size:11px;letter-spacing:.1em;user-select:none}
+#sideTab{left:10px}#ppTab{right:10px}
+body.noside #side,body.nopp #pp{display:none}
+body.noside #sideTab,body.nopp #ppTab{display:block}
+body.noside #empty{left:0}
 #pp .row input,#pp .sw{flex:none}
 #pp .err{color:#ff7a7a}
 .sb{flex:none;padding:1px 8px;border:1px solid #2b3270;border-radius:10px;color:#bfc7ff;cursor:pointer;font-size:10px}
@@ -57,6 +66,8 @@ label{display:block;color:#9aa2d0;cursor:pointer}
 #pmenu .it:hover{background:rgba(76,141,255,.18)}
 #pmenu .it.danger{color:#ff8a8a}#pmenu .it.danger:hover{background:rgba(255,90,90,.15)}
 #pp .ok{color:#3ddc84}
+.sb.danger{border-color:#ff7a7a;color:#ff8a8a;margin-left:8px;letter-spacing:0}.sb.danger:hover{background:rgba(255,90,90,.15)}
+#ws select{width:100%;background:#0b0e24;color:#cdd5ff;border:1px solid #262c5c;border-radius:5px;font:inherit;font-size:11px}
 #pp .sec{color:#5d6596;font-size:10px;letter-spacing:.12em;margin:8px 0 2px;cursor:pointer;user-select:none}
 #pp .sec:hover{color:#cdd5ff}
 #pp .modline{padding:0 0 3px 26px;color:#8b93c4;font-size:10px;cursor:pointer;user-select:none}
@@ -97,7 +108,8 @@ label{display:block;color:#9aa2d0;cursor:pointer}
 <script type="importmap">{"imports":{"three":"/overview_prototype_assets/three.module.js","three/addons/":"/overview_prototype_assets/"}}</script>
 </head><body>
 <div id="side">
-  <span id="reset" title="show every project, clear selection, directions and search, fit the view">reset</span>
+  <span id="sideHide" class="fold" title="hide this panel">«</span>
+  <span id="reset" title="put the camera back on the default view, centred and upright">reset</span>
   <h1>DOTWEAVIER</h1><div class="proto">OVERVIEW PROTOTYPE</div>
   <div id="stats" class="muted">loading…</div>
   <h2>DIRECTIONS</h2>
@@ -119,11 +131,12 @@ label{display:block;color:#9aa2d0;cursor:pointer}
   <label><input type="checkbox" id="showNames" checked> function names when zoomed in</label>
 </div>
 <div id="empty">Nothing in the overview yet.<br>Press <b>Sync</b> on a project in the top-right list to index it and add it here.</div>
-<div id="pp"><h2>PROJECTS <a id="ppAll" title="show every added project matching the filter">all</a><a id="ppNone" title="hide every added project matching the filter">none</a></h2>
+<div id="pp"><h2>PROJECTS <a id="ppAll" title="show every added project matching the filter">all</a><a id="ppNone" title="hide every added project matching the filter">none</a><span id="ppHide" class="fold" title="hide this panel">»</span></h2>
   <div id="ws" class="muted"></div>
   <input id="pq" type="text" placeholder="find project" autocomplete="off">
   <div id="projects"></div>
   <div id="ppGrip" title="drag to resize · double-click to expand or shrink">◣</div></div>
+<div id="sideTab" class="tab" title="show the side panel">» DOTWEAVIER</div><div id="ppTab" class="tab" title="show the projects panel">PROJECTS «</div>
 <div id="tip"></div><div id="ctx"></div><div id="pmenu"></div><div id="labels"></div><div id="names"></div><div id="markers"></div><div id="fps"><div id="counts"></div><div id="rate"></div></div>
 <script type="module">
 import * as THREE from 'three';
@@ -175,11 +188,12 @@ let out = [], inn = [];
 let labels = [];
 let focus = null; // {node: i} or {edge: {s, t, via}}
 // added: indexed projects, kept in step with /projects on every load; hidden: added but unchecked.
-const added = new Set(JSON.parse(localStorage.getItem('dw.added') || '[]'));
-const hidden = new Set(JSON.parse(localStorage.getItem('dw.hidden') || '[]'));
+// Both are kept per workspace: nested workspaces name the same project differently.
+const added = new Set(), hidden = new Set();
+let setsKey = '';
 const shownProjects = () => [...added].filter(p => !hidden.has(p));
 const showQS = () => shownProjects().map(p => 'show=' + encodeURIComponent(p)).join('&');
-let detected = [], root = '';
+let detected = [], root = '', invalid = [], workspaces = [];
 const syncing = new Set(), syncErr = new Map(), syncNote = new Map(); // note: short-lived "up to date" / "synced"
 const m4 = new THREE.Matrix4(), v = new THREE.Vector3(), q4 = new THREE.Quaternion(), s3 = new THREE.Vector3();
 const where = i => `${D.projects[D.proj[i]]}:${D.files[D.file[i]]}:${D.line[i]}`;
@@ -232,6 +246,43 @@ function segments(pairs, colorOf, opacity) {
 }
 function drop(o) { if (o) { scene.remove(o); o.geometry.dispose(); o.material.dispose(); } return null; }
 
+// With "calls inside projects" off, only public functions (ends of shown link hops) and
+// the call paths from one public function to another stay; every other star is hidden
+// (scale 0, and project() puts it behind the camera so nothing picks or names it).
+let shown = new Uint8Array(0), nearCalls = null, nearPairs = [];
+// reach marks every node reached from the seeds along calls (back = 0) or against them (back = 1).
+function reach(seeds, back) {
+  const adj = Array.from({length: N}, () => []);
+  for (let k = 0; k < D.edges.length; k += 2) adj[D.edges[k + back]].push(D.edges[k + 1 - back]);
+  const seen = new Uint8Array(N), stack = [...seeds];
+  for (const i of stack) seen[i] = 1;
+  while (stack.length) for (const j of adj[stack.pop()]) if (!seen[j]) { seen[j] = 1; stack.push(j); }
+  return seen;
+}
+const starScale = i => shown[i] ? 0.35 + 0.3 * Math.log2(1 + D.deg[i]) : 0;
+function applyCalls() {
+  const all = $('showCalls').checked;
+  calls.visible = all;
+  nearCalls = drop(nearCalls); nearPairs = [];
+  shown = new Uint8Array(N).fill(all ? 1 : 0);
+  if (!all) {
+    const ends = new Set();
+    for (let k = 0; k < D.linkKinds.length; k++) if (links[D.linkKinds[k]]?.visible) ends.add(D.links[2*k]).add(D.links[2*k+1]);
+    for (const i of ends) shown[i] = 1;
+    // A call a -> b is on such a path when a is reached from a public function and b reaches one.
+    const from = reach(ends, 0), to = reach(ends, 1);
+    for (let k = 0; k < D.edges.length; k += 2) {
+      const a = D.edges[k], b = D.edges[k+1];
+      if (from[a] && to[b]) { shown[a] = shown[b] = 1; nearPairs.push(a, b); }
+    }
+    nearCalls = segments(nearPairs, k => pcol[D.proj[nearPairs[k]]], CALL_OPACITY);
+    scene.add(nearCalls);
+  }
+  for (let i = 0; i < N; i++) stars.setMatrixAt(i, m4.compose(v.set(D.pos[3*i], D.pos[3*i+1], D.pos[3*i+2]), q4, s3.setScalar(starScale(i))));
+  stars.instanceMatrix.needsUpdate = true;
+  projected = false;
+}
+
 let loadSeq = 0, dataBytes = 0;
 // What this page allocated itself: every vertex, index and instance buffer in the
 // scene (uploaded to the GPU, and kept in JS too) plus the layout JSON it parsed.
@@ -267,7 +318,7 @@ async function load(refit) {
     if (seq === loadSeq) $('pp').classList.remove('busy');
   }
   if (seq !== loadSeq) return; // a newer toggle already asked for another layout
-  detected = det.projects || []; root = det.root;
+  detected = det.projects || []; root = det.root; invalid = det.invalid || [];
   // In overview = indexed, however it was indexed (Sync here or the CLI); Remove deletes the index.
   // Only show/hide is a per-browser choice. A changed set needs a layout for the new set.
   const indexed = new Set(detected.filter(d => d.indexed).map(d => d.name));
@@ -282,15 +333,10 @@ async function load(refit) {
   stars = drop(stars); calls = drop(calls); hl = drop(hl); for (const k in links) drop(links[k]); links = {};
   stars = new THREE.InstancedMesh(new THREE.PlaneGeometry(2, 2), starMaterial, Math.max(N, 1));
   stars.count = N;
-  for (let i = 0; i < N; i++) {
-    v.set(D.pos[3*i], D.pos[3*i+1], D.pos[3*i+2]);
-    stars.setMatrixAt(i, m4.compose(v, q4, s3.setScalar(0.35 + 0.3 * Math.log2(1 + D.deg[i]))));
-    stars.setColorAt(i, pcol[D.proj[i]]);
-  }
+  for (let i = 0; i < N; i++) stars.setColorAt(i, pcol[D.proj[i]]); // positions and sizes: applyCalls
   // Faint lines only read as structure when there are thousands; a few dozen need to be bright.
   CALL_OPACITY = Math.min(0.6, Math.max(0.07, 20 / Math.sqrt(D.edges.length / 2 || 1)));
   calls = segments(D.edges, k => pcol[D.proj[D.edges[k]]], CALL_OPACITY);
-  calls.visible = $('showCalls').checked;
   scene.add(stars, calls);
   const byKind = {};
   for (let k = 0; k < D.linkKinds.length; k++) (byKind[D.linkKinds[k]] ??= []).push(D.links[2*k], D.links[2*k+1]);
@@ -300,6 +346,7 @@ async function load(refit) {
     scene.add(links[kind]);
   }
   renderLinkToggles(byKind);
+  applyCalls();
 
   out = Array.from({length: N}, () => []); inn = Array.from({length: N}, () => []);
   for (let k = 0; k < D.edges.length; k += 2) { out[D.edges[k]].push([D.edges[k+1], 'call']); inn[D.edges[k+1]].push([D.edges[k], 'call']); }
@@ -387,8 +434,44 @@ function renderProjects() {
     return `<div class="sec" data-sec="${id}" title="click to ${open ? 'collapse' : 'expand'}"><span class="tw">${open ? '▾' : '▸'}</span>${title} (${list.length})</div>`
       + (open ? list.map(rootRow).join('') || `<div class="muted">${empty}</div>` : '');
   };
-  $('ws').textContent = root;
-  $('projects').innerHTML = sec('added', 'IN OVERVIEW', inOverview, 'none yet') + sec('detected', 'PROJECTS DETECTED', rest, 'all added');
+  renderWs(root);
+  // Invalid indexes: built in this workspace, but their project is no longer found there.
+  const inv = invalid.filter(match), invOpen = !collapsed.has('invalid') || !!s;
+  const invSec = !invalid.length ? '' : `<div class="sec" data-sec="invalid" title="click to ${invOpen ? 'collapse' : 'expand'}"><span class="tw">${invOpen ? '▾' : '▸'}</span>INVALID (${invalid.length})<span class="sb danger" data-rmi="1" title="delete every invalid index of this workspace">remove all</span></div>`
+    + (invOpen ? inv.map(p => `<div class="row off" title="${esc(p)}: index kept, but the project is no longer found in this workspace"><span class="nm">${esc(p)}</span><span class="st err">not found</span></div>`).join('') : '');
+  $('projects').innerHTML = sec('added', 'IN OVERVIEW', inOverview, 'none yet') + (rest.length ? sec('detected', 'PROJECTS DETECTED', rest, '') : '') + invSec;
+}
+// Workspace: only one is active. With several registered, a select switches between them.
+function renderWs(active) {
+  $('ws').innerHTML = workspaces.length > 1
+    ? `<select title="active workspace">${active ? '' : '<option value="" selected disabled>choose a workspace…</option>'}${workspaces.map(w => `<option value="${esc(w)}"${w === active ? ' selected' : ''}>${esc(w)}</option>`).join('')}</select>`
+    : esc(active);
+}
+const chooseWorkspace = ws => fetch('/workspace?dir=' + encodeURIComponent(ws), {method: 'POST', headers: {'X-Dotweavier': '1'}});
+$('ws').onchange = async e => {
+  const r = await chooseWorkspace(e.target.value);
+  if (!r.ok) return alert(await r.text());
+  localStorage.setItem('dw.ws', e.target.value);
+  location.reload(); // another workspace: other projects, node ids and layout
+};
+// The server starts with no workspace when several are registered: reopen the last one chosen here.
+async function initWorkspace() {
+  const j = await (await fetch('/workspaces')).json();
+  workspaces = j.workspaces || [];
+  let active = j.active;
+  const last = localStorage.getItem('dw.ws');
+  if (!active && workspaces.includes(last) && (await chooseWorkspace(last)).ok) active = last;
+  if (active) { loadSets(active); return load(true); }
+  renderWs('');
+  $('stats').textContent = 'no workspace chosen';
+  $('empty').innerHTML = 'Several workspaces are registered.<br>Choose one in the top-right list.';
+  $('empty').style.display = 'block';
+}
+// Remove all invalid: deletes those index files from ~/.dotweavier.
+async function removeInvalid() {
+  if (!confirm(`Remove ${invalid.length} invalid ${invalid.length > 1 ? 'indexes' : 'index'} of this workspace?\n\n${invalid.join('\n')}\n\nTheir projects are no longer found here. The index files are deleted from ~/.dotweavier.`)) return;
+  try { await post('remove-invalid', ''); } catch (err) { alert(String(err.message || err)); }
+  load(false);
 }
 $('pq').oninput = () => renderProjects();
 const collapsed = new Set(JSON.parse(localStorage.getItem('dw.collapsed') || '[]'));
@@ -410,7 +493,14 @@ const collapsed = new Set(JSON.parse(localStorage.getItem('dw.collapsed') || '[]
   });
   grip.addEventListener('dblclick', () => { apply(pp.offsetWidth > 600 ? [340, 0] : [Math.min(innerWidth - 360, 760), innerHeight - 20]); save(); });
 })();
-function saveSets() { localStorage.setItem('dw.added', JSON.stringify([...added])); localStorage.setItem('dw.hidden', JSON.stringify([...hidden])); }
+function saveSets() { localStorage.setItem('dw.added:' + setsKey, JSON.stringify([...added])); localStorage.setItem('dw.hidden:' + setsKey, JSON.stringify([...hidden])); }
+function loadSets(ws) {
+  setsKey = ws;
+  for (const [set, name] of [[added, 'added'], [hidden, 'hidden']]) {
+    set.clear();
+    for (const p of JSON.parse(localStorage.getItem(`dw.${name}:${ws}`) || '[]')) set.add(p);
+  }
+}
 function saveHidden() { saveSets(); load(false); }
 const post = async (what, p) => {
   const r = await fetch(`/${what}?project=` + encodeURIComponent(p), {method: 'POST', headers: {'X-Dotweavier': '1'}});
@@ -477,6 +567,7 @@ $('projects').onclick = e => {
   if (t.dataset.c !== undefined) return; // checkbox: handled by onchange
   const mt = t.closest('[data-mods]');
   if (mt) { const r = mt.dataset.mods; openMods.has(r) ? openMods.delete(r) : openMods.add(r); localStorage.setItem('dw.openMods', JSON.stringify([...openMods])); return renderProjects(); }
+  if (t.dataset.rmi !== undefined) return removeInvalid();
   const sh = t.closest('[data-sec]');
   if (sh) { const id = sh.dataset.sec; collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id); localStorage.setItem('dw.collapsed', JSON.stringify([...collapsed])); return renderProjects(); }
   if (t.dataset.sync !== undefined) return sync(t.dataset.sync);
@@ -519,8 +610,8 @@ function setFocus(f) {
   const lit = new Set(), ends = new Set(), pairs = [], cols = []; // ends: this focus's own nodes
   if (f && f.node !== undefined) {
     const i = f.node; lit.add(i); ends.add(i);
-    for (const [t] of out[i]) { lit.add(t); pairs.push(i, t); cols.push(OUT, OUT); }
-    for (const [s] of inn[i]) { lit.add(s); pairs.push(s, i); cols.push(IN, IN); }
+    for (const [t] of out[i]) if (shown[t]) { lit.add(t); pairs.push(i, t); cols.push(OUT, OUT); }
+    for (const [s] of inn[i]) if (shown[s]) { lit.add(s); pairs.push(s, i); cols.push(IN, IN); }
   } else if (f && f.edge) {
     for (const j of [f.edge.s, f.edge.t]) { lit.add(j); ends.add(j); }
     pairs.push(f.edge.s, f.edge.t); cols.push(WHITE, WHITE);
@@ -537,6 +628,7 @@ function setFocus(f) {
   }
   if (stars.instanceColor) stars.instanceColor.needsUpdate = true;
   calls.material.opacity = dim ? CALL_OPACITY * 0.25 : CALL_OPACITY;
+  if (nearCalls) nearCalls.material.opacity = calls.material.opacity;
   for (const kind in links) links[kind].material.opacity = dim ? 0.15 : GRPC_OPACITY;
   if (pairs.length) { hl = segments(pairs, k => cols[k], 0.95); scene.add(hl); }
   renderFocus();
@@ -586,16 +678,17 @@ $('hits').onclick = e => {
 
 // Bottom right: what is drawn right now; with a selection or route, how much of it is lit.
 function renderCounts(litNodes, litEdges) {
-  const ec = calls.visible ? D.edges.length / 2 : 0;
+  const ec = calls.visible ? D.edges.length / 2 : nearPairs.length / 2;
+  const shownN = shown.reduce((a, b) => a + b, 0);
   const lc = {}; for (const kind of D.linkKinds) if (links[kind]?.visible) lc[kind] = (lc[kind] || 0) + 1;
   const eg = Object.values(lc).reduce((a, b) => a + b, 0);
   const r = routes[routeSel];
-  let t = `${N.toLocaleString()}${D.total > N ? ' of ' + D.total.toLocaleString() : ''} nodes · ${(ec + eg).toLocaleString()} edges (${[ec.toLocaleString() + ' calls', ...Object.entries(lc).map(([kind, n]) => n.toLocaleString() + ' ' + linkShort(kind))].join(' + ')})`;
+  let t = `${shownN < N ? shownN.toLocaleString() + ' of ' : ''}${N.toLocaleString()}${D.total > N ? ' of ' + D.total.toLocaleString() : ''} nodes · ${(ec + eg).toLocaleString()} edges (${[ec.toLocaleString() + ' calls', ...Object.entries(lc).map(([kind, n]) => n.toLocaleString() + ' ' + linkShort(kind))].join(' + ')})`;
   if (litNodes) t += ` · lit ${litNodes.toLocaleString()} nodes, ${(litEdges + (r ? r.via.length : 0)).toLocaleString()} edges`;
   $('counts').textContent = t;
 }
 const recount = () => setFocus(focus);
-$('showCalls').onchange = e => { calls.visible = e.target.checked; recount(); };
+$('showCalls').onchange = () => { applyCalls(); recount(); };
 // One checkbox per link kind present in the layout, with its colour and count.
 function renderLinkToggles(byKind) {
   const kinds = Object.keys(LINK).filter(k => byKind[k]).concat(Object.keys(byKind).filter(k => !LINK[k]));
@@ -605,6 +698,7 @@ function renderLinkToggles(byKind) {
     const kind = e.target.dataset.kind;
     links[kind].visible = linkShown[kind] = e.target.checked;
     localStorage.setItem('dw.links', JSON.stringify(linkShown));
+    applyCalls(); // the hops shown decide which stars stay when calls are off
     recount();
   };
 }
@@ -658,7 +752,7 @@ function project() {
   for (let i = 0; i < N; i++) {
     const x = D.pos[3*i], y = D.pos[3*i+1], z = D.pos[3*i+2];
     const w = e[3]*x + e[7]*y + e[11]*z + e[15];
-    sz[i] = w;
+    sz[i] = shown[i] ? w : -1; // hidden stars count as behind the camera
     sx[i] = (e[0]*x + e[4]*y + e[8]*z + e[12]) / w * w2 + w2;
     sy[i] = -(e[1]*x + e[5]*y + e[9]*z + e[13]) / w * h2 + h2;
   }
@@ -694,6 +788,7 @@ function pickEdge(mx, my) {
   }
   for (let k = 0; k < D.linkKinds.length; k++) if (links[D.linkKinds[k]]?.visible) seg(D.links[2*k], D.links[2*k+1], linkLabel(D.linkKinds[k], D.methods[k]));
   if (calls.visible) for (let k = 0; k < D.edges.length; k += 2) seg(D.edges[k], D.edges[k+1], 'call');
+  else for (let k = 0; k < nearPairs.length; k += 2) seg(nearPairs[k], nearPairs[k+1], 'call');
   return best;
 }
 renderer.domElement.addEventListener('pointermove', e => mouse = [e.clientX, e.clientY]);
@@ -934,15 +1029,11 @@ function pickRoute(mx, my) {
   return best;
 }
 
+// Reset puts the camera back on its first view: centred on the hub, upright, from the front.
+// Projects, selection, directions, search and toggles stay as they are.
 $('reset').onclick = () => {
-  ends.a = ends.b = null; closeMenu();
-  $('q').value = ''; $('qp').value = -1; $('pq').value = '';
-  for (const id of ['showCalls', 'showLabels']) $(id).checked = true;
-  for (const k in linkShown) delete linkShown[k]; localStorage.removeItem('dw.links'); // load redraws the link toggles
-  $('labels').style.display = '';
-  focus = null;
-  hidden.clear(); saveSets();
-  load(true); // relayout with every added project, fit the camera, re-run (now empty) directions
+  const h = hub();
+  anim = {t: 0, fromT: controls.target.clone(), toT: h.clone(), fromP: camera.position.clone(), toP: new THREE.Vector3(h.x, h.y + R * 0.6, h.z + R * 2.2)};
 };
 
 let frames = 0, last = performance.now(), worst = 0, prev = last;
@@ -988,6 +1079,13 @@ function frame(now) {
     $('rate').innerHTML = `${frames} fps · worst frame ${worst.toFixed(0)} ms · ${mem}`; frames = 0; last = now; worst = 0; }
 }
 requestAnimationFrame(frame);
-load(true);
+// Panel collapse, remembered in this browser like the rest of the layout.
+const fold = (cls, on) => { document.body.classList.toggle(cls, on); localStorage.setItem('dw.' + cls, on ? '1' : ''); };
+for (const [cls, hide, tab] of [['noside', 'sideHide', 'sideTab'], ['nopp', 'ppHide', 'ppTab']]) {
+  if (localStorage.getItem('dw.' + cls)) document.body.classList.add(cls);
+  $(hide).onclick = () => fold(cls, true);
+  $(tab).onclick = () => fold(cls, false);
+}
+initWorkspace();
 </script>
 </body></html>

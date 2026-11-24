@@ -33,7 +33,8 @@ func TestGraphGolden(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	files, err := filepath.Glob(filepath.Join(storeDir(), "*.db"))
+	ws, _ := filepath.Abs("../../samples")
+	files, err := filepath.Glob(filepath.Join(storesDir(), "*.db"))
 	if err != nil || len(files) == 0 {
 		t.Fatalf("no stores: %v", err)
 	}
@@ -45,7 +46,7 @@ func TestGraphGolden(t *testing.T) {
 		golden(t, strings.ReplaceAll(s.Project, "/", "_")+".txt", dumpGraph(&s.Graph, false))
 	}
 
-	g, _, err := loadIndexes()
+	g, _, err := loadIndexes(ws)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +71,7 @@ func TestGraphGolden(t *testing.T) {
 		{"golang/orders:internal/pricer/pricer.go:23", "golang/pricing::TierRule.Discount", false},
 	} {
 		fmt.Fprintf(&b, "== %s -> %s tests=%v\n", c.a, c.b, c.tests)
-		r, err := TracePath(c.a, c.b, 10, c.tests)
+		r, err := TracePath(ws, c.a, c.b, 10, c.tests)
 		if err != nil {
 			fmt.Fprintf(&b, "error: %v\n\n", err)
 			continue

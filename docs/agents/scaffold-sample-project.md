@@ -81,7 +81,8 @@ customer tier and one request per new failure mode. Check the numbers
 against the rules in the READMEs. Then index and trace:
 
 ```sh
-dotweavier index --project samples
+dotweavier init samples
+dotweavier index samples/<language>/<service>   # once per service
 dotweavier trace path -A <caller> -B <callee>
 ```
 

@@ -38,14 +38,14 @@ If you added the `PATH` line only for dotweavier, delete it from `~/.zshrc`.
 
 ### 1. Index
 
-Run it from a project folder, or pass `--project DIR`. dotweavier treats every directory under it that contains a `go.mod`, `pom.xml`, `build.gradle(.kts)` or `settings.gradle(.kts)` as a project. Java and Kotlin projects are read from source, without building them (`docs/adr/0007-jvm-extractor-from-source.md`). A project's name is its path relative to that folder.
+A workspace is the folder that projects are found under. dotweavier treats every directory under it that contains a `go.mod`, `pom.xml`, `build.gradle(.kts)` or `settings.gradle(.kts)` as a project. Java and Kotlin projects are read from source, without building them (`docs/adr/0007-jvm-extractor-from-source.md`). A project's name is its path relative to its workspace.
 
 ```sh
-dotweavier index                    # every project under the current folder
-dotweavier index orders pricing     # only these projects
+dotweavier init ~/code              # register a workspace; its projects are detected, not indexed
+dotweavier index ~/code/orders      # index one project and its modules
 ```
 
-Re-run `index` after the source changes.
+`index` uses the deepest registered workspace that contains the project. Workspaces may nest: a project has one index, shared by every workspace that contains it. If none does, the project's parent folder is registered as its workspace. Re-run `index` after the source changes, or press Sync in the overview.
 
 ### 2. Trace a call path between two symbols
 
@@ -98,7 +98,8 @@ resID, err := s.reserver.Reserve(ctx, c.ID, req.Items)
 Index the samples, then trace that line and follow its calls two services deep:
 
 ```sh
-dotweavier index --project samples
+dotweavier init samples
+for p in samples/golang/orders samples/golang/pricing samples/java/inventory samples/kotlin/shipping; do dotweavier index $p; done
 dotweavier trace field golang/orders:internal/order/order.go:81 --project samples --follow 2
 ```
 
@@ -127,7 +128,7 @@ What to check against `samples/README.md`:
 - Inside `pricing`, the customer ID reaches its HTTP clients `customers.Client.Tier` and `shipping.Client.Rate`. The trace stops there: Go HTTP clients are not linked yet, so `pricing → orders` and `pricing → shipping` are not followed.
 - A handler reached from several steps is traced once; the other steps show `(traced at another step)`.
 
-The same in the browser: run `dotweavier overview --project samples`, open `http://127.0.0.1:7357/ui/trace-field.html`, trace the line from its file viewer, and press **follow all hops** (or **follow ⇢** on one step).
+The same in the browser: run `dotweavier overview --workspace samples`, open `http://127.0.0.1:7357/ui/trace-field.html`, trace the line from its file viewer, and press **follow all hops** (or **follow ⇢** on one step).
 
 ## Try it
 

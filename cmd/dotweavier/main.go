@@ -1,8 +1,9 @@
 // The dotweavier CLI: parses flags, calls internal/domain and renders its
 // results as text or as a self-contained HTML page.
 //
-//	dotweavier index [--project DIR] [project ...]
-//	dotweavier trace path -A <addr> -B <addr> [--max-paths 10] [--include-tests]
+//	dotweavier init [DIR]
+//	dotweavier index [DIR]
+//	dotweavier trace path -A <addr> -B <addr> [--workspace DIR] [--max-paths 10] [--include-tests]
 //	dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--depth N] [--include-tests] [--format text|ui]
 //
 // Addresses: project::Type.Method, project:rel/path.go:Type.Method, project:rel/path.go:LINE.
@@ -26,8 +27,9 @@ import (
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
-  dotweavier index [--project DIR] [project ...]   (no names: every project under DIR)
-  dotweavier trace path -A <addr> -B <addr> [--max-paths N] [--include-tests] [--format text|ui]
+  dotweavier init [DIR]    register DIR (default: current folder) as a workspace; its projects are detected, not indexed
+  dotweavier index [DIR]   index the project in DIR (default: current folder) and its modules
+  dotweavier trace path -A <addr> -B <addr> [--workspace DIR] [--max-paths N] [--include-tests] [--format text|ui]
   dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--project DIR] [--depth N] [--include-tests] [--max-projects N] [--follow N] [--export FILE] [--format text|ui]`)
 	os.Exit(2)
 }
@@ -38,6 +40,8 @@ func main() {
 	}
 	start := time.Now()
 	switch os.Args[1] {
+	case "init":
+		runInit(os.Args[2:])
 	case "index":
 		runIndex(os.Args[2:])
 	case "overview": // PROTOTYPE
@@ -68,21 +72,42 @@ func defaultProjectDir() string {
 	return wd
 }
 
+// dirArg is the single optional folder argument of init and index, or the current folder.
+func dirArg(args []string) string {
+	switch len(args) {
+	case 0:
+		return defaultProjectDir()
+	case 1:
+		return args[0]
+	}
+	usage()
+	return ""
+}
+
+func runInit(args []string) {
+	ws, names, err := domain.InitWorkspace(dirArg(args))
+	must(err)
+	fmt.Printf("workspace %s: %d projects detected; index each with: dotweavier index DIR\n", ws, len(names))
+	for _, n := range names {
+		fmt.Println("  " + n)
+	}
+}
+
 func runIndex(args []string) {
-	fl := flag.NewFlagSet("index", flag.ExitOnError)
-	ws := fl.String("project", defaultProjectDir(), "project folder; projects (and modules) under it are found by their manifest")
-	_ = fl.Parse(args)
-	must(domain.Index(*ws, fl.Args(), func(project, stats string, err error) {
+	ws, err := domain.IndexProject(dirArg(args), func(project, stats string, err error) {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "index %s: %v\n", project, err)
 			return
 		}
 		fmt.Fprintf(os.Stderr, "indexed %-28s %s\n", project, stats)
-	}))
+	})
+	must(err)
+	fmt.Fprintf(os.Stderr, "workspace %s\n", ws)
 }
 
 func runTrace(args []string) {
 	fl := flag.NewFlagSet("trace", flag.ExitOnError)
+	wsFlag := fl.String("workspace", "", "registered workspace to trace in (default: the deepest one containing the current folder, else the only one)")
 	aFlag := fl.String("A", "", "start symbol address")
 	bFlag := fl.String("B", "", "end symbol address")
 	maxPaths := fl.Int("max-paths", 10, "number of paths to print")
@@ -90,7 +115,7 @@ func runTrace(args []string) {
 	format := fl.String("format", "text", "text (one line per path) or ui (galaxy view written to ~/.dotweavier/ui/trace-path.html)")
 	_ = fl.Parse(args)
 
-	r, err := domain.TracePath(*aFlag, *bFlag, *maxPaths, *tests)
+	r, err := domain.TracePath(*wsFlag, *aFlag, *bFlag, *maxPaths, *tests)
 	must(err)
 	fmt.Fprintf(os.Stderr, "loaded %d indexes: nodes=%d edges=%d grpcHops=%d pubsubHops=%d grpcClientCalls=%d servedMethods=%d\n",
 		r.Indexes, r.Nodes, r.Edges, r.GRPCHops, r.PubsubHops, r.GRPCCalls, r.ServedMethods)

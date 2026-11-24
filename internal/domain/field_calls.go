@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -14,15 +15,21 @@ import (
 // unindexed projects get no path.
 // ponytail: one trace per distinct function, each rebuilding the reverse graph;
 // share one reverse graph if large trees get slow.
-func attachCalls(r *FieldTrace, home, seedFile string, seedLine int) {
-	g, err := mergedGraph()
+func attachCalls(r *FieldTrace, ws, home, seedFile string, seedLine int) {
+	// Project names in the trace are relative to ws, and so are the indexes' names when loaded for ws.
+	abs, err := filepath.Abs(ws)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "call paths skipped:", err)
+		return
+	}
+	g, err := mergedGraph(abs)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "call paths skipped:", err)
 		return
 	}
 	seed, err := g.resolve(address{Project: home, File: seedFile, Line: seedLine}, false)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "call paths skipped: seed is not in the index (run: dotweavier index %s): %v\n", home, err)
+		fmt.Fprintf(os.Stderr, "call paths skipped: seed is not in the index (run: dotweavier index %s): %v\n", filepath.Join(abs, home), err)
 		return
 	}
 	cache := map[int32]*Path{}

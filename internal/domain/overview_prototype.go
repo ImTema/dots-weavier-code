@@ -5,11 +5,11 @@ package domain
 
 import (
 	"cmp"
-	"database/sql"
 	"errors"
 	"fmt"
 	"hash/fnv"
 	"io/fs"
+	"maps"
 	"math"
 	"math/rand/v2"
 	"os"
@@ -47,22 +47,34 @@ type OverviewGraph struct {
 // OverviewSource is every index merged once; Build lays it out per request and
 // Sync re-indexes one project, then merges again.
 type OverviewSource struct {
-	ws   string
+	ws   string // the workspace, an absolute folder
 	mu   sync.RWMutex // guards g: Sync swaps it while requests read it
 	g    *graph
 	sync sync.Mutex // one Sync at a time
 }
 
+// LoadOverview merges the indexes of the registered workspace ws, the only workspace it shows.
 func LoadOverview(ws string) (*OverviewSource, error) {
-	g, err := mergedGraph()
+	ws, err := filepath.Abs(ws)
+	if err != nil {
+		return nil, err
+	}
+	if err := registered(ws); err != nil {
+		return nil, err
+	}
+	g, err := mergedGraph(ws)
 	if err != nil {
 		return nil, err
 	}
 	return &OverviewSource{ws: ws, g: g}, nil
 }
 
-func mergedGraph() (*graph, error) {
-	g, _, err := loadIndexes()
+// Workspace is the absolute folder of the workspace this overview shows.
+func (src *OverviewSource) Workspace() string { return src.ws }
+
+// mergedGraph merges the indexes of every project inside the absolute folder ws, joined and without tests.
+func mergedGraph(ws string) (*graph, error) {
+	g, _, err := loadIndexes(ws)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +108,7 @@ func (src *OverviewSource) Detect() ([]DetectedProject, error) {
 	out := make([]DetectedProject, 0, len(ps))
 	for _, p := range ps {
 		d := DetectedProject{Name: p.Name, Parent: parentOf(p.Name, names), Nodes: nodes[p.Name], Edges: edges[p.Name], Links: links[p.Name]}
-		if built, ok := indexBuilt(p.Name); ok {
+		if built, ok := indexBuilt(p.dir); ok {
 			d.Indexed, d.Built = true, built
 		}
 		out = append(out, d)
@@ -133,22 +145,10 @@ func (src *OverviewSource) counts() (nodes, edges map[string]int, links map[stri
 	return nodes, edges, links
 }
 
-func indexBuilt(project string) (time.Time, bool) {
-	path := storePath(project)
-	if _, err := os.Stat(path); err != nil {
-		return time.Time{}, false
-	}
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
-	if err != nil {
-		return time.Time{}, false
-	}
-	defer db.Close()
-	var built string
-	if err := db.QueryRow(`SELECT built FROM meta`).Scan(&built); err != nil {
-		return time.Time{}, false
-	}
-	t, err := time.Parse(time.RFC3339Nano, built)
-	return t, err == nil
+// indexBuilt is when the index of the project in folder dir was built, if it has one.
+func indexBuilt(dir string) (time.Time, bool) {
+	_, _, built, err := readMeta(storePath(dir))
+	return built, err == nil
 }
 
 // detected returns the detected project with this name. Request input is only
@@ -242,7 +242,7 @@ func (src *OverviewSource) Sync(project string) ([]SyncResult, error) {
 	for i, p := range fam {
 		res[i].Project = p.Name
 		at[p.Name] = i
-		if built, ok := indexBuilt(p.Name); ok && !changedSince(p.dir, built) {
+		if built, ok := indexBuilt(p.dir); ok && !changedSince(p.dir, built) {
 			res[i].UpToDate = true
 		} else {
 			stale = append(stale, p.Name)
@@ -272,7 +272,7 @@ func (src *OverviewSource) Remove(project string) ([]string, error) {
 	}
 	var removed []string
 	for _, p := range fam {
-		if err := os.Remove(storePath(p.Name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if err := os.Remove(storePath(p.dir)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return removed, err
 		}
 		removed = append(removed, p.Name)
@@ -280,8 +280,52 @@ func (src *OverviewSource) Remove(project string) ([]string, error) {
 	return removed, src.remerge()
 }
 
+// Invalid lists the invalid indexes of this workspace: indexes whose project is
+// no longer detected where it was found.
+func (src *OverviewSource) Invalid() ([]string, error) {
+	files, err := src.invalid()
+	out := slices.Sorted(maps.Values(files))
+	return out, err
+}
+
+// invalid maps each invalid index file of this workspace to its project's name.
+func (src *OverviewSource) invalid() (map[string]string, error) {
+	ps, err := discover(src.ws)
+	if err != nil {
+		return nil, err
+	}
+	files, err := indexesIn(src.ws)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range ps {
+		delete(files, storePath(p.dir))
+	}
+	return files, nil
+}
+
+// RemoveInvalid deletes every invalid index of this workspace and returns their projects.
+// A nested workspace sharing such an index loses it too: its project is gone for both.
+func (src *OverviewSource) RemoveInvalid() ([]string, error) {
+	src.sync.Lock()
+	defer src.sync.Unlock()
+	files, err := src.invalid()
+	if err != nil {
+		return nil, err
+	}
+	var removed []string
+	for f, name := range files {
+		if err := os.Remove(f); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return removed, err
+		}
+		removed = append(removed, name)
+	}
+	slices.Sort(removed)
+	return removed, src.remerge()
+}
+
 func (src *OverviewSource) remerge() error {
-	g, err := mergedGraph()
+	g, err := mergedGraph(src.ws)
 	if err != nil {
 		return err
 	}
@@ -426,6 +470,63 @@ func separate(pos []vec, gap float64, passes int) {
 }
 
 func (a vec) add(b vec, k float64) vec { return vec{a[0] + b[0]*k, a[1] + b[1]*k, a[2] + b[2]*k} }
+func (a vec) scale(k float64) vec        { return vec{a[0] * k, a[1] * k, a[2] * k} }
+func cross(a, b vec) vec {
+	return vec{a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]}
+}
+
+// groupRing is how a project's group is laid out: modules at dist from the
+// project's centre, the whole group within outer of it.
+type groupRing struct{ dist, outer float64 }
+
+// moduleGroups groups the shown projects (indexes into names, biggest first) as
+// [project, its modules...]: a module joins the outermost shown project whose
+// folder contains it, otherwise it heads its own group. Groups keep the order of
+// their projects. ring is keyed by each group's project.
+func moduleGroups(names []string, shown []int, radius []float64, gap float64) ([][]int, map[int]groupRing) {
+	idx := map[string]int{}
+	for _, i := range shown {
+		idx[names[i]] = i
+	}
+	head := func(i int) int { // outermost shown project containing names[i], or i
+		n := names[i]
+		for j := range len(n) { // shortest prefix first: the outermost project
+			if n[j] == '/' {
+				if h, ok := idx[n[:j]]; ok {
+					return h
+				}
+			}
+		}
+		return i
+	}
+	at := map[int]int{} // head -> its group's index
+	var groups [][]int
+	for _, i := range shown {
+		h := head(i)
+		if _, ok := at[h]; !ok {
+			at[h] = len(groups)
+			groups = append(groups, []int{h})
+		}
+		if h != i {
+			groups[at[h]] = append(groups[at[h]], i)
+		}
+	}
+	ring := map[int]groupRing{}
+	for _, g := range groups {
+		r0, rm := radius[g[0]], 0.0
+		for _, i := range g[1:] {
+			rm = max(rm, radius[i])
+		}
+		if len(g) == 1 {
+			ring[g[0]] = groupRing{0, r0}
+			continue
+		}
+		// Far enough to clear the project, and a ring long enough that modules do not touch.
+		d := max(r0+rm+gap, float64(len(g)-1)*(2*rm+gap)/(2*math.Pi))
+		ring[g[0]] = groupRing{d, d + rm}
+	}
+	return groups, ring
+}
 
 // inBall is a deterministic point in the unit ball for key.
 func inBall(key string) vec {
@@ -445,27 +546,47 @@ func inBall(key string) vec {
 // shortcut: anchored neighbour smoothing, no Barnes-Hut repulsion; upgrade if clusters look mushy.
 func (o *OverviewGraph) layout() {
 	const spread = 7.0 // world units per cbrt(node)
+	const gap = 6.0    // between a project and the ring of its modules
 	radius := make([]float64, len(o.Projects))
-	sum := 0.0
 	var shown []int
 	for i, n := range o.Sizes {
-		if o.Hidden[i] {
-			continue
+		if !o.Hidden[i] {
+			shown = append(shown, i)
+			radius[i] = spread * math.Cbrt(float64(n))
 		}
-		shown = append(shown, i)
-		radius[i] = spread * math.Cbrt(float64(n))
-		sum += radius[i] * radius[i]
 	}
-	// Sphere surface ~ 4πR² must hold every cluster's disc πr²; R >= 0.5*sqrt(sum)
-	// fits them exactly, 0.55 keeps projects nearly touching.
+	// A module is drawn beside its project: each shown project and the shown modules
+	// inside it form one group, placed on the sphere as one cluster.
+	groups, ring := moduleGroups(o.Projects, shown, radius, gap)
+	sum := 0.0
+	for _, g := range groups {
+		sum += ring[g[0]].outer * ring[g[0]].outer
+	}
+	// Sphere surface ~ 4πR² must hold every group's disc πr²; R >= 0.5*sqrt(sum)
+	// fits them exactly, 0.55 keeps groups nearly touching.
 	R := 0.55 * math.Sqrt(sum)
 	centers := make([]vec, len(o.Projects))
 	golden := math.Pi * (3 - math.Sqrt(5))
-	for k, i := range shown {
-		y := 1 - 2*(float64(k)+0.5)/float64(len(shown))
+	for k, g := range groups {
+		y := 1 - 2*(float64(k)+0.5)/float64(len(groups))
 		rr := math.Sqrt(1 - y*y)
 		th := golden * float64(k)
-		centers[i] = vec{math.Cos(th) * rr * R, y * R, math.Sin(th) * rr * R}
+		c := vec{math.Cos(th) * rr * R, y * R, math.Sin(th) * rr * R}
+		centers[g[0]] = c
+		// Modules on a ring around the project, in the plane tangent to the sphere.
+		n := vec{math.Cos(th) * rr, y, math.Sin(th) * rr}
+		u := cross(n, vec{0, 1, 0})
+		if l := math.Hypot(u[0], math.Hypot(u[1], u[2])); l > 1e-6 {
+			u = u.scale(1 / l)
+		} else {
+			u = vec{1, 0, 0}
+		}
+		w := cross(n, u)
+		d := ring[g[0]].dist
+		for m, i := range g[1:] {
+			a := 2 * math.Pi * float64(m) / float64(len(g)-1)
+			centers[i] = c.add(u, d*math.Cos(a)).add(w, d*math.Sin(a))
+		}
 	}
 	for _, c := range centers {
 		o.Centers = append(o.Centers, float32(c[0]), float32(c[1]), float32(c[2]))

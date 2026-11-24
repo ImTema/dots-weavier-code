@@ -90,7 +90,7 @@ func traceGoHandler(ws, loc string, line int, tests bool, maxProjects int) (*Fie
 	if err != nil {
 		return nil, err
 	}
-	return fieldTrace(t, home, gos, file, line), nil
+	return fieldTrace(ws, t, home, gos, file, line), nil
 }
 
 // requestParam accepts the parameters that carry a request into a handler.

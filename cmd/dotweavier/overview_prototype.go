@@ -6,13 +6,17 @@ package main
 import (
 	"embed"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"dotweavier/internal/domain"
@@ -27,12 +31,49 @@ var overviewAssets embed.FS
 func runOverview(args []string) {
 	fl := flag.NewFlagSet("overview", flag.ExitOnError)
 	addr := fl.String("addr", "127.0.0.1:7357", "listen address")
-	ws := fl.String("project", defaultProjectDir(), "project folder whose projects the page lists and can sync")
+	ws := fl.String("workspace", "", "registered workspace to show (default: the only one registered; with several, the page asks)")
 	maxNodes := fl.Int("max-nodes", 20000, "draw at most N functions: cross-project ones first, then the most connected (0: no cap)")
 	_ = fl.Parse(args)
 
-	src, err := domain.LoadOverview(*ws)
+	// Only one workspace is active at a time; the page can switch to another registered one.
+	var cur atomic.Pointer[domain.OverviewSource]
+	activate := func(dir string) error {
+		all, err := domain.Workspaces()
+		if err != nil {
+			return err
+		}
+		abs, err := filepath.Abs(dir)
+		if err != nil {
+			return err
+		}
+		if !slices.Contains(all, abs) { // request input never reaches the loader unless registered
+			return fmt.Errorf("%s is not a registered workspace; run: dotweavier init %s", abs, abs)
+		}
+		src, err := domain.LoadOverview(abs)
+		if err != nil {
+			return err
+		}
+		cur.Store(src)
+		return nil
+	}
+	all, err := domain.Workspaces()
 	must(err)
+	switch {
+	case *ws != "":
+		must(activate(*ws))
+	case len(all) == 0:
+		must(errors.New("no workspace registered; run: dotweavier init DIR"))
+	case len(all) == 1:
+		must(activate(all[0]))
+	}
+	// active is the active workspace's overview, or nil after answering 409 when none is chosen yet.
+	active := func(w http.ResponseWriter) *domain.OverviewSource {
+		src := cur.Load()
+		if src == nil {
+			http.Error(w, "no active workspace; choose one", http.StatusConflict)
+		}
+		return src
+	}
 	show := func(r *http.Request) map[string]bool {
 		m := map[string]bool{}
 		for _, p := range r.URL.Query()["show"] {
@@ -48,6 +89,10 @@ func runOverview(args []string) {
 	})
 	// ?show=project (repeatable): lay out only those projects; none shown is a valid, empty overview.
 	mux.HandleFunc("GET /data.json", func(w http.ResponseWriter, r *http.Request) {
+		src := active(w)
+		if src == nil {
+			return
+		}
 		shown := show(r)
 		o := src.Build(shown, *maxNodes)
 		data, err := json.Marshal(o)
@@ -73,6 +118,10 @@ func runOverview(args []string) {
 		if errK != nil || k < 1 || k > 20 {
 			k = 5
 		}
+		src := active(w)
+		if src == nil {
+			return
+		}
 		t0 := time.Now()
 		routes, exhausted := src.Routes(int32(a), int32(b), k, show(r), *maxNodes)
 		ms := time.Since(t0).Milliseconds()
@@ -82,25 +131,52 @@ func runOverview(args []string) {
 	})
 	// Projects detected under the project folder, with whether and when each was indexed.
 	mux.HandleFunc("GET /projects", func(w http.ResponseWriter, _ *http.Request) {
+		src := active(w)
+		if src == nil {
+			return
+		}
 		ps, err := src.Detect()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		invalid, err := src.Invalid()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"root": *ws, "projects": ps})
+		json.NewEncoder(w).Encode(map[string]any{"root": src.Workspace(), "projects": ps, "invalid": invalid})
+	})
+	// The registered workspaces and the active one ("" until one is chosen).
+	mux.HandleFunc("GET /workspaces", func(w http.ResponseWriter, _ *http.Request) {
+		all, err := domain.Workspaces()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		act := ""
+		if src := cur.Load(); src != nil {
+			act = src.Workspace()
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"active": act, "workspaces": all})
 	})
 	// A custom header forces a CORS preflight, which this server never answers,
 	// so other sites open in the browser cannot trigger indexing or delete indexes.
-	action := func(name string, run func(project string) (map[string]any, error)) {
+	action := func(name string, run func(src *domain.OverviewSource, project string) (map[string]any, error)) {
 		mux.HandleFunc("POST /"+name, func(w http.ResponseWriter, r *http.Request) {
 			if r.Header.Get("X-Dotweavier") != "1" {
 				http.Error(w, "missing X-Dotweavier header", http.StatusForbidden)
 				return
 			}
+			src := active(w)
+			if src == nil {
+				return
+			}
 			p := r.URL.Query().Get("project")
 			t0 := time.Now()
-			res, err := run(p)
+			res, err := run(src, p)
 			fmt.Fprintf(os.Stderr, "%s %s: %v err=%v (%s)\n", name, p, res, err, time.Since(t0).Round(time.Millisecond))
 			w.Header().Set("Content-Type", "application/json")
 			if err != nil {
@@ -112,14 +188,35 @@ func runOverview(args []string) {
 	}
 	// POST /sync?project=NAME syncs the project and the projects nested in it;
 	// each is re-indexed only if it changed.
-	action("sync", func(p string) (map[string]any, error) {
+	action("sync", func(src *domain.OverviewSource, p string) (map[string]any, error) {
 		res, err := src.Sync(p)
 		return map[string]any{"results": res}, err
 	})
 	// POST /remove?project=NAME deletes the indexes of the project and the projects nested in it.
-	action("remove", func(p string) (map[string]any, error) {
+	action("remove", func(src *domain.OverviewSource, p string) (map[string]any, error) {
 		removed, err := src.Remove(p)
 		return map[string]any{"removed": removed}, err
+	})
+	// POST /remove-invalid deletes every invalid index of the active workspace.
+	action("remove-invalid", func(src *domain.OverviewSource, _ string) (map[string]any, error) {
+		removed, err := src.RemoveInvalid()
+		return map[string]any{"removed": removed}, err
+	})
+	// POST /workspace?dir=DIR makes the registered workspace DIR the active one.
+	mux.HandleFunc("POST /workspace", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Dotweavier") != "1" {
+			http.Error(w, "missing X-Dotweavier header", http.StatusForbidden)
+			return
+		}
+		dir := r.URL.Query().Get("dir")
+		t0 := time.Now()
+		err := activate(dir)
+		fmt.Fprintf(os.Stderr, "workspace %s: err=%v (%s)\n", dir, err, time.Since(t0).Round(time.Millisecond))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.Handle("GET /overview_prototype_assets/", http.FileServerFS(overviewAssets))
 	// Field trace page, served so it can continue a trace: GET /ui/trace-field.html?t=RUN
@@ -137,7 +234,11 @@ func runOverview(args []string) {
 			http.Error(w, "missing X-Dotweavier header", http.StatusForbidden)
 			return
 		}
-		f, err := domain.Source(*ws, r.URL.Query().Get("loc"))
+		src := active(w)
+		if src == nil {
+			return
+		}
+		f, err := domain.Source(src.Workspace(), r.URL.Query().Get("loc"))
 		w.Header().Set("Content-Type", "application/json")
 		if err != nil {
 			w.WriteHeader(http.StatusUnprocessableEntity)
@@ -177,6 +278,10 @@ func runOverview(args []string) {
 			reply(http.StatusForbidden, map[string]any{"error": "missing X-Dotweavier header"})
 			return
 		}
+		src := active(w)
+		if src == nil {
+			return
+		}
 		q := r.URL.Query()
 		run, err := loadFieldRun(q.Get("run"))
 		if err != nil {
@@ -187,7 +292,7 @@ func runOverview(args []string) {
 		t0 := time.Now()
 		if q.Get("path") == "" {
 			depth, _ := strconv.Atoi(q.Get("depth"))
-			n, errs := domain.FollowHops(*ws, tr, max(depth, 1), maxFollow, false, 10)
+			n, errs := domain.FollowHops(src.Workspace(), tr, max(depth, 1), maxFollow, false, 10)
 			if n == 0 && len(errs) > 0 {
 				err = errs[0]
 			}
@@ -203,7 +308,7 @@ func runOverview(args []string) {
 			}
 			if err == nil {
 				k, _ := strconv.Atoi(q.Get("hop"))
-				err = domain.FollowHop(*ws, tr, path, k, false, 10)
+				err = domain.FollowHop(src.Workspace(), tr, path, k, false, 10)
 			}
 		}
 		var name string
@@ -225,6 +330,10 @@ func runOverview(args []string) {
 			http.Error(w, "missing X-Dotweavier header", http.StatusForbidden)
 			return
 		}
+		src := active(w)
+		if src == nil {
+			return
+		}
 		a := r.URL.Query().Get("addr")
 		t0 := time.Now()
 		reply := func(code int, v map[string]any) {
@@ -232,9 +341,9 @@ func runOverview(args []string) {
 			w.WriteHeader(code)
 			json.NewEncoder(w).Encode(v)
 		}
-		tr, err := domain.TraceField(*ws, a, false, 10)
+		tr, err := domain.TraceField(src.Workspace(), a, false, 10)
 		if n, _ := strconv.Atoi(r.URL.Query().Get("follow")); err == nil && n > 0 {
-			domain.FollowHops(*ws, tr, n, maxFollow, false, 10) // a hop that fails stays unfollowed
+			domain.FollowHops(src.Workspace(), tr, n, maxFollow, false, 10) // a hop that fails stays unfollowed
 		}
 		var name string
 		if err == nil {

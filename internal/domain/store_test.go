@@ -24,12 +24,12 @@ func TestStoreRoundTrip(t *testing.T) {
 	if err := save(in); err != nil { // re-index overwrites
 		t.Fatal(err)
 	}
-	out, err := load(storePath("org/p"))
+	out, err := load(storePath("/x"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Base(storePath("org/p")) != "org__p.db" {
-		t.Errorf("path %s", storePath("org/p"))
+	if filepath.Base(storePath("/x")) != "x.db" {
+		t.Errorf("path %s", storePath("/x"))
 	}
 	out.Graph.ids, in.Graph.ids = nil, nil
 	if !reflect.DeepEqual(in, out) {

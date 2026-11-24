@@ -10,6 +10,7 @@ import (
 	"go/token"
 	"go/types"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -17,11 +18,19 @@ import (
 	"time"
 )
 
-// Index indexes the projects under ws, or only the named ones, each into its own
-// store. done is called after each project with its load stats or its error.
+// Index indexes the projects under workspace ws, or only the named ones, each into
+// the one index of its folder; ws is registered if it is not yet.
+// done is called after each project with its load stats or its error.
 func Index(ws string, names []string, done func(project, stats string, err error)) error {
+	ws, err := filepath.Abs(ws)
+	if err != nil {
+		return err
+	}
 	all, err := discover(ws)
 	if err != nil {
+		return err
+	}
+	if err := register(ws); err != nil {
 		return err
 	}
 	want := map[string]bool{}
@@ -49,6 +58,60 @@ func Index(ws string, names []string, done func(project, stats string, err error
 		return fmt.Errorf("project %q not found under %s", n, ws)
 	}
 	return nil
+}
+
+// InitWorkspace registers folder dir as a workspace and returns its absolute path
+// and the projects detected under it. Nothing is indexed.
+func InitWorkspace(dir string) (string, []string, error) {
+	ws, err := filepath.Abs(dir)
+	if err != nil {
+		return "", nil, err
+	}
+	if fi, err := os.Stat(ws); err != nil || !fi.IsDir() {
+		return "", nil, fmt.Errorf("%s is not a folder", ws)
+	}
+	ps, err := discover(ws)
+	if err != nil {
+		return "", nil, err
+	}
+	var names []string
+	for _, p := range ps {
+		names = append(names, p.Name)
+	}
+	return ws, names, register(ws)
+}
+
+// IndexProject indexes the project in folder dir, with its modules, into the
+// deepest registered workspace that contains it. If none does, dir's parent
+// folder is registered as the workspace first. It returns the workspace.
+func IndexProject(dir string, done func(project, stats string, err error)) (string, error) {
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	ps, err := discover(dir)
+	if err != nil {
+		return "", err
+	}
+	if !slices.ContainsFunc(ps, func(p project) bool { return p.Name == "." }) {
+		return "", fmt.Errorf("%s is not a project: it has no go.mod, pom.xml, build.gradle(.kts) or settings.gradle(.kts)", dir)
+	}
+	ws, err := workspaceFor(dir)
+	if err != nil {
+		return "", err
+	}
+	if ws == "" {
+		ws = filepath.Dir(dir) // Index below registers it
+	}
+	rel, err := filepath.Rel(ws, dir)
+	if err != nil {
+		return "", err
+	}
+	var names []string // the project and its modules
+	for _, p := range ps {
+		names = append(names, path.Join(filepath.ToSlash(rel), p.Name))
+	}
+	return ws, Index(ws, names, done)
 }
 
 func (st loadStats) String() string {
@@ -108,9 +171,13 @@ type PathTrace struct {
 }
 
 // TracePath finds up to maxPaths call paths from address a to address b over
-// every indexed project. Addresses: project::Type.Method,
-// project:rel/path.go:Type.Method, project:rel/path.go:LINE.
-func TracePath(a, b string, maxPaths int, tests bool) (*PathTrace, error) {
+// every project indexed in workspace ws (see pickWorkspace for ws ""). Addresses:
+// project::Type.Method, project:rel/path.go:Type.Method, project:rel/path.go:LINE.
+func TracePath(ws, a, b string, maxPaths int, tests bool) (*PathTrace, error) {
+	ws, err := pickWorkspace(ws)
+	if err != nil {
+		return nil, err
+	}
 	addrA, err := parseAddr(a)
 	if err != nil {
 		return nil, err
@@ -119,13 +186,13 @@ func TracePath(a, b string, maxPaths int, tests bool) (*PathTrace, error) {
 	if err != nil {
 		return nil, err
 	}
-	g, loaded, err := loadIndexes()
+	g, loaded, err := loadIndexes(ws)
 	if err != nil {
 		return nil, err
 	}
 	for _, p := range []string{addrA.Project, addrB.Project} {
 		if !loaded[p] {
-			return nil, fmt.Errorf("project %q is not indexed; run: dotweavier index %s", p, p)
+			return nil, fmt.Errorf("project %q is not indexed in workspace %s; run: dotweavier index %s", p, ws, filepath.Join(ws, p))
 		}
 	}
 	if !tests {
@@ -231,18 +298,18 @@ func TraceField(ws, addr string, tests bool, maxProjects int) (*FieldTrace, erro
 		if err != nil {
 			return nil, err
 		}
-		attachCalls(r, home.Name, rel, line)
+		attachCalls(r, ws, home.Name, rel, line)
 		return r, nil
 	}
 	t, err := traceField(projects, home, file, line, tests, maxProjects, nil)
 	if err != nil {
 		return nil, err
 	}
-	return fieldTrace(t, home, projects, file, line), nil
+	return fieldTrace(ws, t, home, projects, file, line), nil
 }
 
 // fieldTrace turns a Go tracker's walks into the two trees, with call paths and hops.
-func fieldTrace(t *tracker, home project, projects []project, file string, line int) *FieldTrace {
+func fieldTrace(ws string, t *tracker, home project, projects []project, file string, line int) *FieldTrace {
 	projects = slices.Clone(projects)
 	slices.SortFunc(projects, func(a, b project) int { return cmp.Compare(len(b.dir), len(a.dir)) })
 	p := &printer{t: t, home: home, projects: projects, src: map[string][]string{}}
@@ -253,7 +320,7 @@ func fieldTrace(t *tracker, home project, projects []project, file string, line 
 	for _, n := range t.fwd.tree() {
 		r.Uses = append(r.Uses, p.step(n))
 	}
-	attachCalls(r, home.Name, p.rel(file), line)
+	attachCalls(r, ws, home.Name, p.rel(file), line)
 	return r
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,16 +22,21 @@ type stored struct {
 	Graph        graph
 }
 
-// One SQLite file per project (ADR 0004). trace still loads whole graphs into
-// memory; the tables just make them queryable without dotweavier.
-func storeDir() string {
+// One SQLite file per project folder (ADR 0004), shared by every workspace that
+// contains the folder. trace still loads whole graphs into memory; the tables
+// just make them queryable without dotweavier.
+func dotweavierDir() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".dotweavier", "proto")
+	return filepath.Join(home, ".dotweavier")
 }
 
-func storePath(project string) string {
-	return filepath.Join(storeDir(), strings.ReplaceAll(project, "/", "__")+".db")
+// storePath is the index file of the project in the absolute folder dir.
+func storePath(dir string) string {
+	name := strings.ReplaceAll(strings.TrimPrefix(filepath.ToSlash(filepath.Clean(dir)), "/"), "/", "__")
+	return filepath.Join(storesDir(), name+".db")
 }
+
+func storesDir() string { return filepath.Join(dotweavierDir(), "projects") }
 
 const schema = `
 CREATE TABLE meta (project TEXT NOT NULL, dir TEXT NOT NULL, built TEXT NOT NULL);
@@ -47,16 +53,16 @@ CREATE INDEX nodes_name ON nodes(name);
 // save writes a fresh database next to the old one and renames it over, so a
 // crash never leaves a half-written index.
 func save(s *stored) error {
-	if err := os.MkdirAll(storeDir(), 0o755); err != nil {
+	if err := os.MkdirAll(storesDir(), 0o755); err != nil {
 		return err
 	}
-	tmp := storePath(s.Project) + ".tmp"
+	tmp := storePath(s.Dir) + ".tmp"
 	os.Remove(tmp)
 	if err := writeDB(tmp, s); err != nil {
 		os.Remove(tmp)
 		return err
 	}
-	return os.Rename(tmp, storePath(s.Project))
+	return os.Rename(tmp, storePath(s.Dir))
 }
 
 func writeDB(path string, s *stored) error {
@@ -204,21 +210,171 @@ func load(path string) (*stored, error) {
 	return s, nil
 }
 
-// loadIndexes merges every project's store into one graph; unreadable stores are skipped.
-func loadIndexes() (*graph, map[string]bool, error) {
-	files, err := filepath.Glob(filepath.Join(storeDir(), "*.db"))
+// readMeta reads only an index's meta row: its project name, folder and build time.
+func readMeta(path string) (project, dir string, built time.Time, err error) {
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	if err != nil {
+		return "", "", time.Time{}, err
+	}
+	defer db.Close()
+	var b string
+	if err = db.QueryRow(`SELECT project, dir, built FROM meta`).Scan(&project, &dir, &b); err != nil {
+		return "", "", time.Time{}, err
+	}
+	built, err = time.Parse(time.RFC3339Nano, b)
+	return project, dir, built, err
+}
+
+// The workspace registry: one row per workspace. Workspaces may nest; a project
+// folder inside several of them has one index, which each names relative to itself.
+const registrySchema = `CREATE TABLE IF NOT EXISTS workspaces (
+	id INTEGER PRIMARY KEY, dir TEXT NOT NULL UNIQUE, registered TEXT NOT NULL)`
+
+func openRegistry() (*sql.DB, error) {
+	if err := os.MkdirAll(dotweavierDir(), 0o755); err != nil {
+		return nil, err
+	}
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(dotweavierDir(), "dotweavier.db")+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := db.Exec(registrySchema); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return db, nil
+}
+
+// Workspaces lists the registered workspaces, sorted.
+func Workspaces() ([]string, error) {
+	db, err := openRegistry()
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	rows, err := db.Query(`SELECT dir FROM workspaces ORDER BY dir`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// register registers the absolute folder ws, if it is not registered yet.
+func register(ws string) error {
+	db, err := openRegistry()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	_, err = db.Exec(`INSERT OR IGNORE INTO workspaces (dir, registered) VALUES (?, ?)`, ws, time.Now().Format(time.RFC3339Nano))
+	return err
+}
+
+// registered reports an error unless the absolute folder ws is a registered workspace.
+func registered(ws string) error {
+	all, err := Workspaces()
+	if err == nil && !slices.Contains(all, ws) {
+		err = fmt.Errorf("%s is not a registered workspace; run: dotweavier init %s", ws, ws)
+	}
+	return err
+}
+
+// within reports whether the absolute folder dir is ws or inside it.
+func within(dir, ws string) bool {
+	return dir == ws || strings.HasPrefix(dir, ws+string(filepath.Separator))
+}
+
+// workspaceFor is the deepest registered workspace that contains the absolute folder dir, or "".
+func workspaceFor(dir string) (string, error) {
+	all, err := Workspaces()
+	best := ""
+	for _, ws := range all {
+		if within(dir, ws) && len(ws) > len(best) {
+			best = ws
+		}
+	}
+	return best, err
+}
+
+// pickWorkspace is folder ws if it is a registered workspace. With ws "", it is the
+// deepest registered workspace containing the current folder, else the only one registered.
+func pickWorkspace(ws string) (string, error) {
+	if ws != "" {
+		abs, err := filepath.Abs(ws)
+		if err != nil {
+			return "", err
+		}
+		return abs, registered(abs)
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	if w, err := workspaceFor(wd); w != "" || err != nil {
+		return w, err
+	}
+	all, err := Workspaces()
+	if err != nil {
+		return "", err
+	}
+	if len(all) != 1 {
+		return "", fmt.Errorf("%d workspaces registered and none contains %s; pass --workspace DIR", len(all), wd)
+	}
+	return all[0], nil
+}
+
+// indexesIn maps the index file of every project folder inside the absolute
+// folder ws to the project's name in ws, its path relative to ws.
+func indexesIn(ws string) (map[string]string, error) {
+	files, err := filepath.Glob(filepath.Join(storesDir(), "*.db"))
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, f := range files {
+		_, dir, _, err := readMeta(f)
+		if err != nil || !within(dir, ws) {
+			continue
+		}
+		rel, err := filepath.Rel(ws, dir)
+		if err == nil {
+			out[f] = filepath.ToSlash(rel)
+		}
+	}
+	return out, nil
+}
+
+// loadIndexes merges the index of every project inside workspace ws (absolute)
+// into one graph, each project named relative to ws; unreadable indexes are skipped.
+func loadIndexes(ws string) (*graph, map[string]bool, error) {
+	files, err := indexesIn(ws)
 	if err != nil {
 		return nil, nil, err
 	}
 	g := &graph{ids: map[string]int32{}, Impls: map[string][]int32{}}
 	loaded := map[string]bool{}
-	for _, f := range files {
+	for f, name := range files {
 		s, err := load(f)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "skip index %s: %v\n", f, err)
 			continue
 		}
-		loaded[s.Project] = true
+		// The index carries the name it was built under; this workspace may name it differently.
+		for i := range s.Graph.Nodes {
+			if s.Graph.Nodes[i].Project != "" {
+				s.Graph.Nodes[i].Project = name
+			}
+		}
+		loaded[name] = true
 		g.merge(&s.Graph)
 	}
 	return g, loaded, nil

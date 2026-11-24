@@ -1,8 +1,44 @@
+call golang/orders:cmd/orders/main.go:run lib (*cloud.google.com/go/pubsub/v2.Client).Close ext=
+call golang/orders:cmd/orders/main.go:run lib (*google.golang.org/grpc.ClientConn).Close ext=
+call golang/orders:cmd/orders/main.go:run lib cloud.google.com/go/pubsub/v2.NewClient ext=
+call golang/orders:cmd/orders/main.go:run lib example.com/samples/pricing/api/pricing/v1.NewPricingServiceClient ext=
+call golang/orders:cmd/orders/main.go:run lib google.golang.org/grpc.NewClient ext=
+call golang/orders:cmd/orders/main.go:run lib google.golang.org/grpc.WithTransportCredentials ext=
+call golang/orders:cmd/orders/main.go:run lib google.golang.org/grpc/credentials/insecure.NewCredentials ext=
+call golang/orders:internal/events/publisher.go:EnsureTopic lib (*cloud.google.com/go/pubsub/v2.Client).Project ext=
+call golang/orders:internal/events/publisher.go:EnsureTopic lib (*cloud.google.com/go/pubsub/v2/apiv1.TopicAdminClient).CreateTopic ext=
+call golang/orders:internal/events/publisher.go:EnsureTopic lib google.golang.org/grpc/status.Code ext=
+call golang/orders:internal/events/publisher.go:NewPublisher lib (*cloud.google.com/go/pubsub/v2.Client).Publisher ext=
+call golang/orders:internal/events/publisher.go:Publisher.OrderPlaced lib (*cloud.google.com/go/pubsub/v2.Publisher).Publish ext=
+call golang/orders:internal/events/publisher.go:Publisher.OrderPlaced lib google.golang.org/protobuf/proto.Marshal ext=
+call golang/orders:internal/events/publisher.go:Publisher.OrderPlaced lib google.golang.org/protobuf/types/known/timestamppb.New ext=
+call golang/orders:internal/events/publisher.go:Publisher.Stop lib (*cloud.google.com/go/pubsub/v2.Publisher).Stop ext=
+call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib (*cloud.google.com/go/pubsub/v2.Client).Close ext=
+call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib (*cloud.google.com/go/pubsub/v2/pstest.Server).Close ext=
+call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib (*cloud.google.com/go/pubsub/v2/pstest.Server).Messages ext=
+call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib (*google.golang.org/protobuf/types/known/timestamppb.Timestamp).AsTime ext=
+call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib cloud.google.com/go/pubsub/v2.NewClient ext=
+call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib cloud.google.com/go/pubsub/v2/pstest.NewServer ext=
+call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib google.golang.org/api/option.WithEndpoint ext=
+call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib google.golang.org/api/option.WithGRPCDialOption ext=
+call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib google.golang.org/api/option.WithoutAuthentication ext=
+call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib google.golang.org/grpc.WithTransportCredentials ext=
+call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib google.golang.org/grpc/credentials/insecure.NewCredentials ext=
+call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib google.golang.org/protobuf/proto.Unmarshal ext=
 call golang/orders:internal/inventory/client.go:Client.Release /inventory.v1.InventoryService/Release ext=inventoryv1.InventoryServiceClient.Release
 call golang/orders:internal/inventory/client.go:Client.Reserve /inventory.v1.InventoryService/Reserve ext=inventoryv1.InventoryServiceClient.Reserve
+call golang/orders:internal/inventory/client.go:Client.Reserve lib google.golang.org/grpc/status.Code ext=
+call golang/orders:internal/inventory/client.go:Client.Reserve lib google.golang.org/grpc/status.Convert ext=
+call golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:UnimplementedInventoryServiceServer.Release lib google.golang.org/grpc/status.Error ext=
+call golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:UnimplementedInventoryServiceServer.Reserve lib google.golang.org/grpc/status.Error ext=
 call golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Release /inventory.v1.InventoryService/Release ext=grpc /inventory.v1.InventoryService/Release
+call golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Release lib (*google.golang.org/grpc.ClientConn).Invoke ext=
+call golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Release lib google.golang.org/grpc.StaticMethod ext=
 call golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Reserve /inventory.v1.InventoryService/Reserve ext=grpc /inventory.v1.InventoryService/Reserve
+call golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Reserve lib (*google.golang.org/grpc.ClientConn).Invoke ext=
+call golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Reserve lib google.golang.org/grpc.StaticMethod ext=
 call golang/orders:internal/pricer/pricer.go:Client.Price /pricing.v1.PricingService/Quote ext=pricingv1.PricingServiceClient.Quote
+call golang/orders:internal/pricer/pricer.go:Client.Price lib (*example.com/samples/pricing/api/pricing/v1.QuoteResponse).GetTotalCents ext=
 edge golang/orders:api/events/v1/events.pb.go:OrderPlaced.Descriptor -call -> golang/orders:api/events/v1/events.pb.go:file_events_v1_events_proto_rawDescGZIP
 edge golang/orders:api/events/v1/events.pb.go:file_events_v1_events_proto_init -iface:guess -> external: reflect.Type.PkgPath
 edge golang/orders:api/events/v1/events.pb.go:init#1 -call -> golang/orders:api/events/v1/events.pb.go:file_events_v1_events_proto_init
@@ -62,8 +98,6 @@ edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_Inven
 edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_InventoryService_Reserve_Handler -iface:guess -> golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:UnimplementedInventoryServiceServer.Reserve
 edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_InventoryService_Reserve_Handler -iface:guess -> golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_InventoryService_Reserve_Handler$1
 edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:_InventoryService_Reserve_Handler$1 -iface:guess -> golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:UnimplementedInventoryServiceServer.Reserve
-edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Release -iface:guess -> external: grpc.ClientConnInterface.Invoke
-edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Reserve -iface:guess -> external: grpc.ClientConnInterface.Invoke
 edge golang/orders:internal/notify/notify.go:Send -iface:guess -> external: context.Context.Value
 edge golang/orders:internal/notify/notify.go:Send -iface:guess -> golang/orders:internal/notify/notify.go:Email.Notify
 edge golang/orders:internal/notify/notify.go:Send -iface:guess -> golang/orders:internal/notify/notify.go:SMS.Notify
@@ -92,10 +126,19 @@ edge golang/orders:internal/order/order_test.go:TestPlaceReleasesWhenPricingFail
 edge golang/orders:internal/order/order_test.go:TestPlaceReleasesWhenPricingFails -call -> golang/orders:internal/order/order.go:Service.Place
 impl http GET /customers/{} <- golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer
 impl http POST /orders <- golang/orders:internal/httpapi/httpapi.go:Handler.placeOrder
+impl lib (*example.com/samples/orders/api/events/v1.OrderPlaced).Descriptor <- golang/orders:api/events/v1/events.pb.go:OrderPlaced.Descriptor
+impl lib (*example.com/samples/orders/api/events/v1.OrderPlaced).GetCustomerId <- golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetCustomerId
+impl lib (*example.com/samples/orders/api/events/v1.OrderPlaced).GetOrderId <- golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetOrderId
+impl lib (*example.com/samples/orders/api/events/v1.OrderPlaced).GetPlacedAt <- golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetPlacedAt
+impl lib (*example.com/samples/orders/api/events/v1.OrderPlaced).GetTotalCents <- golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetTotalCents
+impl lib (*example.com/samples/orders/api/events/v1.OrderPlaced).GetUnits <- golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetUnits
+impl lib (*example.com/samples/orders/api/events/v1.OrderPlaced).ProtoMessage <- golang/orders:api/events/v1/events.pb.go:OrderPlaced.ProtoMessage
+impl lib (*example.com/samples/orders/api/events/v1.OrderPlaced).ProtoReflect <- golang/orders:api/events/v1/events.pb.go:OrderPlaced.ProtoReflect
+impl lib (*example.com/samples/orders/api/events/v1.OrderPlaced).Reset <- golang/orders:api/events/v1/events.pb.go:OrderPlaced.Reset
+impl lib (*example.com/samples/orders/api/events/v1.OrderPlaced).String <- golang/orders:api/events/v1/events.pb.go:OrderPlaced.String
 node external: context.Context.Done 0-0 test=false
 node external: context.Context.Value 0-0 test=false
 node external: error.Error 0-0 test=false
-node external: grpc.ClientConnInterface.Invoke 0-0 test=false
 node external: grpc.ServiceRegistrar.RegisterService 0-0 test=false
 node external: http.ResponseWriter.Header 0-0 test=false
 node external: http.ResponseWriter.WriteHeader 0-0 test=false

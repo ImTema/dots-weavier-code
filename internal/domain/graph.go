@@ -16,6 +16,7 @@ const (
 	pubsubHop               // publish joined to a subscriber handler on the topic
 	pubsubGuess             // publish joined to a subscriber on the proto message type only
 	httpHop                 // HTTP request joined to the handler of its method and path (http.go)
+	libHop                  // static call into a dependency joined to its function in another indexed project (lib.go)
 )
 
 // link reports whether k joins two ends by a contract (method, route, topic)
@@ -23,7 +24,7 @@ const (
 func (k kind) link() bool { return k >= grpcHop }
 
 func (k kind) String() string {
-	return [...]string{"call", "iface:sure", "iface:guess", "grpc", "pubsub", "pubsub:guess", "http"}[k]
+	return [...]string{"call", "iface:sure", "iface:guess", "grpc", "pubsub", "pubsub:guess", "http", "lib"}[k]
 }
 
 type edge struct {
@@ -99,18 +100,21 @@ func (g *graph) join() {
 			k = pubsubGuess
 		case strings.HasPrefix(c.Method, httpKey):
 			k = httpHop
+		case strings.HasPrefix(c.Method, libKey):
+			k = libHop
 		}
 		hs := g.Impls[c.Method]
 		if k == httpHop { // a route without a method serves them all
 			_, path, _ := strings.Cut(strings.TrimPrefix(c.Method, httpKey), " ")
 			hs = append(slices.Clip(hs), g.Impls[httpKey+"* "+path]...)
 		}
-		if len(hs) == 0 && k != pubsubGuess { // an unmatched type says nothing: no external node
+		// An unmatched type says nothing, and an unmatched library call is a third-party dependency: no external node.
+		if len(hs) == 0 && k != pubsubGuess && k != libHop {
 			g.link(c.From, g.external(c.Ext+" ["+c.Method+"]"), guess, "")
 		}
 		method := c.Method
-		if k == httpHop {
-			method = strings.TrimPrefix(method, httpKey) // the kind already says http
+		if k == httpHop || k == libHop {
+			method = strings.TrimPrefix(strings.TrimPrefix(method, httpKey), libKey) // the kind already says it
 		}
 		for _, h := range hs {
 			if h != c.From {

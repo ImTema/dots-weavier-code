@@ -33,12 +33,12 @@ type OverviewGraph struct {
 	Name     []string  `json:"name"`
 	ID       []int32   `json:"id"` // per node: stable graph node id, what /route takes and returns
 	Line     []int32   `json:"line"`
-	Deg      []int32   `json:"deg"`     // in+out edges
-	Pos      []float32 `json:"pos"`     // x,y,z per node
-	Edges    []int32   `json:"edges"`   // s,t pairs, calls inside one project
-	Links    []int32   `json:"links"`     // s,t pairs, grpc/http/pubsub hops (between projects)
-	Kinds    []string  `json:"linkKinds"` // per link pair: edge kind, "grpc", "http", "pubsub", "pubsub:guess"
-	Methods  []string  `json:"methods"`   // per link pair: gRPC full method, "GET /path", or pubsub key
+	Deg      []int32   `json:"deg"`       // in+out edges
+	Pos      []float32 `json:"pos"`       // x,y,z per node
+	Edges    []int32   `json:"edges"`     // s,t pairs, calls inside one project
+	Links    []int32   `json:"links"`     // s,t pairs, grpc/http/pubsub/lib hops (between projects)
+	Kinds    []string  `json:"linkKinds"` // per link pair: edge kind, "grpc", "http", "pubsub", "pubsub:guess", "lib"
+	Methods  []string  `json:"methods"`   // per link pair: gRPC full method, "GET /path", pubsub key, or library function
 	LayoutMs int64     `json:"layoutMs"`
 	Total    int       `json:"total"` // functions in the shown projects before the node cap
 	Limit    int       `json:"limit"` // the node cap; 0 means none
@@ -47,7 +47,7 @@ type OverviewGraph struct {
 // OverviewSource is every index merged once; Build lays it out per request and
 // Sync re-indexes one project, then merges again.
 type OverviewSource struct {
-	ws   string // the workspace, an absolute folder
+	ws   string       // the workspace, an absolute folder
 	mu   sync.RWMutex // guards g: Sync swaps it while requests read it
 	g    *graph
 	sync sync.Mutex // one Sync at a time
@@ -85,13 +85,13 @@ func mergedGraph(ws string) (*graph, error) {
 
 // DetectedProject is one project under the project folder and the state of its index.
 type DetectedProject struct {
-	Name    string    `json:"name"`
-	Indexed bool      `json:"indexed"`
-	Built   time.Time `json:"built,omitzero"`
-	Parent  string    `json:"parent,omitempty"` // nearest detected project folder containing this one
-	Nodes   int       `json:"nodes"`            // non-test functions in the index
-	Edges   int       `json:"edges"`            // calls between them, plus outgoing gRPC hops
-	Links   map[string]int `json:"links,omitempty"` // outgoing link hops by kind
+	Name    string         `json:"name"`
+	Indexed bool           `json:"indexed"`
+	Built   time.Time      `json:"built,omitzero"`
+	Parent  string         `json:"parent,omitempty"` // nearest detected project folder containing this one
+	Nodes   int            `json:"nodes"`            // non-test functions in the index
+	Edges   int            `json:"edges"`            // calls between them, plus outgoing link hops
+	Links   map[string]int `json:"links,omitempty"`  // outgoing link hops by kind
 }
 
 // Detect lists the projects under the project folder; it reads only each index's meta row.
@@ -470,7 +470,7 @@ func separate(pos []vec, gap float64, passes int) {
 }
 
 func (a vec) add(b vec, k float64) vec { return vec{a[0] + b[0]*k, a[1] + b[1]*k, a[2] + b[2]*k} }
-func (a vec) scale(k float64) vec        { return vec{a[0] * k, a[1] * k, a[2] * k} }
+func (a vec) scale(k float64) vec      { return vec{a[0] * k, a[1] * k, a[2] * k} }
 func cross(a, b vec) vec {
 	return vec{a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]}
 }

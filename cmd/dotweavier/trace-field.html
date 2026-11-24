@@ -81,7 +81,7 @@ const served=location.protocol.startsWith('http')&&!window.EXPORTED;
 const home=(D.addr.match(/^([^:]+):[^:]+\.(go|java|kt):\d+$/)||[])[1]||'';
 const KIND = {seed:'#ffffff',assign:'#6878b8',convert:'#6be4ff',transform:'#ffd06b',arg:'#7aa2ff',return:'#b88bff',
   store:'#ff9b6b',read:'#6dffc6',field:'#ff7ad9',container:'#c4ff6b',capture:'#9aa2d0','callback?':'#ffb35c',overwritten:'#ff5c5c',
-  grpc:'#ff4fe8',http:'#ff8c4f',pubsub:'#c88bff','pubsub:guess':'#a77bd6'};
+  grpc:'#ff4fe8',http:'#ff8c4f',pubsub:'#c88bff','pubsub:guess':'#a77bd6',lib:'#4fc3ff'};
 const mk=k=>'a'+k.replace(/[^a-z]/g,''); // marker id per kind
 const NW=300, NH=40, COL=360, ROW=52;
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -92,7 +92,7 @@ let all=[];
 // Open the first levels; a step with one way on stays open so chains read through.
 function wrap(d,side,depth,parent,j){const n={d,side,depth,parent,path:parent.path.concat(j),open:depth<(D.open||6)||(d.kids||[]).length<=1||isHop(d),kids:[]}; all.push(n);
   n.kids=(d.kids||[]).map((k,j)=>wrap(k,side,depth+1,n,j)); return n;}
-const isHop=d=>/^(grpc|http|pubsub)/.test(d.kind);
+const isHop=d=>/^(grpc|http|pubsub|lib)/.test(d.kind);
 const openHops=d=>(d.hops||[]).filter(h=>!h.followed).length;
 const centers=[];
 (D.uses||[]).forEach((u,i)=>{const o=(D.origin||[]).find(o=>o.loc===u.loc)||{kids:[]};

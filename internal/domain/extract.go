@@ -162,13 +162,40 @@ func extract(g *graph, p project, tests bool) (st loadStats, err error) {
 	for f := range ssautil.AllFunctions(prog) {
 		if keep(f) {
 			fns[f] = true
-			nodeOf(f)
+			n := nodeOf(f)
+			if key := libFunc(f); key != "" && !isTest(f) {
+				g.Impls[key] = append(g.Impls[key], n)
+			}
 		}
 	}
 	st.funcs = len(fns)
 
 	chaG := cha.CallGraph(prog)
 	vtaG := vta.CallGraph(fns, chaG)
+	// Before the synthetic nodes go: a dependency's functions come from export
+	// data and count as synthetic, so deleting them drops these targets.
+	// An interface call VTA resolves to a dependency's type (an engine built by
+	// another project) is a library call; CHA-only targets are not: small
+	// interfaces like io.Writer match half of every dependency.
+	type libTarget struct {
+		site ssa.CallInstruction
+		from *ssa.Function
+		key  string
+	}
+	var libTargets []libTarget
+	for f, n := range vtaG.Nodes {
+		if !keep(f) {
+			continue
+		}
+		for _, e := range n.Out {
+			if e.Site == nil || !e.Site.Common().IsInvoke() || keep(e.Callee.Func) {
+				continue
+			}
+			if key := libFunc(e.Callee.Func); key != "" && !own[e.Callee.Func.Object().Pkg()] {
+				libTargets = append(libTargets, libTarget{e.Site, f, key})
+			}
+		}
+	}
 	chaG.DeleteSyntheticNodes()
 	vtaG.DeleteSyntheticNodes()
 	confirmed := map[ssa.CallInstruction]map[*ssa.Function]bool{}
@@ -183,7 +210,23 @@ func extract(g *graph, p project, tests bool) (st loadStats, err error) {
 		}
 	}
 
-	linked := map[ssa.CallInstruction]bool{} // invoke sites with at least one in-project target
+	type libSite struct {
+		from int32
+		key  string
+	}
+	libCalled := map[libSite]bool{} // one library call per caller and callee
+	libCall := func(from int32, key string) {
+		if !libCalled[libSite{from, key}] {
+			libCalled[libSite{from, key}] = true
+			g.Calls = append(g.Calls, grpcCall{from, key, ""})
+		}
+	}
+
+	linked := map[ssa.CallInstruction]bool{} // invoke sites with at least one in-project or library target
+	for _, t := range libTargets {
+		libCall(nodeOf(t.from), t.key)
+		linked[t.site] = true
+	}
 	for f, n := range chaG.Nodes {
 		if !keep(f) {
 			continue
@@ -261,6 +304,9 @@ func extract(g *graph, p project, tests bool) (st loadStats, err error) {
 				} else if sc := c.StaticCallee(); sc != nil {
 					name = sc.Name()
 					httpServes(g, prog, c, nodeOf, keep)
+					if key := libFunc(sc); key != "" && !own[sc.Object().Pkg()] {
+						libCall(from, key)
+					}
 				}
 				switch {
 				case name == "Invoke" || name == "NewStream":

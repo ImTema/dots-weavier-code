@@ -1,7 +1,11 @@
+edge golang/orders:cmd/orders/main.go:run -lib example.com/samples/pricing/api/pricing/v1.NewPricingServiceClient-> golang/pricing:api/pricing/v1/pricing_grpc.pb.go:NewPricingServiceClient
 edge golang/orders:internal/inventory/client.go:Client.Release -grpc /inventory.v1.InventoryService/Release-> java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.release
 edge golang/orders:internal/inventory/client.go:Client.Reserve -grpc /inventory.v1.InventoryService/Reserve-> java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.reserve
 edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Release -grpc /inventory.v1.InventoryService/Release-> java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.release
 edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Reserve -grpc /inventory.v1.InventoryService/Reserve-> java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.reserve
 edge golang/orders:internal/pricer/pricer.go:Client.Price -grpc /pricing.v1.PricingService/Quote-> golang/pricing:internal/server/server.go:Server.Quote
+edge golang/orders:internal/pricer/pricer.go:Client.Price -lib (*example.com/samples/pricing/api/pricing/v1.QuoteResponse).GetTotalCents-> golang/pricing:api/pricing/v1/pricing.pb.go:QuoteResponse.GetTotalCents
 edge golang/pricing:api/pricing/v1/pricing_grpc.pb.go:pricingServiceClient.Quote -grpc /pricing.v1.PricingService/Quote-> golang/pricing:internal/server/server.go:Server.Quote
+edge golang/pricing:internal/events/subscriber.go:Subscriber.Handle -lib (*example.com/samples/orders/api/events/v1.OrderPlaced).GetCustomerId-> golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetCustomerId
+edge golang/pricing:internal/events/subscriber.go:Subscriber.Handle -lib (*example.com/samples/orders/api/events/v1.OrderPlaced).GetOrderId-> golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetOrderId
 edge kotlin/shipping:src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:OrdersCustomerDirectory.find -http GET /customers/{}-> golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer

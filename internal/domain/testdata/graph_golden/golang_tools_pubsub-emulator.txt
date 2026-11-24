@@ -1,3 +1,5 @@
+call golang/tools/pubsub-emulator:main.go:main lib (*cloud.google.com/go/pubsub/v2/pstest.Server).Close ext=
+call golang/tools/pubsub-emulator:main.go:main lib cloud.google.com/go/pubsub/v2/pstest.NewServerWithPort ext=
 edge golang/tools/pubsub-emulator:main.go:main -iface:guess -> external: context.Context.Done
 node external: context.Context.Done 0-0 test=false
 node golang/tools/pubsub-emulator:main.go:main 20-33 test=false

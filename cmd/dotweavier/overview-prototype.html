@@ -97,7 +97,7 @@ body.noside #empty{left:0}
 .rt .t{color:#fff}.rt .m{color:#8b93c4;font-size:11px}
 .step{display:flex;gap:6px;align-items:baseline;padding:1px 0 1px 4px}
 .step .ic{flex:none;width:18px;text-align:center}
-.ic.call,.ic.sure{color:#4c8dff}.ic.guess{color:#ffa63d}.ic.grpc{color:#ff4fe8}.ic.http{color:#3ee08f}.ic.pubsub{color:#ffd23f}
+.ic.call,.ic.sure{color:#4c8dff}.ic.guess{color:#ffa63d}.ic.grpc{color:#ff4fe8}.ic.http{color:#3ee08f}.ic.pubsub{color:#ffd23f}.ic.lib{color:#4fc3ff}
 .lk .sw{border-radius:1px}.lk .n{color:#58608f}
 .step .row{flex:1;padding:1px 2px}
 .dbtn{display:inline-block;margin:6px 6px 0 0;padding:3px 8px;border:1px solid #2b3270;border-radius:12px;color:#bfc7ff;cursor:pointer;font-size:11px}
@@ -148,10 +148,16 @@ import {LineMaterial} from '/overview_prototype_assets/lines/LineMaterial.js';
 const $ = id => document.getElementById(id);
 // gRPC full methods start with '/'; HTTP routes come as "GET /path".
 // Hops between projects, one colour and one toggle per edge kind (D.linkKinds).
-const LINK = {grpc: ['gRPC', '#ff4fe8', '✈'], http: ['HTTP', '#3ee08f', '⇄'], pubsub: ['Pub/Sub', '#ffd23f', '✉'], 'pubsub:guess': ['Pub/Sub, guess (message type only)', '#a8893a', '✉']};
+const LINK = {grpc: ['gRPC', '#ff4fe8', '✈'], http: ['HTTP', '#3ee08f', '⇄'], pubsub: ['Pub/Sub', '#ffd23f', '✉'], 'pubsub:guess': ['Pub/Sub, guess (message type only)', '#a8893a', '✉'], lib: ['Library call', '#4fc3ff', '⧉']};
 const linkLabel = (kind, m) => kind + (m ? ' ' + m : '');
 const linkShort = kind => (LINK[kind]?.[0] || kind).split(',')[0], linkColor = kind => LINK[kind]?.[1] || '#ff4fe8';
 const linkShown = JSON.parse(localStorage.getItem('dw.links') || '{}'); // kind -> false when hidden
+// The SHOW checkboxes keep their last state; restored before the first draw reads them.
+for (const id of ['showCalls', 'showLabels', 'showNames']) {
+  const cb = document.getElementById(id), v = localStorage.getItem('dw.' + id);
+  if (v !== null) cb.checked = v === '1';
+  cb.addEventListener('change', () => localStorage.setItem('dw.' + id, cb.checked ? '1' : '0'));
+}
 const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const color = name => { let h = 2166136261; for (const ch of name) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return new THREE.Color().setHSL((h >>> 0) / 2**32, 0.75, 0.6); };
 const IN = new THREE.Color('#4ad8ff'), OUT = new THREE.Color('#ffb14a'), WHITE = new THREE.Color('#ffffff'), GRPC = new THREE.Color('#ff4fe8');
@@ -335,7 +341,7 @@ async function load(refit) {
   stars.count = N;
   for (let i = 0; i < N; i++) stars.setColorAt(i, pcol[D.proj[i]]); // positions and sizes: applyCalls
   // Faint lines only read as structure when there are thousands; a few dozen need to be bright.
-  CALL_OPACITY = Math.min(0.6, Math.max(0.07, 20 / Math.sqrt(D.edges.length / 2 || 1)));
+  CALL_OPACITY = Math.min(0.6, Math.max(0.09, 25 / Math.sqrt(D.edges.length / 2 || 1)));
   calls = segments(D.edges, k => pcol[D.proj[D.edges[k]]], CALL_OPACITY);
   scene.add(stars, calls);
   const byKind = {};
@@ -689,14 +695,17 @@ function renderCounts(litNodes, litEdges) {
 }
 const recount = () => setFocus(focus);
 $('showCalls').onchange = () => { applyCalls(); recount(); };
-// One checkbox per link kind present in the layout, with its colour and count.
+// One checkbox per link kind, every known kind even with no hops in the layout, with its colour and count.
 function renderLinkToggles(byKind) {
-  const kinds = Object.keys(LINK).filter(k => byKind[k]).concat(Object.keys(byKind).filter(k => !LINK[k]));
-  $('linkToggles').innerHTML = kinds.map(kind => `<label class="lk"><input type="checkbox" data-kind="${esc(kind)}"${linkShown[kind] !== false ? ' checked' : ''}> <span class="sw" style="background:${linkColor(kind)}"></span>${esc(LINK[kind]?.[0] || kind)} hops between projects <span class="n">${byKind[kind].length / 2}</span></label>`).join('')
-    || '<div class="muted">no gRPC, HTTP or Pub/Sub hops between the shown projects</div>';
+  const kinds = Object.keys(LINK).concat(Object.keys(byKind).filter(k => !LINK[k]));
+  $('linkToggles').innerHTML = kinds.map(kind => {
+    const n = (byKind[kind]?.length || 0) / 2;
+    return `<label class="lk${n ? '' : ' muted'}"><input type="checkbox" data-kind="${esc(kind)}"${linkShown[kind] !== false ? ' checked' : ''}> <span class="sw" style="background:${linkColor(kind)}"></span>${esc(LINK[kind]?.[0] || kind)} hops between projects <span class="n">${n}</span></label>`;
+  }).join('');
   for (const cb of $('linkToggles').querySelectorAll('input')) cb.onchange = e => {
     const kind = e.target.dataset.kind;
-    links[kind].visible = linkShown[kind] = e.target.checked;
+    linkShown[kind] = e.target.checked;
+    if (links[kind]) links[kind].visible = e.target.checked; // no segments for a kind without hops
     localStorage.setItem('dw.links', JSON.stringify(linkShown));
     applyCalls(); // the hops shown decide which stars stay when calls are off
     recount();
@@ -709,6 +718,7 @@ function linkSummary() {
 }
 $('showNames').onchange = () => drawNames();
 $('showLabels').onchange = e => $('labels').style.display = e.target.checked ? '' : 'none';
+if (!$('showLabels').checked) $('labels').style.display = 'none';
 
 // Picking in screen space: project every star once per camera move.
 let sx = new Float32Array(0), sy = sx, sz = sx;
@@ -813,7 +823,7 @@ addEventListener('resize', () => {
 controls.addEventListener('change', () => projected = false);
 
 // Directions, map-style: A and B fields, ranked alternative routes, the chosen
-// route drawn on top coloured by certainty (blue sure, orange guess, magenta gRPC)
+// route drawn on top coloured by certainty (blue sure, orange guess, a hop between projects in its kind's colour)
 // and listed step by step. Ends are graph ids, so they survive a relayout.
 // Ends are stored as project:file:name keys: node ids change when a sync re-merges the indexes.
 let idOf = new Map(), keyOf = new Map();

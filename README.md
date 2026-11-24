@@ -38,14 +38,15 @@ If you added the `PATH` line only for dotweavier, delete it from `~/.zshrc`.
 
 ### 1. Index
 
-A workspace is the folder that projects are found under. dotweavier treats every directory under it that contains a `go.mod`, `pom.xml`, `build.gradle(.kts)` or `settings.gradle(.kts)` as a project. Java and Kotlin projects are read from source, without building them (`docs/adr/0007-jvm-extractor-from-source.md`). A project's name is its path relative to its workspace.
+A workspace is a name for a set of projects; `index` uses the `default` workspace unless you pass `--workspace NAME`, and creates the workspace if it does not exist. Its projects are found under its registered folders: dotweavier treats every directory under them that contains a `go.mod`, `pom.xml`, `build.gradle(.kts)` or `settings.gradle(.kts)` as a project. Java and Kotlin projects are read from source, without building them (`docs/adr/0007-jvm-extractor-from-source.md`). A project's name is its path relative to the workspace folder that contains it.
 
 ```sh
-dotweavier init ~/code              # register a workspace; its projects are detected, not indexed
-dotweavier index ~/code/orders      # index one project and its modules
+dotweavier init ~/code              # add ~/code to the default workspace; its projects are detected, not indexed
+dotweavier index ~/code/orders      # index one project and its modules into the default workspace
+dotweavier index ~/work/billing --workspace work   # into the workspace "work", created on first use
 ```
 
-`index` uses the deepest registered workspace that contains the project. Workspaces may nest: a project has one index, shared by every workspace that contains it. If none does, the project's parent folder is registered as its workspace. Re-run `index` after the source changes, or press Sync in the overview.
+If no folder of the workspace contains the project, `index` adds the project's parent folder to the workspace. A project has one index, shared by every workspace that contains it. Re-run `index` after the source changes, or press Sync in the overview.
 
 ### 2. Trace a call path between two symbols
 
@@ -128,7 +129,7 @@ What to check against `samples/README.md`:
 - Inside `pricing`, the customer ID reaches its HTTP clients `customers.Client.Tier` and `shipping.Client.Rate`. The trace stops there: Go HTTP clients are not linked yet, so `pricing → orders` and `pricing → shipping` are not followed.
 - A handler reached from several steps is traced once; the other steps show `(traced at another step)`.
 
-The same in the browser: run `dotweavier overview --workspace samples`, open `http://127.0.0.1:7357/ui/trace-field.html`, trace the line from its file viewer, and press **follow all hops** (or **follow ⇢** on one step).
+The same in the browser: run `dotweavier overview`, open `http://127.0.0.1:7357/ui/trace-field.html`, trace the line from its file viewer, and press **follow all hops** (or **follow ⇢** on one step).
 
 ## Try it
 

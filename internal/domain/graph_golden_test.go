@@ -26,7 +26,10 @@ func TestGraphGolden(t *testing.T) {
 		t.Setenv([]string{"GOPATH", "GOMODCACHE", "GOCACHE"}[i], v)
 	}
 	t.Setenv("HOME", t.TempDir())
-	if err := Index("../../samples", nil, func(p, _ string, err error) {
+	if _, err := InitWorkspace("../../samples", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := Index("", nil, func(p, _ string, err error) {
 		if err != nil {
 			t.Errorf("index %s: %v", p, err)
 		}
@@ -46,7 +49,7 @@ func TestGraphGolden(t *testing.T) {
 		golden(t, strings.ReplaceAll(s.Project, "/", "_")+".txt", dumpGraph(&s.Graph, false))
 	}
 
-	g, _, err := loadIndexes(ws)
+	g, _, err := loadIndexes([]string{ws})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +74,7 @@ func TestGraphGolden(t *testing.T) {
 		{"golang/orders:internal/pricer/pricer.go:23", "golang/pricing::TierRule.Discount", false},
 	} {
 		fmt.Fprintf(&b, "== %s -> %s tests=%v\n", c.a, c.b, c.tests)
-		r, err := TracePath(ws, c.a, c.b, 10, c.tests)
+		r, err := TracePath("", c.a, c.b, 10, c.tests)
 		if err != nil {
 			fmt.Fprintf(&b, "error: %v\n\n", err)
 			continue

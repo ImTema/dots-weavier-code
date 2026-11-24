@@ -1,9 +1,9 @@
 // The dotweavier CLI: parses flags, calls internal/domain and renders its
 // results as text or as a self-contained HTML page.
 //
-//	dotweavier init [DIR]
-//	dotweavier index [DIR]
-//	dotweavier trace path -A <addr> -B <addr> [--workspace DIR] [--max-paths 10] [--include-tests]
+//	dotweavier init [DIR] [--workspace NAME]
+//	dotweavier index [DIR] [--workspace NAME]
+//	dotweavier trace path -A <addr> -B <addr> [--workspace NAME] [--max-paths 10] [--include-tests]
 //	dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--depth N] [--include-tests] [--format text|ui]
 //
 // Addresses: project::Type.Method, project:rel/path.go:Type.Method, project:rel/path.go:LINE.
@@ -27,9 +27,9 @@ import (
 
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
-  dotweavier init [DIR]    register DIR (default: current folder) as a workspace; its projects are detected, not indexed
-  dotweavier index [DIR]   index the project in DIR (default: current folder) and its modules
-  dotweavier trace path -A <addr> -B <addr> [--workspace DIR] [--max-paths N] [--include-tests] [--format text|ui]
+  dotweavier init [DIR] [--workspace NAME]    add DIR (default: current folder) to workspace NAME (default: default); its projects are detected, not indexed
+  dotweavier index [DIR] [--workspace NAME]   index the project in DIR (default: current folder) and its modules into workspace NAME (default: default)
+  dotweavier trace path -A <addr> -B <addr> [--workspace NAME] [--max-paths N] [--include-tests] [--format text|ui]
   dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--project DIR] [--depth N] [--include-tests] [--max-projects N] [--follow N] [--export FILE] [--format text|ui]`)
 	os.Exit(2)
 }
@@ -72,42 +72,55 @@ func defaultProjectDir() string {
 	return wd
 }
 
-// dirArg is the single optional folder argument of init and index, or the current folder.
-func dirArg(args []string) string {
-	switch len(args) {
+// dirAndWorkspace parses the optional folder argument (default: the current folder)
+// and --workspace of init and index; flags may come before or after the folder.
+func dirAndWorkspace(cmd string, args []string) (dir, ws string) {
+	fl := flag.NewFlagSet(cmd, flag.ExitOnError)
+	wsFlag := fl.String("workspace", domain.DefaultWorkspace, "workspace name; created if it does not exist")
+	var pos []string
+	for {
+		_ = fl.Parse(args)
+		if fl.NArg() == 0 {
+			break
+		}
+		pos = append(pos, fl.Arg(0))
+		args = fl.Args()[1:]
+	}
+	switch len(pos) {
 	case 0:
-		return defaultProjectDir()
+		return defaultProjectDir(), *wsFlag
 	case 1:
-		return args[0]
+		return pos[0], *wsFlag
 	}
 	usage()
-	return ""
+	return "", ""
 }
 
 func runInit(args []string) {
-	ws, names, err := domain.InitWorkspace(dirArg(args))
+	dir, ws := dirAndWorkspace("init", args)
+	names, err := domain.InitWorkspace(dir, ws)
 	must(err)
-	fmt.Printf("workspace %s: %d projects detected; index each with: dotweavier index DIR\n", ws, len(names))
+	fmt.Printf("workspace %s: %d projects detected; index each with: dotweavier index DIR --workspace %s\n", ws, len(names), ws)
 	for _, n := range names {
 		fmt.Println("  " + n)
 	}
 }
 
 func runIndex(args []string) {
-	ws, err := domain.IndexProject(dirArg(args), func(project, stats string, err error) {
+	dir, ws := dirAndWorkspace("index", args)
+	must(domain.IndexProject(dir, ws, func(project, stats string, err error) {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "index %s: %v\n", project, err)
 			return
 		}
 		fmt.Fprintf(os.Stderr, "indexed %-28s %s\n", project, stats)
-	})
-	must(err)
+	}))
 	fmt.Fprintf(os.Stderr, "workspace %s\n", ws)
 }
 
 func runTrace(args []string) {
 	fl := flag.NewFlagSet("trace", flag.ExitOnError)
-	wsFlag := fl.String("workspace", "", "registered workspace to trace in (default: the deepest one containing the current folder, else the only one)")
+	wsFlag := fl.String("workspace", domain.DefaultWorkspace, "workspace to trace in")
 	aFlag := fl.String("A", "", "start symbol address")
 	bFlag := fl.String("B", "", "end symbol address")
 	maxPaths := fl.Int("max-paths", 10, "number of paths to print")

@@ -12,7 +12,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -37,19 +36,15 @@ func runOverview(args []string) {
 
 	// Only one workspace is active at a time; the page can switch to another registered one.
 	var cur atomic.Pointer[domain.OverviewSource]
-	activate := func(dir string) error {
+	activate := func(name string) error {
 		all, err := domain.Workspaces()
 		if err != nil {
 			return err
 		}
-		abs, err := filepath.Abs(dir)
-		if err != nil {
-			return err
+		if !slices.Contains(all, name) { // request input never reaches the loader unless registered
+			return fmt.Errorf("workspace %q does not exist; create it with: dotweavier index DIR --workspace %s", name, name)
 		}
-		if !slices.Contains(all, abs) { // request input never reaches the loader unless registered
-			return fmt.Errorf("%s is not a registered workspace; run: dotweavier init %s", abs, abs)
-		}
-		src, err := domain.LoadOverview(abs)
+		src, err := domain.LoadOverview(name)
 		if err != nil {
 			return err
 		}
@@ -62,7 +57,7 @@ func runOverview(args []string) {
 	case *ws != "":
 		must(activate(*ws))
 	case len(all) == 0:
-		must(errors.New("no workspace registered; run: dotweavier init DIR"))
+		must(errors.New("no workspace registered; run: dotweavier index DIR"))
 	case len(all) == 1:
 		must(activate(all[0]))
 	}
@@ -238,7 +233,12 @@ func runOverview(args []string) {
 		if src == nil {
 			return
 		}
-		f, err := domain.Source(src.Workspace(), r.URL.Query().Get("loc"))
+		loc := r.URL.Query().Get("loc")
+		dir, err := src.FolderOf(loc)
+		var f *domain.SourceFile
+		if err == nil {
+			f, err = domain.Source(dir, loc)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		if err != nil {
 			w.WriteHeader(http.StatusUnprocessableEntity)
@@ -290,9 +290,14 @@ func runOverview(args []string) {
 		}
 		tr := &domain.FieldTrace{Origin: run.Origin, Uses: run.Uses}
 		t0 := time.Now()
+		dir, err := src.FolderOf(run.Addr)
+		if err != nil {
+			reply(http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
+			return
+		}
 		if q.Get("path") == "" {
 			depth, _ := strconv.Atoi(q.Get("depth"))
-			n, errs := domain.FollowHops(src.Workspace(), tr, max(depth, 1), maxFollow, false, 10)
+			n, errs := domain.FollowHops(dir, tr, max(depth, 1), maxFollow, false, 10)
 			if n == 0 && len(errs) > 0 {
 				err = errs[0]
 			}
@@ -308,7 +313,7 @@ func runOverview(args []string) {
 			}
 			if err == nil {
 				k, _ := strconv.Atoi(q.Get("hop"))
-				err = domain.FollowHop(src.Workspace(), tr, path, k, false, 10)
+				err = domain.FollowHop(dir, tr, path, k, false, 10)
 			}
 		}
 		var name string
@@ -341,9 +346,13 @@ func runOverview(args []string) {
 			w.WriteHeader(code)
 			json.NewEncoder(w).Encode(v)
 		}
-		tr, err := domain.TraceField(src.Workspace(), a, false, 10)
+		var tr *domain.FieldTrace
+		dir, err := src.FolderOf(a)
+		if err == nil {
+			tr, err = domain.TraceField(dir, a, false, 10)
+		}
 		if n, _ := strconv.Atoi(r.URL.Query().Get("follow")); err == nil && n > 0 {
-			domain.FollowHops(src.Workspace(), tr, n, maxFollow, false, 10) // a hop that fails stays unfollowed
+			domain.FollowHops(dir, tr, n, maxFollow, false, 10) // a hop that fails stays unfollowed
 		}
 		var name string
 		if err == nil {

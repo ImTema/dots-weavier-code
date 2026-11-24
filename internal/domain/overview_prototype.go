@@ -47,34 +47,51 @@ type OverviewGraph struct {
 // OverviewSource is every index merged once; Build lays it out per request and
 // Sync re-indexes one project, then merges again.
 type OverviewSource struct {
-	ws   string       // the workspace, an absolute folder
-	mu   sync.RWMutex // guards g: Sync swaps it while requests read it
-	g    *graph
-	sync sync.Mutex // one Sync at a time
+	ws      string       // the workspace name
+	folders []string     // its registered folders, absolute
+	mu      sync.RWMutex // guards g: Sync swaps it while requests read it
+	g       *graph
+	sync    sync.Mutex // one Sync at a time
 }
 
-// LoadOverview merges the indexes of the registered workspace ws, the only workspace it shows.
+// LoadOverview merges the indexes of workspace ws, the only workspace it shows.
 func LoadOverview(ws string) (*OverviewSource, error) {
-	ws, err := filepath.Abs(ws)
+	ws, fs, err := workspaceFolders(ws)
 	if err != nil {
 		return nil, err
 	}
-	if err := registered(ws); err != nil {
-		return nil, err
-	}
-	g, err := mergedGraph(ws)
+	g, err := mergedGraph(fs)
 	if err != nil {
 		return nil, err
 	}
-	return &OverviewSource{ws: ws, g: g}, nil
+	return &OverviewSource{ws: ws, folders: fs, g: g}, nil
 }
 
-// Workspace is the absolute folder of the workspace this overview shows.
+// Workspace is the name of the workspace this overview shows.
 func (src *OverviewSource) Workspace() string { return src.ws }
 
-// mergedGraph merges the indexes of every project inside the absolute folder ws, joined and without tests.
-func mergedGraph(ws string) (*graph, error) {
-	g, _, err := loadIndexes(ws)
+// FolderOf is the folder that names the project of address addr ([project:]rest)
+// in this workspace: field traces and Source run over that folder, where the
+// project has the same name.
+// ponytail: a field trace sees only the projects under that one folder; trace over
+// every folder of the workspace if hops into other folders are needed.
+func (src *OverviewSource) FolderOf(addr string) (string, error) {
+	name, _, _ := strings.Cut(addr, ":")
+	ps, err := projectsIn(src.folders)
+	if err != nil {
+		return "", err
+	}
+	for _, p := range ps {
+		if p.Name == name {
+			return deepest(src.folders, p.dir), nil
+		}
+	}
+	return "", fmt.Errorf("project %q not found in workspace %s", name, src.ws)
+}
+
+// mergedGraph merges the indexes of every project inside the absolute folders, joined and without tests.
+func mergedGraph(folders []string) (*graph, error) {
+	g, _, err := loadIndexes(folders)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +113,7 @@ type DetectedProject struct {
 
 // Detect lists the projects under the project folder; it reads only each index's meta row.
 func (src *OverviewSource) Detect() ([]DetectedProject, error) {
-	ps, err := discover(src.ws)
+	ps, err := projectsIn(src.folders)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +171,7 @@ func indexBuilt(dir string) (time.Time, bool) {
 // detected returns the detected project with this name. Request input is only
 // ever turned into a store path through a name discover produced.
 func (src *OverviewSource) family(name string) ([]project, error) {
-	ps, err := discover(src.ws)
+	ps, err := projectsIn(src.folders)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +184,7 @@ func (src *OverviewSource) family(name string) ([]project, error) {
 		}
 	}
 	if len(fam) == 0 || fam[0].Name != name {
-		return nil, fmt.Errorf("project %q not found under %s", name, src.ws)
+		return nil, fmt.Errorf("project %q not found in workspace %s", name, src.ws)
 	}
 	return fam, nil
 }
@@ -290,11 +307,11 @@ func (src *OverviewSource) Invalid() ([]string, error) {
 
 // invalid maps each invalid index file of this workspace to its project's name.
 func (src *OverviewSource) invalid() (map[string]string, error) {
-	ps, err := discover(src.ws)
+	ps, err := projectsIn(src.folders)
 	if err != nil {
 		return nil, err
 	}
-	files, err := indexesIn(src.ws)
+	files, err := indexesIn(src.folders)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +342,7 @@ func (src *OverviewSource) RemoveInvalid() ([]string, error) {
 }
 
 func (src *OverviewSource) remerge() error {
-	g, err := mergedGraph(src.ws)
+	g, err := mergedGraph(src.folders)
 	if err != nil {
 		return err
 	}

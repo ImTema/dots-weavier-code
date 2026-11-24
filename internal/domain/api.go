@@ -10,7 +10,6 @@ import (
 	"go/token"
 	"go/types"
 	"os"
-	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -18,19 +17,16 @@ import (
 	"time"
 )
 
-// Index indexes the projects under workspace ws, or only the named ones, each into
-// the one index of its folder; ws is registered if it is not yet.
+// Index indexes the projects of workspace ws (DefaultWorkspace for ""), or only
+// the named ones, each into the one index of its folder.
 // done is called after each project with its load stats or its error.
 func Index(ws string, names []string, done func(project, stats string, err error)) error {
-	ws, err := filepath.Abs(ws)
+	ws, fs, err := workspaceFolders(ws)
 	if err != nil {
 		return err
 	}
-	all, err := discover(ws)
+	all, err := projectsIn(fs)
 	if err != nil {
-		return err
-	}
-	if err := register(ws); err != nil {
 		return err
 	}
 	want := map[string]bool{}
@@ -55,63 +51,75 @@ func Index(ws string, names []string, done func(project, stats string, err error
 		done(p.Name, st.String(), nil)
 	}
 	for n := range want {
-		return fmt.Errorf("project %q not found under %s", n, ws)
+		return fmt.Errorf("project %q not found in workspace %s", n, ws)
 	}
 	return nil
 }
 
-// InitWorkspace registers folder dir as a workspace and returns its absolute path
-// and the projects detected under it. Nothing is indexed.
-func InitWorkspace(dir string) (string, []string, error) {
-	ws, err := filepath.Abs(dir)
-	if err != nil {
-		return "", nil, err
+// InitWorkspace registers folder dir in workspace ws (DefaultWorkspace for ""),
+// creating ws if it does not exist, and returns the projects detected under dir,
+// named as ws names them. Nothing is indexed.
+func InitWorkspace(dir, ws string) ([]string, error) {
+	if ws == "" {
+		ws = DefaultWorkspace
 	}
-	if fi, err := os.Stat(ws); err != nil || !fi.IsDir() {
-		return "", nil, fmt.Errorf("%s is not a folder", ws)
-	}
-	ps, err := discover(ws)
-	if err != nil {
-		return "", nil, err
-	}
-	var names []string
-	for _, p := range ps {
-		names = append(names, p.Name)
-	}
-	return ws, names, register(ws)
-}
-
-// IndexProject indexes the project in folder dir, with its modules, into the
-// deepest registered workspace that contains it. If none does, dir's parent
-// folder is registered as the workspace first. It returns the workspace.
-func IndexProject(dir string, done func(project, stats string, err error)) (string, error) {
 	dir, err := filepath.Abs(dir)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	ps, err := discover(dir)
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		return nil, fmt.Errorf("%s is not a folder", dir)
+	}
+	if err := register(ws, dir); err != nil {
+		return nil, err
+	}
+	return projectsUnder(ws, dir)
+}
+
+// projectsUnder lists the projects of workspace ws whose folder is dir or inside it.
+func projectsUnder(ws, dir string) ([]string, error) {
+	_, fs, err := workspaceFolders(ws)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	if !slices.ContainsFunc(ps, func(p project) bool { return p.Name == "." }) {
-		return "", fmt.Errorf("%s is not a project: it has no go.mod, pom.xml, build.gradle(.kts) or settings.gradle(.kts)", dir)
-	}
-	ws, err := workspaceFor(dir)
-	if err != nil {
-		return "", err
-	}
-	if ws == "" {
-		ws = filepath.Dir(dir) // Index below registers it
-	}
-	rel, err := filepath.Rel(ws, dir)
-	if err != nil {
-		return "", err
-	}
-	var names []string // the project and its modules
+	ps, err := projectsIn(fs)
+	var names []string
 	for _, p := range ps {
-		names = append(names, path.Join(filepath.ToSlash(rel), p.Name))
+		if within(p.dir, dir) {
+			names = append(names, p.Name)
+		}
 	}
-	return ws, Index(ws, names, done)
+	return names, err
+}
+
+// IndexProject indexes the project in folder dir, with its modules, into
+// workspace ws (DefaultWorkspace for ""), creating ws if it does not exist. If no
+// folder of ws contains dir, dir's parent folder is registered in ws first.
+func IndexProject(dir, ws string, done func(project, stats string, err error)) error {
+	if ws == "" {
+		ws = DefaultWorkspace
+	}
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	if langOf(dir) == "" {
+		return fmt.Errorf("%s is not a project: it has no go.mod, pom.xml, build.gradle(.kts) or settings.gradle(.kts)", dir)
+	}
+	fs, err := folders(ws)
+	if err != nil {
+		return err
+	}
+	if deepest(fs, dir) == "" {
+		if err := register(ws, filepath.Dir(dir)); err != nil {
+			return err
+		}
+	}
+	names, err := projectsUnder(ws, dir)
+	if err != nil {
+		return err
+	}
+	return Index(ws, names, done)
 }
 
 func (st loadStats) String() string {
@@ -171,10 +179,10 @@ type PathTrace struct {
 }
 
 // TracePath finds up to maxPaths call paths from address a to address b over
-// every project indexed in workspace ws (see pickWorkspace for ws ""). Addresses:
+// every project indexed in workspace ws (DefaultWorkspace for ""). Addresses:
 // project::Type.Method, project:rel/path.go:Type.Method, project:rel/path.go:LINE.
 func TracePath(ws, a, b string, maxPaths int, tests bool) (*PathTrace, error) {
-	ws, err := pickWorkspace(ws)
+	ws, fs, err := workspaceFolders(ws)
 	if err != nil {
 		return nil, err
 	}
@@ -186,13 +194,13 @@ func TracePath(ws, a, b string, maxPaths int, tests bool) (*PathTrace, error) {
 	if err != nil {
 		return nil, err
 	}
-	g, loaded, err := loadIndexes(ws)
+	g, loaded, err := loadIndexes(fs)
 	if err != nil {
 		return nil, err
 	}
 	for _, p := range []string{addrA.Project, addrB.Project} {
 		if !loaded[p] {
-			return nil, fmt.Errorf("project %q is not indexed in workspace %s; run: dotweavier index %s", p, ws, filepath.Join(ws, p))
+			return nil, fmt.Errorf("project %q is not indexed in workspace %s; run: dotweavier index DIR --workspace %s", p, ws, ws)
 		}
 	}
 	if !tests {

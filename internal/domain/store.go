@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -225,10 +224,15 @@ func readMeta(path string) (project, dir string, built time.Time, err error) {
 	return project, dir, built, err
 }
 
-// The workspace registry: one row per workspace. Workspaces may nest; a project
-// folder inside several of them has one index, which each names relative to itself.
-const registrySchema = `CREATE TABLE IF NOT EXISTS workspaces (
-	id INTEGER PRIMARY KEY, dir TEXT NOT NULL UNIQUE, registered TEXT NOT NULL)`
+// DefaultWorkspace is the workspace used when none is named.
+const DefaultWorkspace = "default"
+
+// The workspace registry. A workspace is a name with one or more registered
+// folders; its projects are the ones detected under them. A project folder has
+// one index, shared by every workspace that contains it; each workspace names
+// the project by its path relative to the deepest of its folders containing it.
+const registrySchema = `CREATE TABLE IF NOT EXISTS workspace_folders (
+	workspace TEXT NOT NULL, dir TEXT NOT NULL, registered TEXT NOT NULL, PRIMARY KEY (workspace, dir))`
 
 func openRegistry() (*sql.DB, error) {
 	if err := os.MkdirAll(dotweavierDir(), 0o755); err != nil {
@@ -242,49 +246,79 @@ func openRegistry() (*sql.DB, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := migrateRegistry(db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return db, nil
 }
 
-// Workspaces lists the registered workspaces, sorted.
+// migrateRegistry moves the folders of the old registry, where each workspace was
+// one folder, into the default workspace.
+func migrateRegistry(db *sql.DB) error {
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'workspaces'`).Scan(&n); err != nil || n == 0 {
+		return err
+	}
+	_, err := db.Exec(`INSERT OR IGNORE INTO workspace_folders (workspace, dir, registered)
+		SELECT ?, dir, registered FROM workspaces; DROP TABLE workspaces`, DefaultWorkspace)
+	return err
+}
+
+// Workspaces lists the names of the registered workspaces, sorted.
 func Workspaces() ([]string, error) {
+	return registryList(`SELECT DISTINCT workspace FROM workspace_folders ORDER BY workspace`)
+}
+
+// folders lists the registered folders of workspace ws, sorted; none if ws does not exist.
+func folders(ws string) ([]string, error) {
+	return registryList(`SELECT dir FROM workspace_folders WHERE workspace = ? ORDER BY dir`, ws)
+}
+
+func registryList(query string, args ...any) ([]string, error) {
 	db, err := openRegistry()
 	if err != nil {
 		return nil, err
 	}
 	defer db.Close()
-	rows, err := db.Query(`SELECT dir FROM workspaces ORDER BY dir`)
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var out []string
 	for rows.Next() {
-		var d string
-		if err := rows.Scan(&d); err != nil {
+		var s string
+		if err := rows.Scan(&s); err != nil {
 			return nil, err
 		}
-		out = append(out, d)
+		out = append(out, s)
 	}
 	return out, rows.Err()
 }
 
-// register registers the absolute folder ws, if it is not registered yet.
-func register(ws string) error {
+// workspaceFolders is the registered folders of workspace ws (DefaultWorkspace for
+// ""), or an error if it has none.
+func workspaceFolders(ws string) (string, []string, error) {
+	if ws == "" {
+		ws = DefaultWorkspace
+	}
+	fs, err := folders(ws)
+	if err == nil && len(fs) == 0 {
+		err = fmt.Errorf("workspace %q does not exist; create it with: dotweavier index DIR --workspace %s", ws, ws)
+	}
+	return ws, fs, err
+}
+
+// register adds the absolute folder dir to workspace ws, creating ws if it does not exist.
+func register(ws, dir string) error {
 	db, err := openRegistry()
 	if err != nil {
 		return err
 	}
 	defer db.Close()
-	_, err = db.Exec(`INSERT OR IGNORE INTO workspaces (dir, registered) VALUES (?, ?)`, ws, time.Now().Format(time.RFC3339Nano))
-	return err
-}
-
-// registered reports an error unless the absolute folder ws is a registered workspace.
-func registered(ws string) error {
-	all, err := Workspaces()
-	if err == nil && !slices.Contains(all, ws) {
-		err = fmt.Errorf("%s is not a registered workspace; run: dotweavier init %s", ws, ws)
-	}
+	_, err = db.Exec(`INSERT OR IGNORE INTO workspace_folders (workspace, dir, registered) VALUES (?, ?, ?)`,
+		ws, dir, time.Now().Format(time.RFC3339Nano))
 	return err
 }
 
@@ -293,48 +327,44 @@ func within(dir, ws string) bool {
 	return dir == ws || strings.HasPrefix(dir, ws+string(filepath.Separator))
 }
 
-// workspaceFor is the deepest registered workspace that contains the absolute folder dir, or "".
-func workspaceFor(dir string) (string, error) {
-	all, err := Workspaces()
+// deepest is the deepest of folders that contains the absolute folder dir, or "".
+func deepest(folders []string, dir string) string {
 	best := ""
-	for _, ws := range all {
-		if within(dir, ws) && len(ws) > len(best) {
-			best = ws
+	for _, f := range folders {
+		if within(dir, f) && len(f) > len(best) {
+			best = f
 		}
 	}
-	return best, err
+	return best
 }
 
-// pickWorkspace is folder ws if it is a registered workspace. With ws "", it is the
-// deepest registered workspace containing the current folder, else the only one registered.
-func pickWorkspace(ws string) (string, error) {
-	if ws != "" {
-		abs, err := filepath.Abs(ws)
+// projectsIn detects the projects under folders, each named relative to the
+// deepest folder that contains it. Two projects with one name are an error.
+func projectsIn(folders []string) ([]project, error) {
+	var out []project
+	at := map[string]string{}
+	for _, f := range folders {
+		ps, err := discover(f)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		return abs, registered(abs)
+		for _, p := range ps {
+			if deepest(folders, p.dir) != f {
+				continue // named by a deeper folder
+			}
+			if d, ok := at[p.Name]; ok {
+				return nil, fmt.Errorf("two projects named %q: %s and %s", p.Name, d, p.dir)
+			}
+			at[p.Name] = p.dir
+			out = append(out, p)
+		}
 	}
-	wd, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	if w, err := workspaceFor(wd); w != "" || err != nil {
-		return w, err
-	}
-	all, err := Workspaces()
-	if err != nil {
-		return "", err
-	}
-	if len(all) != 1 {
-		return "", fmt.Errorf("%d workspaces registered and none contains %s; pass --workspace DIR", len(all), wd)
-	}
-	return all[0], nil
+	return out, nil
 }
 
-// indexesIn maps the index file of every project folder inside the absolute
-// folder ws to the project's name in ws, its path relative to ws.
-func indexesIn(ws string) (map[string]string, error) {
+// indexesIn maps the index file of every project folder inside folders to the
+// project's name: its path relative to the deepest folder that contains it.
+func indexesIn(folders []string) (map[string]string, error) {
 	files, err := filepath.Glob(filepath.Join(storesDir(), "*.db"))
 	if err != nil {
 		return nil, err
@@ -342,21 +372,24 @@ func indexesIn(ws string) (map[string]string, error) {
 	out := map[string]string{}
 	for _, f := range files {
 		_, dir, _, err := readMeta(f)
-		if err != nil || !within(dir, ws) {
+		if err != nil {
 			continue
 		}
-		rel, err := filepath.Rel(ws, dir)
-		if err == nil {
+		top := deepest(folders, dir)
+		if top == "" {
+			continue
+		}
+		if rel, err := filepath.Rel(top, dir); err == nil {
 			out[f] = filepath.ToSlash(rel)
 		}
 	}
 	return out, nil
 }
 
-// loadIndexes merges the index of every project inside workspace ws (absolute)
-// into one graph, each project named relative to ws; unreadable indexes are skipped.
-func loadIndexes(ws string) (*graph, map[string]bool, error) {
-	files, err := indexesIn(ws)
+// loadIndexes merges the index of every project inside folders (absolute) into
+// one graph, each project named as indexesIn names it; unreadable indexes are skipped.
+func loadIndexes(folders []string) (*graph, map[string]bool, error) {
+	files, err := indexesIn(folders)
 	if err != nil {
 		return nil, nil, err
 	}

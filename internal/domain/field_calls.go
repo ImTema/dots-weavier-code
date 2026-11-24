@@ -22,7 +22,7 @@ func attachCalls(r *FieldTrace, ws, home, seedFile string, seedLine int) {
 		fmt.Fprintln(os.Stderr, "call paths skipped:", err)
 		return
 	}
-	g, err := mergedGraph(abs)
+	g, err := mergedGraph([]string{abs})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "call paths skipped:", err)
 		return

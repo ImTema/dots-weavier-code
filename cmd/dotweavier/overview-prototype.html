@@ -125,7 +125,7 @@ body.noside #empty{left:0}
   <div id="hits"></div>
   <h2>SELECTION</h2><div id="sel" class="muted">click a star or an edge</div>
   <h2>SHOW</h2>
-  <label><input type="checkbox" id="showCalls" checked> calls inside projects</label>
+  <label><input type="checkbox" id="showCalls"> calls inside projects</label>
   <div id="linkToggles"></div>
   <label><input type="checkbox" id="showLabels" checked> project labels</label>
   <label><input type="checkbox" id="showNames" checked> function names when zoomed in</label>
@@ -252,19 +252,11 @@ function segments(pairs, colorOf, opacity) {
 }
 function drop(o) { if (o) { scene.remove(o); o.geometry.dispose(); o.material.dispose(); } return null; }
 
-// With "calls inside projects" off, only public functions (ends of shown link hops) and
-// the call paths from one public function to another stay; every other star is hidden
+// With "calls inside projects" off, only public functions (ends of shown link hops) stay,
+// and each call path from one public function to the next is drawn as one straight
+// "weave" edge; clicking it routes between the two. Every other star is hidden
 // (scale 0, and project() puts it behind the camera so nothing picks or names it).
 let shown = new Uint8Array(0), nearCalls = null, nearPairs = [];
-// reach marks every node reached from the seeds along calls (back = 0) or against them (back = 1).
-function reach(seeds, back) {
-  const adj = Array.from({length: N}, () => []);
-  for (let k = 0; k < D.edges.length; k += 2) adj[D.edges[k + back]].push(D.edges[k + 1 - back]);
-  const seen = new Uint8Array(N), stack = [...seeds];
-  for (const i of stack) seen[i] = 1;
-  while (stack.length) for (const j of adj[stack.pop()]) if (!seen[j]) { seen[j] = 1; stack.push(j); }
-  return seen;
-}
 const starScale = i => shown[i] ? 0.35 + 0.3 * Math.log2(1 + D.deg[i]) : 0;
 function applyCalls() {
   const all = $('showCalls').checked;
@@ -275,12 +267,8 @@ function applyCalls() {
     const ends = new Set();
     for (let k = 0; k < D.linkKinds.length; k++) if (links[D.linkKinds[k]]?.visible) ends.add(D.links[2*k]).add(D.links[2*k+1]);
     for (const i of ends) shown[i] = 1;
-    // A call a -> b is on such a path when a is reached from a public function and b reaches one.
-    const from = reach(ends, 0), to = reach(ends, 1);
-    for (let k = 0; k < D.edges.length; k += 2) {
-      const a = D.edges[k], b = D.edges[k+1];
-      if (from[a] && to[b]) { shown[a] = shown[b] = 1; nearPairs.push(a, b); }
-    }
+    nearPairs = D.weaves; // computed by the server, see weaves in overview_prototype.go
+    for (const i of nearPairs) shown[i] = 1;
     nearCalls = segments(nearPairs, k => pcol[D.proj[nearPairs[k]]], CALL_OPACITY);
     scene.add(nearCalls);
   }
@@ -798,7 +786,7 @@ function pickEdge(mx, my) {
   }
   for (let k = 0; k < D.linkKinds.length; k++) if (links[D.linkKinds[k]]?.visible) seg(D.links[2*k], D.links[2*k+1], linkLabel(D.linkKinds[k], D.methods[k]));
   if (calls.visible) for (let k = 0; k < D.edges.length; k += 2) seg(D.edges[k], D.edges[k+1], 'call');
-  else for (let k = 0; k < nearPairs.length; k += 2) seg(nearPairs[k], nearPairs[k+1], 'call');
+  else for (let k = 0; k < nearPairs.length; k += 2) seg(nearPairs[k], nearPairs[k+1], 'weave');
   return best;
 }
 renderer.domElement.addEventListener('pointermove', e => mouse = [e.clientX, e.clientY]);
@@ -813,6 +801,7 @@ renderer.domElement.addEventListener('pointerup', e => {
   const r = pickRoute(e.clientX, e.clientY);
   if (r >= 0) return selectRoute(r);
   const ed = pickEdge(e.clientX, e.clientY);
+  if (ed && ed.via === 'weave') { ends.a = nodeKey(ed.s); ends.b = nodeKey(ed.t); return findRoutes(); }
   setFocus(ed ? {edge: ed} : null);
 });
 addEventListener('keydown', e => { if (e.key === 'Escape') { if (pmenuFor !== null) closeProjectMenu(); else if (menuNode >= 0) closeMenu(); else setFocus(null); } if (e.key === 'f' && e.target === document.body) flyTo(hub(), R * 2.3); });

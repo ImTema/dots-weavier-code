@@ -70,3 +70,10 @@ func TestSelectNodesRanksCrossProjectThenDegree(t *testing.T) {
 	// client and server cross projects; then hub has the most edges.
 	assert.Equal(t, []string{"hub", "client", "server"}, got)
 }
+
+func TestWeaves(t *testing.T) {
+	// Public 0, 3, 4. 0 reaches 3 by two call paths; 4 only through 3; 6 is a dead end.
+	calls := []int32{0, 1, 1, 2, 2, 3, 0, 5, 5, 3, 3, 4, 0, 6}
+	public := []bool{0: true, 3: true, 4: true, 7: false}
+	assert.Equal(t, []int32{0, 3, 3, 4}, weaves(public, calls))
+}

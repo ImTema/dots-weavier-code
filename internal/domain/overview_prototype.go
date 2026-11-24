@@ -40,6 +40,7 @@ type OverviewGraph struct {
 	Links    []int32   `json:"links"`     // s,t pairs, grpc/http/pubsub/lib hops (between projects)
 	Kinds    []string  `json:"linkKinds"` // per link pair: edge kind, "grpc", "http", "pubsub", "pubsub:guess", "lib"
 	Methods  []string  `json:"methods"`   // per link pair: gRPC full method, "GET /path", pubsub key, or library function
+	Weaves   []int32   `json:"weaves"`    // s,t pairs: public function t reached from public function s along calls, see weaves
 	LayoutMs int64     `json:"layoutMs"`
 	Total    int       `json:"total"` // functions in the shown projects before the node cap
 	Limit    int       `json:"limit"` // the node cap; 0 means none
@@ -390,7 +391,7 @@ func (src *OverviewSource) Build(show map[string]bool, limit int) *OverviewGraph
 	// Empty, not nil: an overview with nothing shown must still encode as [] for the page.
 	o := &OverviewGraph{Projects: []string{}, Sizes: []int{}, Hidden: []bool{}, Centers: []float32{}, Files: []string{},
 		Proj: []int32{}, File: []int32{}, Name: []string{}, ID: []int32{}, Line: []int32{}, Deg: []int32{}, Pos: []float32{},
-		Edges: []int32{}, Links: []int32{}, Kinds: []string{}, Methods: []string{}}
+		Edges: []int32{}, Links: []int32{}, Kinds: []string{}, Methods: []string{}, Weaves: []int32{}}
 	idx := make([]int32, len(g.Nodes)) // graph node -> overview node, -1 when dropped
 	projOf := map[string]int32{}
 	fileOf := map[string]int32{}
@@ -447,6 +448,7 @@ func (src *OverviewSource) Build(show map[string]bool, limit int) *OverviewGraph
 			}
 		}
 	}
+	o.Weaves = weaves(publicNodes(g, idx, o), o.Edges)
 	o.layout()
 	o.Total, o.Limit = total, limit
 	o.LayoutMs = time.Since(t0).Milliseconds()
@@ -801,4 +803,66 @@ func selectNodes(g *graph, hide map[string]bool, limit int) (keep []bool, total 
 		keep[i] = false
 	}
 	return keep, total
+}
+
+// publicNodes marks the overview nodes another project can reach or that reach
+// another project: every handler the index registered for a gRPC method, HTTP
+// route or pubsub topic (served even when nothing indexed calls it, like
+// POST /orders), and both ends of every hop between projects. Library calls do
+// not count: a getter or constructor from another module is not an entry point.
+func publicNodes(g *graph, idx []int32, o *OverviewGraph) []bool {
+	public := make([]bool, len(o.Name))
+	for key, hs := range g.Impls {
+		if strings.HasPrefix(key, libKey) {
+			continue
+		}
+		for _, h := range hs {
+			if i := idx[h]; i >= 0 {
+				public[i] = true
+			}
+		}
+	}
+	for k, kind := range o.Kinds {
+		if kind != libHop.String() {
+			public[o.Links[2*k]], public[o.Links[2*k+1]] = true, true
+		}
+	}
+	return public
+}
+
+// weaves returns s,t pairs: for every public node s, each public node t reached
+// from s along calls without passing through another public one. The overview
+// draws each pair as one edge instead of the calls between.
+// ponytail: one DFS per public function, O(publics x calls); fine at the 20k node cap.
+func weaves(public []bool, calls []int32) []int32 {
+	n := len(public)
+	out := make([][]int32, n)
+	for k := 0; k < len(calls); k += 2 {
+		out[calls[k]] = append(out[calls[k]], calls[k+1])
+	}
+	pairs := []int32{}
+	seen := make([]int32, n) // seen[i] == s+1: i already visited from s
+	for s := range int32(n) {
+		if !public[s] {
+			continue
+		}
+		seen[s] = s + 1
+		stack := []int32{s}
+		for len(stack) > 0 {
+			i := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			for _, t := range out[i] {
+				if seen[t] == s+1 {
+					continue
+				}
+				seen[t] = s + 1
+				if public[t] {
+					pairs = append(pairs, s, t)
+				} else {
+					stack = append(stack, t)
+				}
+			}
+		}
+	}
+	return pairs
 }

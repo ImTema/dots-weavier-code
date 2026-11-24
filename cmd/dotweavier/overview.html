@@ -1,13 +1,12 @@
 <!doctype html>
-<!-- PROTOTYPE, throwaway (branch prototype/overview): galaxy overview of every indexed project. -->
-<html><head><meta charset="utf-8"><title>dotweavier overview (prototype)</title>
+<!-- galaxy overview of every indexed project. -->
+<html><head><meta charset="utf-8"><title>dotweavier overview</title>
 <style>
 html,body{margin:0;height:100%;background:#02030a;color:#cdd5ff;font:12px/1.45 ui-monospace,Menlo,monospace;overflow:hidden}
 canvas{position:absolute;inset:0;display:block}
 #side{position:absolute;top:0;left:0;bottom:0;width:330px;box-sizing:border-box;padding:12px;overflow:auto;z-index:2;
   background:linear-gradient(180deg,rgba(10,12,32,.92),rgba(5,6,18,.88));border-right:1px solid #1b2045}
 h1{margin:0 0 4px;font-size:13px;letter-spacing:.2em;color:#fff}
-.proto{color:#ffb86b;font-size:10px;letter-spacing:.1em}
 .muted{color:#5d6596;font-size:11px}
 #qp{width:100%;box-sizing:border-box;background:#0b0e24;border:1px solid #262c5c;color:#cdd5ff;padding:4px 6px;border-radius:6px;font:inherit;margin:0 0 4px}
 #hits .n{cursor:pointer;text-decoration:underline dotted}
@@ -26,6 +25,11 @@ label{display:block;color:#9aa2d0;cursor:pointer}
 #sel{word-break:break-all}
 #sel .k{color:#58608f}
 #fps{position:absolute;right:10px;bottom:8px;z-index:2;color:#5d6596;text-align:right}
+#legend{position:absolute;left:340px;bottom:8px;z-index:2;padding:6px 9px;background:rgba(8,10,28,.85);border:1px solid #1b2045;border-radius:6px;color:#9aa2d0;font-size:11px;line-height:1.6;max-height:calc(100% - 60px);overflow:auto}
+#legend h2{margin:0 0 2px}
+body.noside #legend{left:10px}
+#legend .ln{display:inline-block;width:18px;height:3px;border-radius:2px;vertical-align:middle;margin:0 6px 0 2px}
+#legend .key{padding-left:19px}
 #counts{color:#9aa2d0}
 #reset{float:right;margin-top:-2px;padding:3px 10px;border:1px solid #2b3270;border-radius:12px;color:#bfc7ff;cursor:pointer;font-size:11px}
 #reset:hover{background:rgba(255,90,90,.15);border-color:#ff5a5a}
@@ -39,9 +43,9 @@ label{display:block;color:#9aa2d0;cursor:pointer}
 #pp .row.off{opacity:.4}
 #pp.busy #projects{opacity:.6}
 #projects{flex:0 1 auto;min-height:0;overflow:auto}
-#pp .st{flex:none;color:#5d6596;font-size:10px;margin-left:auto}
+#pp .st{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;color:#5d6596;font-size:10px;margin-left:auto} /* shrinks so the ⋯ menu always shows */
 #pp .nm{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis} /* long names shrink, buttons stay */
-#pp .cnt{flex:none;color:#8b93c4;font-size:10px}
+#pp .cnt{color:#8b93c4;font-size:10px}
 #pp .cnt .g{color:#ff4fe8}
 #ppGrip{position:absolute;left:0;bottom:0;width:16px;height:16px;cursor:nesw-resize;color:#5d6596;font-size:12px;line-height:16px;text-align:center;user-select:none}
 #ppGrip:hover{color:#fff}
@@ -98,19 +102,19 @@ body.noside #empty{left:0}
 .step{display:flex;gap:6px;align-items:baseline;padding:1px 0 1px 4px}
 .step .ic{flex:none;width:18px;text-align:center}
 .ic.call,.ic.sure{color:#4c8dff}.ic.guess{color:#ffa63d}.ic.grpc{color:#ff4fe8}.ic.http{color:#3ee08f}.ic.pubsub{color:#ffd23f}.ic.lib{color:#4fc3ff}
-.lk .sw{border-radius:1px}.lk .n{color:#58608f}
+.lk .n{color:#58608f;margin-left:6px}
 .step .row{flex:1;padding:1px 2px}
 .dbtn{display:inline-block;margin:6px 6px 0 0;padding:3px 8px;border:1px solid #2b3270;border-radius:12px;color:#bfc7ff;cursor:pointer;font-size:11px}
 .dbtn:hover{background:rgba(76,141,255,.15)}
 .mk{position:absolute;z-index:1;pointer-events:none;transform:translate(-50%,-120%);width:20px;height:20px;border-radius:50% 50% 50% 0;rotate:-45deg;display:flex;align-items:center;justify-content:center;box-shadow:0 0 8px #000}
 .mk span{rotate:45deg;color:#02030a;font-weight:bold;font-size:11px}
 </style>
-<script type="importmap">{"imports":{"three":"/overview_prototype_assets/three.module.js","three/addons/":"/overview_prototype_assets/"}}</script>
+<script type="importmap">{"imports":{"three":"/overview_assets/three.module.js","three/addons/":"/overview_assets/"}}</script>
 </head><body>
 <div id="side">
   <span id="sideHide" class="fold" title="hide this panel">«</span>
   <span id="reset" title="put the camera back on the default view, centred and upright">reset</span>
-  <h1>DOTWEAVIER</h1><div class="proto">OVERVIEW PROTOTYPE</div>
+  <h1>DOTWEAVIER</h1>
   <div id="stats" class="muted">loading…</div>
   <h2>DIRECTIONS</h2>
   <div class="fld" id="fa"><span class="pin a">A</span><input placeholder="start: type a function or project" autocomplete="off" spellcheck="false"><span class="x" title="clear">×</span></div>
@@ -118,17 +122,12 @@ body.noside #empty{left:0}
   <div class="fld" id="fb"><span class="pin b">B</span><input placeholder="destination" autocomplete="off" spellcheck="false"><span class="x" title="clear">×</span></div>
   <div class="dd" id="ddb"></div>
   <a id="swap">⇅ swap</a>
-  <div id="routes"></div>
+  <div id="paths"></div>
   <h2>SEARCH</h2>
   <input id="q" type="text" placeholder="find function (Enter: fly to first)" autocomplete="off">
   <select id="qp"><option value="-1">in all projects</option></select>
   <div id="hits"></div>
   <h2>SELECTION</h2><div id="sel" class="muted">click a star or an edge</div>
-  <h2>SHOW</h2>
-  <label><input type="checkbox" id="showCalls"> calls inside projects</label>
-  <div id="linkToggles"></div>
-  <label><input type="checkbox" id="showLabels" checked> project labels</label>
-  <label><input type="checkbox" id="showNames" checked> function names when zoomed in</label>
 </div>
 <div id="empty">Nothing in the overview yet.<br>Press <b>Sync</b> on a project in the top-right list to index it and add it here.</div>
 <div id="pp"><h2>PROJECTS <a id="ppAll" title="show every added project matching the filter">all</a><a id="ppNone" title="hide every added project matching the filter">none</a><span id="ppHide" class="fold" title="hide this panel">»</span></h2>
@@ -137,13 +136,18 @@ body.noside #empty{left:0}
   <div id="projects"></div>
   <div id="ppGrip" title="drag to resize · double-click to expand or shrink">◣</div></div>
 <div id="sideTab" class="tab" title="show the side panel">» DOTWEAVIER</div><div id="ppTab" class="tab" title="show the projects panel">PROJECTS «</div>
-<div id="tip"></div><div id="ctx"></div><div id="pmenu"></div><div id="labels"></div><div id="names"></div><div id="markers"></div><div id="fps"><div id="counts"></div><div id="rate"></div></div>
+<div id="tip"></div><div id="ctx"></div><div id="pmenu"></div><div id="labels"></div><div id="names"></div><div id="markers"></div><div id="legend"><h2>SHOW</h2>
+  <label><input type="checkbox" id="showCalls"> calls inside projects</label>
+  <div id="linkToggles"></div>
+  <label><input type="checkbox" id="showLabels" checked> project labels</label>
+  <label><input type="checkbox" id="showNames" checked> function names when zoomed in</label>
+  <h2>PATH</h2><div id="pathKey"></div></div><div id="fps"><div id="counts"></div><div id="rate"></div></div>
 <script type="module">
 import * as THREE from 'three';
-import {OrbitControls} from '/overview_prototype_assets/OrbitControls.js';
-import {LineSegments2} from '/overview_prototype_assets/lines/LineSegments2.js';
-import {LineSegmentsGeometry} from '/overview_prototype_assets/lines/LineSegmentsGeometry.js';
-import {LineMaterial} from '/overview_prototype_assets/lines/LineMaterial.js';
+import {OrbitControls} from '/overview_assets/OrbitControls.js';
+import {LineSegments2} from '/overview_assets/lines/LineSegments2.js';
+import {LineSegmentsGeometry} from '/overview_assets/lines/LineSegmentsGeometry.js';
+import {LineMaterial} from '/overview_assets/lines/LineMaterial.js';
 
 const $ = id => document.getElementById(id);
 // gRPC full methods start with '/'; HTTP routes come as "GET /path".
@@ -252,9 +256,9 @@ function segments(pairs, colorOf, opacity) {
 }
 function drop(o) { if (o) { scene.remove(o); o.geometry.dispose(); o.material.dispose(); } return null; }
 
-// With "calls inside projects" off, only public functions (ends of shown link hops) stay,
-// and each call path from one public function to the next is drawn as one straight
-// "weave" edge; clicking it routes between the two. Every other star is hidden
+// With "calls inside projects" off, only boundary nodes (ends of shown link hops) stay,
+// and each call path from one boundary node to the next is drawn as one straight
+// "weaved path" edge; clicking it finds the paths between the two. Every other star is hidden
 // (scale 0, and project() puts it behind the camera so nothing picks or names it).
 let shown = new Uint8Array(0), nearCalls = null, nearPairs = [];
 const starScale = i => shown[i] ? 0.35 + 0.3 * Math.log2(1 + D.deg[i]) : 0;
@@ -267,7 +271,7 @@ function applyCalls() {
     const ends = new Set();
     for (let k = 0; k < D.linkKinds.length; k++) if (links[D.linkKinds[k]]?.visible) ends.add(D.links[2*k]).add(D.links[2*k+1]);
     for (const i of ends) shown[i] = 1;
-    nearPairs = D.weaves; // computed by the server, see weaves in overview_prototype.go
+    nearPairs = D.weavedPaths; // computed by the server, see weavedPaths in overview.go
     for (const i of nearPairs) shown[i] = 1;
     nearCalls = segments(nearPairs, k => pcol[D.proj[nearPairs[k]]], CALL_OPACITY);
     scene.add(nearCalls);
@@ -364,11 +368,8 @@ async function load(refit) {
   $('qp').innerHTML = '<option value="-1">in all projects</option>' + D.projects.map((p, i) => D.hidden[i] ? '' : `<option value="${i}">in ${esc(p)}</option>`).join('');
   $('qp').value = cur >= 0 && !D.hidden[cur] ? cur : -1;
 
-  const shown = D.hidden.filter(h => !h).length;
-  $('stats').innerHTML = `${shown} project${shown === 1 ? '' : 's'} shown · ${added.size} added · ${detected.length} detected<br>`
-    + `${shown}/${P} indexed projects · ${N.toLocaleString()} functions${D.limit && D.total > N ? ` <span style="color:#ffa63d" title="the server keeps functions linked to another project first, then the most connected; the rest are never sent">(top ${N.toLocaleString()} of ${D.total.toLocaleString()})</span>` : ''}<br>${(D.edges.length/2).toLocaleString()} calls · ${linkSummary()}<br>
-    layout ${D.layoutMs} ms (Go) · fetch ${tFetch.toFixed(0)} ms · build ${(performance.now() - t0 - tFetch).toFixed(0)} ms<br>
-    <span class="muted">left-drag: orbit · right-drag: pan · wheel: zoom · f: fit · Esc: clear</span>`;
+  // Counts live in the projects panel and bottom right; only the cap warning and the controls stay here.
+  $('stats').innerHTML = (D.limit && D.total > N ? `<span style="color:#ffa63d" title="the server keeps functions linked to another project first, then the most connected; the rest are never sent">showing top ${N.toLocaleString()} of ${D.total.toLocaleString()} functions</span><br>` : '');
   idOf = new Map(D.id.map((g, i) => [g, i]));
   keyOf = new Map(D.name.map((_, i) => [nodeKey(i), i]));
   hay = D.name.map((n, i) => (n + ' ' + D.projects[D.proj[i]]).toLowerCase());
@@ -377,7 +378,7 @@ async function load(refit) {
   focus = null;
   projected = false; hover = -1; $('tip').style.display = 'none';
   $('q').oninput();
-  findRoutes();
+  findPaths();
 }
 
 // Project panel (top right): every project detected under the project folder. Nothing is
@@ -398,7 +399,7 @@ function renderProjects() {
   famOf = r => [r, ...(mods.get(r) || []).map(d => d.name)];
   const k = n => n >= 10000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n);
   const lk = d => Object.entries(d.links || {});
-  const cnt = d => `<span class="cnt" title="${d.nodes.toLocaleString()} functions · ${d.edges.toLocaleString()} edges${lk(d).length ? ` (outgoing ${lk(d).map(([kind, n]) => n + ' ' + (LINK[kind]?.[0] || kind)).join(', ')})` : ''}${d.built ? ' · indexed ' + ago(d.built) : ''}">${k(d.nodes)} n · ${k(d.edges)} e${lk(d).map(([kind, n]) => ` · <span style="color:${linkColor(kind)}">${n} ${esc(linkShort(kind))}</span>`).join('')}</span>`;
+  const cnt = d => `<span class="cnt" title="${d.nodes.toLocaleString()} functions · ${d.edges.toLocaleString()} edges${lk(d).length ? ` (outgoing ${lk(d).map(([kind, n]) => n + ' ' + (LINK[kind]?.[0] || kind)).join(', ')})` : ''}${d.built ? ' · indexed ' + ago(d.built) : ''}">${k(d.nodes)} n · ${k(d.edges)} e</span>`;
   const status = (d, own) => own && syncing.has(d.name) ? 'syncing…'
     : own && syncNote.has(d.name) ? `<span class="ok">${esc(syncNote.get(d.name))}</span>`
     : own && syncErr.has(d.name) ? `<span class="err" title="${esc(syncErr.get(d.name))}">sync failed</span>`
@@ -610,13 +611,13 @@ function setFocus(f) {
     for (const j of [f.edge.s, f.edge.t]) { lit.add(j); ends.add(j); }
     pairs.push(f.edge.s, f.edge.t); cols.push(WHITE, WHITE);
   }
-  // A shown route keeps its nodes lit too, so selecting a star never hides the route.
-  const onRoute = routeNodes();
-  const dim = f || onRoute.size;
+  // A shown path keeps its nodes lit too, so selecting a star never hides the path.
+  const onPath = pathNodes();
+  const dim = f || onPath.size;
   const c = new THREE.Color();
   for (let i = 0; i < N; i++) {
     c.copy(pcol[D.proj[i]]);
-    if (dim && !lit.has(i) && !onRoute.has(i)) c.multiplyScalar(DIM);
+    if (dim && !lit.has(i) && !onPath.has(i)) c.multiplyScalar(DIM);
     if (ends.has(i)) c.lerp(WHITE, 0.5);
     stars.setColorAt(i, c);
   }
@@ -626,7 +627,7 @@ function setFocus(f) {
   for (const kind in links) links[kind].material.opacity = dim ? 0.15 : GRPC_OPACITY;
   if (pairs.length) { hl = segments(pairs, k => cols[k], 0.95); scene.add(hl); }
   renderFocus();
-  renderCounts(dim ? new Set([...lit, ...onRoute]).size : 0, pairs.length / 2);
+  renderCounts(dim ? new Set([...lit, ...onPath]).size : 0, pairs.length / 2);
 }
 function nodeRow(j, prefix, note) {
   return `<div class="row" data-n="${j}" title="${esc(where(j))}">${swatch(j)}${prefix} ${esc(D.name[j])} <span class="k">${esc(note || '')}</span></div>`;
@@ -637,7 +638,7 @@ function renderFocus() {
   $('sel').className = '';
   if (f.edge) {
     const {s, t, via} = f.edge;
-    $('sel').innerHTML = `<b style="color:#fff">${esc(via)}</b><div><span class="dbtn" data-dir="a" data-g="${s}">route from caller</span><span class="dbtn" data-dir="b" data-g="${t}">route to callee</span></div><h2>FROM</h2>${nodeRow(s, '')}<div class="muted">${esc(where(s))}</div><h2>TO</h2>${nodeRow(t, '')}<div class="muted">${esc(where(t))}</div>`;
+    $('sel').innerHTML = `<b style="color:#fff">${esc(via)}</b><div><span class="dbtn" data-dir="a" data-g="${s}">path from caller</span><span class="dbtn" data-dir="b" data-g="${t}">path to callee</span></div><h2>FROM</h2>${nodeRow(s, '')}<div class="muted">${esc(where(s))}</div><h2>TO</h2>${nodeRow(t, '')}<div class="muted">${esc(where(t))}</div>`;
     return;
   }
   const i = f.node;
@@ -670,13 +671,13 @@ $('hits').onclick = e => {
   $('sel').onclick(e);
 };
 
-// Bottom right: what is drawn right now; with a selection or route, how much of it is lit.
+// Bottom right: what is drawn right now; with a selection or path, how much of it is lit.
 function renderCounts(litNodes, litEdges) {
   const ec = calls.visible ? D.edges.length / 2 : nearPairs.length / 2;
   const shownN = shown.reduce((a, b) => a + b, 0);
   const lc = {}; for (const kind of D.linkKinds) if (links[kind]?.visible) lc[kind] = (lc[kind] || 0) + 1;
   const eg = Object.values(lc).reduce((a, b) => a + b, 0);
-  const r = routes[routeSel];
+  const r = paths[pathSel];
   let t = `${shownN < N ? shownN.toLocaleString() + ' of ' : ''}${N.toLocaleString()}${D.total > N ? ' of ' + D.total.toLocaleString() : ''} nodes · ${(ec + eg).toLocaleString()} edges (${[ec.toLocaleString() + ' calls', ...Object.entries(lc).map(([kind, n]) => n.toLocaleString() + ' ' + linkShort(kind))].join(' + ')})`;
   if (litNodes) t += ` · lit ${litNodes.toLocaleString()} nodes, ${(litEdges + (r ? r.via.length : 0)).toLocaleString()} edges`;
   $('counts').textContent = t;
@@ -688,7 +689,7 @@ function renderLinkToggles(byKind) {
   const kinds = Object.keys(LINK).concat(Object.keys(byKind).filter(k => !LINK[k]));
   $('linkToggles').innerHTML = kinds.map(kind => {
     const n = (byKind[kind]?.length || 0) / 2;
-    return `<label class="lk${n ? '' : ' muted'}"><input type="checkbox" data-kind="${esc(kind)}"${linkShown[kind] !== false ? ' checked' : ''}> <span class="sw" style="background:${linkColor(kind)}"></span>${esc(LINK[kind]?.[0] || kind)} hops between projects <span class="n">${n}</span></label>`;
+    return `<label class="lk${n ? '' : ' muted'}"><input type="checkbox" data-kind="${esc(kind)}"${linkShown[kind] !== false ? ' checked' : ''}> <span class="ln" style="background:${linkColor(kind)}"></span>${esc(LINK[kind]?.[0] || kind)} <span class="n">${n}</span></label>`;
   }).join('');
   for (const cb of $('linkToggles').querySelectorAll('input')) cb.onchange = e => {
     const kind = e.target.dataset.kind;
@@ -698,11 +699,6 @@ function renderLinkToggles(byKind) {
     applyCalls(); // the hops shown decide which stars stay when calls are off
     recount();
   };
-}
-function linkSummary() {
-  const c = {}; for (const kind of D.linkKinds) c[kind] = (c[kind] || 0) + 1;
-  const parts = Object.entries(c).map(([kind, n]) => `<span style="color:${linkColor(kind)}">${n.toLocaleString()} ${esc(linkShort(kind))}</span>`);
-  return parts.length ? parts.join(' · ') + ' hops' : 'no hops between projects';
 }
 $('showNames').onchange = () => drawNames();
 $('showLabels').onchange = e => $('labels').style.display = e.target.checked ? '' : 'none';
@@ -786,7 +782,7 @@ function pickEdge(mx, my) {
   }
   for (let k = 0; k < D.linkKinds.length; k++) if (links[D.linkKinds[k]]?.visible) seg(D.links[2*k], D.links[2*k+1], linkLabel(D.linkKinds[k], D.methods[k]));
   if (calls.visible) for (let k = 0; k < D.edges.length; k += 2) seg(D.edges[k], D.edges[k+1], 'call');
-  else for (let k = 0; k < nearPairs.length; k += 2) seg(nearPairs[k], nearPairs[k+1], 'weave');
+  else for (let k = 0; k < nearPairs.length; k += 2) seg(nearPairs[k], nearPairs[k+1], 'weaved');
   return best;
 }
 renderer.domElement.addEventListener('pointermove', e => mouse = [e.clientX, e.clientY]);
@@ -798,27 +794,27 @@ renderer.domElement.addEventListener('pointerup', e => {
   const i = pickNode(e.clientX, e.clientY);
   if (i >= 0) return openMenu(i, e.clientX, e.clientY);
   closeMenu();
-  const r = pickRoute(e.clientX, e.clientY);
-  if (r >= 0) return selectRoute(r);
+  const r = pickPath(e.clientX, e.clientY);
+  if (r >= 0) return selectPath(r);
   const ed = pickEdge(e.clientX, e.clientY);
-  if (ed && ed.via === 'weave') { ends.a = nodeKey(ed.s); ends.b = nodeKey(ed.t); return findRoutes(); }
+  if (ed && ed.via === 'weaved') { ends.a = nodeKey(ed.s); ends.b = nodeKey(ed.t); return findPaths(); }
   setFocus(ed ? {edge: ed} : null);
 });
 addEventListener('keydown', e => { if (e.key === 'Escape') { if (pmenuFor !== null) closeProjectMenu(); else if (menuNode >= 0) closeMenu(); else setFocus(null); } if (e.key === 'f' && e.target === document.body) flyTo(hub(), R * 2.3); });
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); projected = false;
-  for (const o of routeObjs) o.material.resolution.set(innerWidth, innerHeight);
+  for (const o of pathObjs) o.material.resolution.set(innerWidth, innerHeight);
 });
 controls.addEventListener('change', () => projected = false);
 
-// Directions, map-style: A and B fields, ranked alternative routes, the chosen
-// route drawn on top coloured by certainty (blue sure, orange guess, a hop between projects in its kind's colour)
+// Directions, map-style: A and B fields, ranked alternative paths, the chosen
+// path drawn on top coloured by certainty (blue sure, orange guess, a hop between projects in its kind's colour)
 // and listed step by step. Ends are graph ids, so they survive a relayout.
 // Ends are stored as project:file:name keys: node ids change when a sync re-merges the indexes.
 let idOf = new Map(), keyOf = new Map();
 const nodeKey = i => `${D.projects[D.proj[i]]}:${D.files[D.file[i]]}:${D.name[i]}`;
 const ends = {a: null, b: null};
-let routes = [], routeSel = 0, routeObjs = [], routeSeq = 0;
+let paths = [], pathSel = 0, pathObjs = [], pathSeq = 0;
 const markers = {};
 for (const [f, col] of [['a', '#3ddc84'], ['b', '#ff5a5a']]) {
   const el = document.createElement('div'); el.className = 'mk'; el.style.background = col; el.style.display = 'none';
@@ -827,6 +823,15 @@ for (const [f, col] of [['a', '#3ddc84'], ['b', '#ff5a5a']]) {
 const HOP = {call: ['→', 'call', 'call'], 'iface:sure': ['⇢', 'sure', 'interface call, sure'], 'iface:guess': ['?', 'guess', 'interface call, guess'], ...Object.fromEntries(Object.entries(LINK).map(([k, [title, , ic]]) => [k, [ic, k.split(':')[0], title]]))};
 const HOPCOL = {call: new THREE.Color('#4c8dff'), 'iface:sure': new THREE.Color('#4c8dff'), 'iface:guess': new THREE.Color('#ffa63d'), ...LINKCOL};
 const ALT = new THREE.Color('#7d8fb8'), CASING = new THREE.Color('#0b1f4d');
+// Bottom left, under the SHOW toggles (which carry the hop colours): the path line styles.
+{
+  const hex = c => '#' + c.getHexString();
+  const ln = (c, label, casing) => `<div class="key"><span class="ln" style="background:${hex(c)}${casing ? `;box-shadow:0 0 0 2px ${hex(casing)}` : ''}"></span>${esc(label)}</div>`;
+  $('pathKey').innerHTML = ln(HOPCOL.call, 'call or sure interface call', CASING)
+    + ln(HOPCOL['iface:guess'], 'interface call, guess', CASING)
+    + '<div class="key muted">gRPC, HTTP, …: colour of its kind</div>'
+    + ln(ALT, 'alternative path');
+}
 
 const endIdx = f => ends[f] === null ? undefined : keyOf.get(ends[f]);
 function renderEnds() {
@@ -838,7 +843,7 @@ function renderEnds() {
 }
 function setEnd(f, i) {
   ends[f] = nodeKey(i);
-  findRoutes();
+  findPaths();
 }
 
 // A/B typeahead: every whitespace-separated word must appear in the function name
@@ -879,7 +884,7 @@ for (const f of ['a', 'b']) {
     else if (e.key === 'Escape') inp.blur();
   };
   dd.onmousedown = e => { e.preventDefault(); const r = e.target.closest('[data-k]'); if (r) choose(+r.dataset.k); }; // mousedown: before blur closes the list
-  $('f' + f).querySelector('.x').onclick = () => { ends[f] = null; inp.value = ''; findRoutes(); inp.focus(); };
+  $('f' + f).querySelector('.x').onclick = () => { ends[f] = null; inp.value = ''; findPaths(); inp.focus(); };
 }
 
 // Star context menu: opens left of the cursor on a click.
@@ -916,36 +921,36 @@ $('ctx').onclick = e => {
     case 'hide': hidden.add(p); return saveHidden();
   }
 };
-$('swap').onclick = () => { [ends.a, ends.b] = [ends.b, ends.a]; findRoutes(); };
+$('swap').onclick = () => { [ends.a, ends.b] = [ends.b, ends.a]; findPaths(); };
 
-function routeNodes() {
+function pathNodes() {
   const s = new Set();
-  for (const r of routes) for (const i of r.idx) s.add(i);
+  for (const r of paths) for (const i of r.idx) s.add(i);
   return s;
 }
-async function findRoutes() {
-  const seq = ++routeSeq;
+async function findPaths() {
+  const seq = ++pathSeq;
   renderEnds();
-  routes = []; routeSel = 0; drawRoutes();
-  if (ends.a === null || ends.b === null) { $('routes').innerHTML = ''; return setFocus(focus); }
-  if (ends.a === ends.b) { $('routes').innerHTML = '<div class="muted">start and destination are the same function</div>'; return setFocus(focus); }
-  $('routes').innerHTML = '<div class="muted">finding routes…</div>';
-  const res = await (await fetch(`/route?a=${D.id[endIdx('a')]}&b=${D.id[endIdx('b')]}&k=5&${showQS()}`)).json();
-  if (seq !== routeSeq) return;
-  routes = (res.routes || []).map(r => ({...r, idx: r.nodes.map(g => idOf.get(g))}));
-  if (!routes.length) {
-    $('routes').innerHTML = `<div class="muted">no route found${res.exhausted ? '' : ' (search limit hit: a route may still exist)'}</div>`;
+  paths = []; pathSel = 0; drawPaths();
+  if (ends.a === null || ends.b === null) { $('paths').innerHTML = ''; return setFocus(focus); }
+  if (ends.a === ends.b) { $('paths').innerHTML = '<div class="muted">start and destination are the same function</div>'; return setFocus(focus); }
+  $('paths').innerHTML = '<div class="muted">finding paths…</div>';
+  const res = await (await fetch(`/path?a=${D.id[endIdx('a')]}&b=${D.id[endIdx('b')]}&k=5&${showQS()}`)).json();
+  if (seq !== pathSeq) return;
+  paths = (res.paths || []).map(r => ({...r, idx: r.nodes.map(g => idOf.get(g))}));
+  if (!paths.length) {
+    $('paths').innerHTML = `<div class="muted">no path found${res.exhausted ? '' : ' (search limit hit: a path may still exist)'}</div>`;
     return setFocus(focus);
   }
-  $('routes').dataset.ms = res.ms;
-  selectRoute(0);
+  $('paths').dataset.ms = res.ms;
+  selectPath(0);
 }
-function selectRoute(k) {
-  routeSel = k;
-  drawRoutes();
-  renderRoutes();
+function selectPath(k) {
+  pathSel = k;
+  drawPaths();
+  renderPaths();
   setFocus(focus);
-  const r = routes[k], box = new THREE.Box3();
+  const r = paths[k], box = new THREE.Box3();
   for (const i of r.idx) box.expandByPoint(nodePos(i));
   const sph = box.getBoundingSphere(new THREE.Sphere());
   flyTo(sph.center, Math.max(60, sph.radius * 2.6));
@@ -956,12 +961,12 @@ function lineObj(segs, colors, width, order) {
   const m = new LineMaterial({linewidth: width, vertexColors: true, transparent: true, depthTest: false});
   m.resolution.set(innerWidth, innerHeight);
   const o = new LineSegments2(g, m); o.renderOrder = order;
-  scene.add(o); routeObjs.push(o);
+  scene.add(o); pathObjs.push(o);
   return o;
 }
-function drawRoutes() {
-  for (const o of routeObjs) { scene.remove(o); o.geometry.dispose(); o.material.dispose(); }
-  routeObjs = [];
+function drawPaths() {
+  for (const o of pathObjs) { scene.remove(o); o.geometry.dispose(); o.material.dispose(); }
+  pathObjs = [];
   const build = (r, colorOf) => {
     const segs = [], cols = [];
     for (let h = 0; h < r.via.length; h++) {
@@ -971,51 +976,51 @@ function drawRoutes() {
     }
     return [segs, cols];
   };
-  routes.forEach((r, k) => {
-    if (k === routeSel) return;
+  paths.forEach((r, k) => {
+    if (k === pathSel) return;
     const [segs, cols] = build(r, () => ALT);
     lineObj(segs, cols, 4, 10).material.opacity = 0.75;
   });
-  if (routes[routeSel]) {
-    const r = routes[routeSel];
+  if (paths[pathSel]) {
+    const r = paths[pathSel];
     const [segs, casing] = build(r, () => CASING);
     lineObj(segs, casing, 10, 11); // dark casing under the coloured line, as on a map
     lineObj(segs, build(r, h => HOPCOL[r.via[h]])[1], 6, 12);
   }
 }
-function routeSummary(r) {
+function pathSummary(r) {
   const linkN = {}; for (const v of r.via) if (LINK[v]) linkN[v] = (linkN[v] || 0) + 1;
   const guesses = r.via.filter(v => v === 'iface:guess' || v === 'pubsub:guess').length;
   const projs = [];
   for (const i of r.idx) { const p = D.projects[D.proj[i]]; if (projs[projs.length - 1] !== p) projs.push(p); }
   return {hops: r.via.length, linkN, guesses, projs};
 }
-function renderRoutes() {
-  $('routes').innerHTML = routes.map((r, k) => {
-    const s = routeSummary(r);
-    const head = `<div class="t">${k === 0 ? 'Best route' : 'Route ' + (k + 1)} · ${s.hops} hops</div>
+function renderPaths() {
+  $('paths').innerHTML = paths.map((r, k) => {
+    const s = pathSummary(r);
+    const head = `<div class="t">${k === 0 ? 'Best path' : 'Path ' + (k + 1)} · ${s.hops} hops</div>
       <div class="m">${s.guesses ? `<span style="color:#ffa63d">${s.guesses} guess${s.guesses > 1 ? 'es' : ''}</span>` : 'no guesses'} · ${r.sure}/${r.iface} iface sure${Object.entries(s.linkN).map(([kind, n]) => ` · <span style="color:${linkColor(kind)}">${n} ${esc(linkShort(kind))}</span>`).join('')}</div>
       <div class="m">${s.projs.map(esc).join(' → ')}</div>`;
-    if (k !== routeSel) return `<div class="rt" data-r="${k}">${head}</div>`;
+    if (k !== pathSel) return `<div class="rt" data-r="${k}">${head}</div>`;
     const steps = r.idx.map((i, h) => {
       const hop = h === 0 ? '' : (() => { const [ic, cl, title] = HOP[r.via[h-1]]; return `<div class="step"><span class="ic ${cl}" title="${title}">${ic}</span><span class="m">${esc(title)}${r.methods[h-1] ? ' ' + esc(r.methods[h-1]) : ''}</span></div>`; })();
       const pin = h === 0 ? '<span class="pin a">A</span>' : h === r.idx.length - 1 ? '<span class="pin b">B</span>' : '<span class="ic">·</span>';
       return hop + `<div class="step">${pin}${nodeRow(i, '', '')}</div>`;
     }).join('');
     return `<div class="rt sel" data-r="${k}">${head}<div style="margin-top:6px">${steps}</div></div>`;
-  }).join('') + `<div class="muted">${routes.length} route${routes.length > 1 ? 's' : ''} in ${$('routes').dataset.ms} ms · fewest guesses first, then fewest hops</div>`;
+  }).join('') + `<div class="muted">${paths.length} path${paths.length > 1 ? 's' : ''} in ${$('paths').dataset.ms} ms · fewest guesses first, then fewest hops</div>`;
 }
-$('routes').onclick = e => {
+$('paths').onclick = e => {
   const n = e.target.closest('[data-n]');
   if (n) { const j = +n.dataset.n; setFocus({node: j}); flyTo(nodePos(j), 60); return; }
-  const r = e.target.closest('[data-r]'); if (r && +r.dataset.r !== routeSel) selectRoute(+r.dataset.r);
+  const r = e.target.closest('[data-r]'); if (r && +r.dataset.r !== pathSel) selectPath(+r.dataset.r);
 };
-// Clicking near an alternative route's line selects it (within 6px, screen space).
-function pickRoute(mx, my) {
+// Clicking near an alternative path's line selects it (within 6px, screen space).
+function pickPath(mx, my) {
   if (!projected) project();
   let best = -1, bd = 36;
-  routes.forEach((r, k) => {
-    if (k === routeSel) return;
+  paths.forEach((r, k) => {
+    if (k === pathSel) return;
     for (let h = 0; h < r.via.length; h++) {
       const s = r.idx[h], t = r.idx[h+1];
       if (sz[s] <= 0 || sz[t] <= 0) continue;

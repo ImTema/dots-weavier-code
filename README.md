@@ -4,8 +4,6 @@ dotweavier is a CLI that indexes Go projects into one call graph and traces path
 
 dotweavier never writes inside the projects it analyzes. All state lives in `~/.dotweavier`.
 
-Status: prototype.
-
 ## Build
 
 ```sh

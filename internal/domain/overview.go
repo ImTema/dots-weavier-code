@@ -1,6 +1,4 @@
-// PROTOTYPE, throwaway (branch prototype/overview): data and layout for a
-// galaxy overview of every indexed project. Answers "is a galaxy of every indexed function
-// readable and fast?" before the real `dotweavier serve` Overview tab is designed.
+// Data and layout for the galaxy overview of every indexed project.
 package domain
 
 import (
@@ -24,26 +22,26 @@ import (
 
 // OverviewGraph is packed into parallel arrays: ~50k nodes stay a few MB of JSON.
 type OverviewGraph struct {
-	Projects []string  `json:"projects"` // every indexed project, biggest first
-	Sizes    []int     `json:"sizes"`    // nodes per project
-	Hidden   []bool    `json:"hidden"`   // excluded from this layout: no nodes, no edges
-	Centers  []float32 `json:"centers"`  // x,y,z per project; 0 for hidden ones
-	Files    []string  `json:"files"`
-	Proj     []int32   `json:"proj"` // per node: index into Projects
-	File     []int32   `json:"file"` // per node: index into Files
-	Name     []string  `json:"name"`
-	ID       []int32   `json:"id"` // per node: stable graph node id, what /route takes and returns
-	Line     []int32   `json:"line"`
-	Deg      []int32   `json:"deg"`       // in+out edges
-	Pos      []float32 `json:"pos"`       // x,y,z per node
-	Edges    []int32   `json:"edges"`     // s,t pairs, calls inside one project
-	Links    []int32   `json:"links"`     // s,t pairs, grpc/http/pubsub/lib hops (between projects)
-	Kinds    []string  `json:"linkKinds"` // per link pair: edge kind, "grpc", "http", "pubsub", "pubsub:guess", "lib"
-	Methods  []string  `json:"methods"`   // per link pair: gRPC full method, "GET /path", pubsub key, or library function
-	Weaves   []int32   `json:"weaves"`    // s,t pairs: public function t reached from public function s along calls, see weaves
-	LayoutMs int64     `json:"layoutMs"`
-	Total    int       `json:"total"` // functions in the shown projects before the node cap
-	Limit    int       `json:"limit"` // the node cap; 0 means none
+	Projects    []string  `json:"projects"` // every indexed project, biggest first
+	Sizes       []int     `json:"sizes"`    // nodes per project
+	Hidden      []bool    `json:"hidden"`   // excluded from this layout: no nodes, no edges
+	Centers     []float32 `json:"centers"`  // x,y,z per project; 0 for hidden ones
+	Files       []string  `json:"files"`
+	Proj        []int32   `json:"proj"` // per node: index into Projects
+	File        []int32   `json:"file"` // per node: index into Files
+	Name        []string  `json:"name"`
+	ID          []int32   `json:"id"` // per node: stable graph node id, what /paths takes and returns
+	Line        []int32   `json:"line"`
+	Deg         []int32   `json:"deg"`         // in+out edges
+	Pos         []float32 `json:"pos"`         // x,y,z per node
+	Edges       []int32   `json:"edges"`       // s,t pairs, calls inside one project
+	Links       []int32   `json:"links"`       // s,t pairs, grpc/http/pubsub/lib hops (between projects)
+	Kinds       []string  `json:"linkKinds"`   // per link pair: edge kind, "grpc", "http", "pubsub", "pubsub:guess", "lib"
+	Methods     []string  `json:"methods"`     // per link pair: gRPC full method, "GET /path", pubsub key, or library function
+	WeavedPaths []int32   `json:"weavedPaths"` // s,t pairs: boundary node t reached from boundary node s along calls, see weavedPaths
+	LayoutMs    int64     `json:"layoutMs"`
+	Total       int       `json:"total"` // functions in the shown projects before the node cap
+	Limit       int       `json:"limit"` // the node cap; 0 means none
 }
 
 // OverviewSource is every index merged once; Build lays it out per request and
@@ -391,7 +389,7 @@ func (src *OverviewSource) Build(show map[string]bool, limit int) *OverviewGraph
 	// Empty, not nil: an overview with nothing shown must still encode as [] for the page.
 	o := &OverviewGraph{Projects: []string{}, Sizes: []int{}, Hidden: []bool{}, Centers: []float32{}, Files: []string{},
 		Proj: []int32{}, File: []int32{}, Name: []string{}, ID: []int32{}, Line: []int32{}, Deg: []int32{}, Pos: []float32{},
-		Edges: []int32{}, Links: []int32{}, Kinds: []string{}, Methods: []string{}, Weaves: []int32{}}
+		Edges: []int32{}, Links: []int32{}, Kinds: []string{}, Methods: []string{}, WeavedPaths: []int32{}}
 	idx := make([]int32, len(g.Nodes)) // graph node -> overview node, -1 when dropped
 	projOf := map[string]int32{}
 	fileOf := map[string]int32{}
@@ -448,7 +446,7 @@ func (src *OverviewSource) Build(show map[string]bool, limit int) *OverviewGraph
 			}
 		}
 	}
-	o.Weaves = weaves(publicNodes(g, idx, o), o.Edges)
+	o.WeavedPaths = weavedPaths(boundaryNodes(g, idx, o), o.Edges)
 	o.layout()
 	o.Total, o.Limit = total, limit
 	o.LayoutMs = time.Since(t0).Milliseconds()
@@ -682,8 +680,8 @@ func (o *OverviewGraph) layout() {
 	}
 }
 
-// Route is one path for the overview's directions panel, in graph node ids.
-type Route struct {
+// OverviewPath is one path for the overview's directions panel, in graph node ids.
+type OverviewPath struct {
 	Nodes   []int32  `json:"nodes"`
 	Via     []string `json:"via"`     // per hop (len(Nodes)-1): call, iface:sure, iface:guess, grpc
 	Methods []string `json:"methods"` // per hop: the link's method, route or pubsub key, or ""
@@ -691,16 +689,16 @@ type Route struct {
 	Iface   int      `json:"iface"`
 }
 
-// Routes returns up to k ranked paths a->b (fewest guesses, then fewest hops) that
-// stay out of hidden projects, so every route can be drawn on the current layout.
-// exhausted is false when the search hit its limit and more routes may exist.
-func (src *OverviewSource) Routes(a, b int32, k int, show map[string]bool, limit int) (routes []Route, exhausted bool) {
+// Paths returns up to k ranked paths a->b (fewest guesses, then fewest hops) that
+// stay out of hidden projects, so every path can be drawn on the current layout.
+// exhausted is false when the search hit its limit and more paths may exist.
+func (src *OverviewSource) Paths(a, b int32, k int, show map[string]bool, limit int) (paths []OverviewPath, exhausted bool) {
 	src.mu.RLock()
 	defer src.mu.RUnlock()
 	g := src.g
 	hide := hiddenExcept(g, show)
-	// Same cap as Build: a route may only pass through functions the page draws.
-	// shortcut: a route through a capped-out function is not found; send its nodes with the route if that bites.
+	// Same cap as Build: a path may only pass through functions the page draws.
+	// shortcut: a path through a capped-out function is not found; send its nodes with the path if that bites.
 	keep, _ := selectNodes(g, hide, limit)
 	if a < 0 || b < 0 || int(a) >= len(g.Nodes) || int(b) >= len(g.Nodes) || a == b {
 		return nil, true
@@ -718,7 +716,7 @@ func (src *OverviewSource) Routes(a, b int32, k int, show map[string]bool, limit
 	}
 	states, exhausted := f.trace(a, b, k)
 	for _, st := range states {
-		var r Route
+		var r OverviewPath
 		for s := st; s != nil; s = s.parent {
 			r.Nodes = append(r.Nodes, s.n)
 			if s.parent != nil {
@@ -736,9 +734,9 @@ func (src *OverviewSource) Routes(a, b int32, k int, show map[string]bool, limit
 		slices.Reverse(r.Nodes)
 		slices.Reverse(r.Via)
 		slices.Reverse(r.Methods)
-		routes = append(routes, r)
+		paths = append(paths, r)
 	}
-	return routes, exhausted
+	return paths, exhausted
 }
 
 // hiddenExcept marks every indexed project not in show as hidden.
@@ -805,37 +803,37 @@ func selectNodes(g *graph, hide map[string]bool, limit int) (keep []bool, total 
 	return keep, total
 }
 
-// publicNodes marks the overview nodes another project can reach or that reach
+// boundaryNodes marks the overview nodes another project can reach or that reach
 // another project: every handler the index registered for a gRPC method, HTTP
 // route or pubsub topic (served even when nothing indexed calls it, like
 // POST /orders), and both ends of every hop between projects. Library calls do
 // not count: a getter or constructor from another module is not an entry point.
-func publicNodes(g *graph, idx []int32, o *OverviewGraph) []bool {
-	public := make([]bool, len(o.Name))
+func boundaryNodes(g *graph, idx []int32, o *OverviewGraph) []bool {
+	boundary := make([]bool, len(o.Name))
 	for key, hs := range g.Impls {
 		if strings.HasPrefix(key, libKey) {
 			continue
 		}
 		for _, h := range hs {
 			if i := idx[h]; i >= 0 {
-				public[i] = true
+				boundary[i] = true
 			}
 		}
 	}
 	for k, kind := range o.Kinds {
 		if kind != libHop.String() {
-			public[o.Links[2*k]], public[o.Links[2*k+1]] = true, true
+			boundary[o.Links[2*k]], boundary[o.Links[2*k+1]] = true, true
 		}
 	}
-	return public
+	return boundary
 }
 
-// weaves returns s,t pairs: for every public node s, each public node t reached
-// from s along calls without passing through another public one. The overview
+// weavedPaths returns s,t pairs: for every boundary node s, each boundary node t reached
+// from s along calls without passing through another one. The overview
 // draws each pair as one edge instead of the calls between.
-// ponytail: one DFS per public function, O(publics x calls); fine at the 20k node cap.
-func weaves(public []bool, calls []int32) []int32 {
-	n := len(public)
+// ponytail: one DFS per boundary node, O(boundary nodes x calls); fine at the 20k node cap.
+func weavedPaths(boundary []bool, calls []int32) []int32 {
+	n := len(boundary)
 	out := make([][]int32, n)
 	for k := 0; k < len(calls); k += 2 {
 		out[calls[k]] = append(out[calls[k]], calls[k+1])
@@ -843,7 +841,7 @@ func weaves(public []bool, calls []int32) []int32 {
 	pairs := []int32{}
 	seen := make([]int32, n) // seen[i] == s+1: i already visited from s
 	for s := range int32(n) {
-		if !public[s] {
+		if !boundary[s] {
 			continue
 		}
 		seen[s] = s + 1
@@ -856,7 +854,7 @@ func weaves(public []bool, calls []int32) []int32 {
 					continue
 				}
 				seen[t] = s + 1
-				if public[t] {
+				if boundary[t] {
 					pairs = append(pairs, s, t)
 				} else {
 					stack = append(stack, t)

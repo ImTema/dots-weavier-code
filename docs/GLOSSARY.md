@@ -83,12 +83,20 @@ _Avoid_: home, start value
 One ordered chain of nodes and edges returned by a trace. Paths are ranked shortest first.
 _Avoid_: route, chain
 
+**Boundary node**:
+A node where a project meets another project: a handler registered for a gRPC method, HTTP route or pubsub topic (even when nothing indexed calls it), or either end of a link. A library-call link does not count.
+_Avoid_: public node, public function, edge node, entry point
+
+**Weaved path**:
+One edge the overview draws from boundary node A to boundary node B in place of every call path from A to B that passes through no other boundary node. It exists only in the overview, never in the index. Clicking it finds the paths from A to B.
+_Avoid_: weave, collapsed route, shortcut, summary edge
+
 **Excluded node**:
 A node the user bars from a trace: no returned path passes through it. Excluding a project excludes every node in it.
 _Avoid_: blocked node, avoided node, filter
 
 **Overview**:
-The galaxy view of every indexed project: the top K nodes that are link endpoints or public functions, ranked by how many edges they have. Test nodes never appear in it.
+The galaxy view of every indexed project: the top K nodes that are link endpoints or boundary nodes, ranked by how many edges they have. Test nodes never appear in it.
 _Avoid_: galaxy, map
 
 ### Running

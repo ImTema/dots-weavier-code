@@ -1,4 +1,4 @@
-// The call graph: nodes, edges and the joins between projects. Throwaway prototype (ticket .scratch/dotweavier-mvp/issues/11).
+// The call graph: nodes, edges and the joins between projects.
 package domain
 
 import (

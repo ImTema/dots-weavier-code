@@ -51,7 +51,7 @@ func main() {
 		runInit(os.Args[2:])
 	case "index":
 		runIndex(cancellable(), os.Args[2:])
-	case "overview": // PROTOTYPE
+	case "overview":
 		runOverview(os.Args[2:])
 	case "trace":
 		if len(os.Args) < 3 {

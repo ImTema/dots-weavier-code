@@ -1,6 +1,5 @@
-// PROTOTYPE, throwaway (branch prototype/overview): `dotweavier overview` serves a
-// 3D galaxy of every indexed function on localhost. three.js 0.187.0 is vendored
-// under overview_prototype_assets (MIT, see LICENSE-three).
+// `dotweavier overview` serves a 3D galaxy of every indexed function on localhost. three.js 0.187.0 is vendored
+// under overview_assets (MIT, see LICENSE-three).
 package main
 
 import (
@@ -21,10 +20,10 @@ import (
 	"dotweavier/internal/domain"
 )
 
-//go:embed overview-prototype.html
+//go:embed overview.html
 var overviewPage []byte
 
-//go:embed overview_prototype_assets
+//go:embed overview_assets
 var overviewAssets embed.FS
 
 func runOverview(args []string) {
@@ -101,8 +100,8 @@ func runOverview(args []string) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(data)
 	})
-	// /route?a=ID&b=ID[&k=N][&show=project...]: ranked paths between two graph node ids.
-	mux.HandleFunc("GET /route", func(w http.ResponseWriter, r *http.Request) {
+	// /paths?a=ID&b=ID[&k=N][&show=project...]: ranked paths between two graph node ids.
+	mux.HandleFunc("GET /paths", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		a, errA := strconv.Atoi(q.Get("a"))
 		b, errB := strconv.Atoi(q.Get("b"))
@@ -119,11 +118,11 @@ func runOverview(args []string) {
 			return
 		}
 		t0 := time.Now()
-		routes, exhausted := src.Routes(int32(a), int32(b), k, show(r), *maxNodes)
+		paths, exhausted := src.Paths(int32(a), int32(b), k, show(r), *maxNodes)
 		ms := time.Since(t0).Milliseconds()
-		fmt.Fprintf(os.Stderr, "route %d -> %d: %d routes in %dms (exhausted=%v)\n", a, b, len(routes), ms, exhausted)
+		fmt.Fprintf(os.Stderr, "paths %d -> %d: %d paths in %dms (exhausted=%v)\n", a, b, len(paths), ms, exhausted)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"routes": routes, "exhausted": exhausted, "ms": ms})
+		json.NewEncoder(w).Encode(map[string]any{"paths": paths, "exhausted": exhausted, "ms": ms})
 	})
 	// Projects detected under the project folder, with whether and when each was indexed.
 	mux.HandleFunc("GET /projects", func(w http.ResponseWriter, _ *http.Request) {
@@ -214,7 +213,7 @@ func runOverview(args []string) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.Handle("GET /overview_prototype_assets/", http.FileServerFS(overviewAssets))
+	mux.Handle("GET /overview_assets/", http.FileServerFS(overviewAssets))
 	// Field trace page, served so it can continue a trace: GET /ui/trace-field.html?t=RUN
 	// (the same static page the CLI writes), GET /trace-field-history/RUN.js, and
 	// POST /trace-field?addr=ADDR, which traces like the CLI, saves the run and returns its name.

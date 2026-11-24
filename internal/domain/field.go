@@ -163,10 +163,10 @@ func importers(projects []project) map[string][]project {
 	return out
 }
 
-// traceField runs both walks from file:line in home, loading further projects that
+// traceField runs both walks from file:line in seedProject, loading further projects that
 // import a reached field's package, up to maxProjects in total. A non-nil seedOK
 // keeps only the line's values it accepts as seeds.
-func traceField(ctx context.Context, projects []project, home project, file string, line int, tests bool, maxProjects int, seedOK func(ssa.Value) bool) (*tracker, error) {
+func traceField(ctx context.Context, projects []project, seedProject project, file string, line int, tests bool, maxProjects int, seedOK func(ssa.Value) bool) (*tracker, error) {
 	var modules []string
 	moduleOf := map[string]string{} // project name -> module path
 	for _, p := range projects {
@@ -179,7 +179,7 @@ func traceField(ctx context.Context, projects []project, home project, file stri
 	}
 	t := newTracker(token.NewFileSet(), tests, modules)
 	t.seedOK = seedOK
-	loaded := map[string]bool{home.Name: true}
+	loaded := map[string]bool{seedProject.Name: true}
 	// Loads run one after another: concurrent loads measured slower (12.1s vs 11.4s),
 	// go list contends on the go command's locks and is mostly system time.
 	loadAll := func(ps []project) []*ssa.Program {
@@ -207,16 +207,16 @@ func traceField(ctx context.Context, projects []project, home project, file stri
 	// The import scan of every project only matters once fields are reached; run it meanwhile.
 	impsC := make(chan map[string][]project, 1)
 	go func() { impsC <- importers(projects) }()
-	prog := loadAll([]project{home})[0]
+	prog := loadAll([]project{seedProject})[0]
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if prog == nil {
-		return nil, fmt.Errorf("project %s did not load", home.Name)
+		return nil, fmt.Errorf("project %s did not load", seedProject.Name)
 	}
 	seeds := t.seeds(prog, file, line)
 	if len(seeds) == 0 {
-		return nil, fmt.Errorf("no value computed at %s:%d in project %s", file, line, home.Name)
+		return nil, fmt.Errorf("no value computed at %s:%d in project %s", file, line, seedProject.Name)
 	}
 	for _, s := range seeds {
 		t.fwd.taint(s, nil, fSeed, s.Pos())

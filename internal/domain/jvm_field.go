@@ -178,14 +178,14 @@ func (t *jtrace) fieldSeeds(rel string, ln int) {
 }
 
 // traceJVMField traces the value computed at rel:line in a Java or Kotlin project.
-func traceJVMField(home project, file string, ln int, tests bool) (*FieldTrace, string, error) {
-	rel, err := filepath.Rel(home.dir, file)
+func traceJVMField(seedProject project, file string, ln int, tests bool) (*FieldTrace, string, error) {
+	rel, err := filepath.Rel(seedProject.dir, file)
 	if err != nil {
 		return nil, "", err
 	}
 	rel = filepath.ToSlash(rel)
 	g := &graph{ids: map[string]int32{}, Impls: map[string][]int32{}}
-	jp, _, err := loadJVM(g, home)
+	jp, _, err := loadJVM(g, seedProject)
 	if err != nil {
 		return nil, "", err
 	}
@@ -207,7 +207,7 @@ func traceJVMField(home project, file string, ln int, tests bool) (*FieldTrace, 
 		t.fieldSeeds(rel, ln)
 	}
 	if len(t.fwd.order) == 0 {
-		return nil, "", fmt.Errorf("no value computed at %s:%d in project %s", rel, ln, home.Name)
+		return nil, "", fmt.Errorf("no value computed at %s:%d in project %s", rel, ln, seedProject.Name)
 	}
 	t.back.run()
 	t.fwd.run()

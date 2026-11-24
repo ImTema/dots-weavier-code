@@ -83,15 +83,15 @@ func traceGoHandler(ctx context.Context, q FieldQuery, loc string, line int) (*F
 			gos = append(gos, p)
 		}
 	}
-	home, file, err := resolveFile(gos, loc)
+	seedProject, file, err := resolveFile(gos, loc)
 	if err != nil {
 		return nil, err
 	}
-	t, err := traceField(ctx, gos, home, file, line, q.IncludeTests, q.maxProjects(), requestParam)
+	t, err := traceField(ctx, gos, seedProject, file, line, q.IncludeTests, q.maxProjects(), requestParam)
 	if err != nil {
 		return nil, err
 	}
-	return fieldTrace(q.Dir, t, home, gos, file, line), nil
+	return fieldTrace(q.Dir, t, seedProject, gos, file, line), nil
 }
 
 // requestParam accepts the parameters that carry a request into a handler.

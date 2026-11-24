@@ -14,7 +14,7 @@ import (
 // unindexed projects get no path.
 // ponytail: one trace per distinct function, each rebuilding the reverse graph;
 // share one reverse graph if large trees get slow.
-func attachCalls(r *FieldTrace, ws, home, seedFile string, seedLine int) {
+func attachCalls(r *FieldTrace, ws, seedProject, seedFile string, seedLine int) {
 	// Project names in the trace are relative to ws, and so are the indexes' names when loaded for ws.
 	warn := func(format string, args ...any) { r.Warnings = append(r.Warnings, fmt.Sprintf(format, args...)) }
 	abs, err := filepath.Abs(ws)
@@ -28,9 +28,9 @@ func attachCalls(r *FieldTrace, ws, home, seedFile string, seedLine int) {
 		warn("call paths skipped: %v", err)
 		return
 	}
-	seed, err := g.resolve(address{Project: home, File: seedFile, Line: seedLine}, false)
+	seed, err := g.resolve(address{Project: seedProject, File: seedFile, Line: seedLine}, false)
 	if err != nil {
-		warn("call paths skipped: seed is not in the index (run: dotweavier index %s): %v", filepath.Join(abs, home), err)
+		warn("call paths skipped: seed is not in the index (run: dotweavier index %s): %v", filepath.Join(abs, seedProject), err)
 		return
 	}
 	cache := map[int32]*Path{}
@@ -52,7 +52,7 @@ func attachCalls(r *FieldTrace, ws, home, seedFile string, seedLine int) {
 	var walk func(ss []*FieldStep)
 	walk = func(ss []*FieldStep) {
 		for _, s := range ss {
-			if a, ok := stepAddr(s.Loc, home); ok {
+			if a, ok := stepAddr(s.Loc, seedProject); ok {
 				if n, err := g.resolve(a, false); err == nil {
 					s.Hops = hopsOf(g, n)
 					if n != seed {
@@ -68,7 +68,7 @@ func attachCalls(r *FieldTrace, ws, home, seedFile string, seedLine int) {
 }
 
 // stepAddr turns a step location, [project:]rel/path.go:LINE, into a graph address.
-func stepAddr(loc, home string) (address, bool) {
+func stepAddr(loc, seedProject string) (address, bool) {
 	i := strings.LastIndex(loc, ":")
 	if i < 0 {
 		return address{}, false
@@ -77,7 +77,7 @@ func stepAddr(loc, home string) (address, bool) {
 	if _, err := fmt.Sscan(loc[i+1:], &line); err != nil {
 		return address{}, false
 	}
-	proj, file := home, loc[:i]
+	proj, file := seedProject, loc[:i]
 	if p, f, ok := strings.Cut(file, ":"); ok {
 		proj, file = p, f
 	}

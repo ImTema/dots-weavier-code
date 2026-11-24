@@ -351,30 +351,30 @@ func TraceField(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, er
 		return nil, err
 	}
 	projects = slices.DeleteFunc(projects, func(p project) bool { return p.lang != lang })
-	home, file, err := resolveFile(projects, addr[:i])
+	seedProject, file, err := resolveFile(projects, addr[:i])
 	if err != nil {
 		return nil, err
 	}
 	if lang == "jvm" {
-		r, rel, err := traceJVMField(home, file, line, tests)
+		r, rel, err := traceJVMField(seedProject, file, line, tests)
 		if err != nil {
 			return nil, err
 		}
-		attachCalls(r, ws, home.Name, rel, line)
+		attachCalls(r, ws, seedProject.Name, rel, line)
 		return r, nil
 	}
-	t, err := traceField(ctx, projects, home, file, line, tests, maxProjects, nil)
+	t, err := traceField(ctx, projects, seedProject, file, line, tests, maxProjects, nil)
 	if err != nil {
 		return nil, err
 	}
-	return fieldTrace(ws, t, home, projects, file, line), nil
+	return fieldTrace(ws, t, seedProject, projects, file, line), nil
 }
 
 // fieldTrace turns a Go tracker's walks into the two trees, with call paths and hops.
-func fieldTrace(ws string, t *tracker, home project, projects []project, file string, line int) *FieldTrace {
+func fieldTrace(ws string, t *tracker, seedProject project, projects []project, file string, line int) *FieldTrace {
 	projects = slices.Clone(projects)
 	slices.SortFunc(projects, func(a, b project) int { return cmp.Compare(len(b.dir), len(a.dir)) })
-	p := &printer{t: t, home: home, projects: projects, src: map[string][]string{}}
+	p := &printer{t: t, seedProject: seedProject, projects: projects, src: map[string][]string{}}
 	r := &FieldTrace{Warnings: t.warnings}
 	for _, n := range t.back.tree() {
 		r.Origin = append(r.Origin, p.step(n))
@@ -382,7 +382,7 @@ func fieldTrace(ws string, t *tracker, home project, projects []project, file st
 	for _, n := range t.fwd.tree() {
 		r.Uses = append(r.Uses, p.step(n))
 	}
-	attachCalls(r, ws, home.Name, p.rel(file), line)
+	attachCalls(r, ws, seedProject.Name, p.rel(file), line)
 	return r
 }
 
@@ -421,16 +421,16 @@ func (p *printer) step(n *tnode) *FieldStep {
 // printer turns a finished trace into Steps: paths relative to the projects,
 // source lines read from disk.
 type printer struct {
-	t        *tracker
-	home     project   // files here show without a project prefix
-	projects []project // innermost first
-	src      map[string][]string
+	t           *tracker
+	seedProject project   // files here show without a project prefix
+	projects    []project // innermost first
+	src         map[string][]string
 }
 
 func (p *printer) rel(file string) string {
-	for _, pr := range append([]project{p.home}, p.projects...) {
+	for _, pr := range append([]project{p.seedProject}, p.projects...) {
 		if r, err := filepath.Rel(pr.dir, file); err == nil && !strings.HasPrefix(r, "..") {
-			if pr == p.home {
+			if pr == p.seedProject {
 				return filepath.ToSlash(r)
 			}
 			return pr.Name + ":" + filepath.ToSlash(r)

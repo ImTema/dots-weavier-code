@@ -9,8 +9,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go/token"
-	"go/types"
 	"os"
 	"path/filepath"
 	"slices"
@@ -468,7 +466,7 @@ func TraceField(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, er
 	}
 	if lang == "jvm" {
 		report(q.Progress, "tracing "+seedProject.Name)
-		r, rel, err := traceJVMField(seedProject, file, line, tests)
+		r, rel, err := traceJVMField(ctx, seedProject, file, line, tests)
 		if err != nil {
 			return nil, err
 		}
@@ -484,99 +482,8 @@ func TraceField(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, er
 
 // fieldTrace turns a Go tracker's walks into the two trees, with call paths and hops.
 func fieldTrace(ws string, t *tracker, seedProject project, projects []project, file string, line int) *FieldTrace {
-	projects = slices.Clone(projects)
-	slices.SortFunc(projects, func(a, b project) int { return cmp.Compare(len(b.dir), len(a.dir)) })
-	p := &printer{t: t, seedProject: seedProject, projects: projects, src: map[string][]string{}}
-	r := &FieldTrace{Warnings: t.warnings}
-	for _, n := range t.back.tree() {
-		r.Origin = append(r.Origin, p.step(n))
-	}
-	for _, n := range t.fwd.tree() {
-		r.Uses = append(r.Uses, p.step(n))
-	}
+	p := newPrinter(seedProject, projects)
+	r := t.result(p)
 	attachCalls(r, ws, seedProject.Name, p.rel(file), line)
 	return r
-}
-
-// step converts a tnode; kids are ordered by location, overwrites come last.
-func (p *printer) step(n *tnode) *FieldStep {
-	s := &FieldStep{Kind: n.how.String()}
-	if n.field != "" {
-		s.Kind, s.Name = "field", p.fieldName(n.field)
-	} else {
-		s.Loc, s.Code = p.rel(n.file)+":"+strconv.Itoa(n.line), p.text(n.file, n.line)
-		s.Before, s.After = p.text(n.file, n.line-1), p.text(n.file, n.line+1) // one line of context each side
-		if n.fn != nil {
-			s.Fn = display(n.fn)
-		}
-	}
-	if n.typ != nil {
-		s.Type = types.TypeString(n.typ, qual)
-	}
-	if n.via.IsValid() {
-		s.Via = p.where(n.via)
-	}
-	kids := slices.Clone(n.kids)
-	slices.SortStableFunc(kids, func(a, b *tnode) int {
-		return cmp.Or(cmp.Compare(p.rel(a.file), p.rel(b.file)), cmp.Compare(a.line, b.line))
-	})
-	for _, k := range kids {
-		s.Kids = append(s.Kids, p.step(k))
-	}
-	for _, o := range n.over {
-		ps := p.t.fset.Position(o)
-		s.Kids = append(s.Kids, &FieldStep{Kind: "overwritten", Loc: p.where(o), Code: p.text(ps.Filename, ps.Line)})
-	}
-	return s
-}
-
-// printer turns a finished trace into Steps: paths relative to the projects,
-// source lines read from disk.
-type printer struct {
-	t           *tracker
-	seedProject project   // files here show without a project prefix
-	projects    []project // innermost first
-	src         map[string][]string
-}
-
-func (p *printer) rel(file string) string {
-	for _, pr := range append([]project{p.seedProject}, p.projects...) {
-		if r, err := filepath.Rel(pr.dir, file); err == nil && !strings.HasPrefix(r, "..") {
-			if pr == p.seedProject {
-				return filepath.ToSlash(r)
-			}
-			return pr.Name + ":" + filepath.ToSlash(r)
-		}
-	}
-	return file
-}
-
-func (p *printer) text(file string, line int) string {
-	ls, ok := p.src[file]
-	if !ok {
-		b, _ := os.ReadFile(file)
-		ls = strings.Split(string(b), "\n")
-		p.src[file] = ls
-	}
-	if line < 1 || line > len(ls) {
-		return ""
-	}
-	return strings.TrimSpace(ls[line-1])
-}
-
-func (p *printer) where(pos token.Pos) string {
-	ps := p.t.fset.Position(pos)
-	return p.rel(ps.Filename) + ":" + strconv.Itoa(ps.Line)
-}
-
-func qual(pkg *types.Package) string { return pkg.Name() }
-
-// fieldName shows a field as pkg.Type.Field.
-func (p *printer) fieldName(k fieldKey) string {
-	s := string(k)
-	name := s[strings.LastIndex(s[:strings.LastIndex(s, ".")], ".")+1:] // Type.Field
-	if v := p.t.fields[k]; v.Pkg() != nil {
-		name = v.Pkg().Name() + "." + name
-	}
-	return name
 }

@@ -95,7 +95,7 @@ func TestTraceJVMField(t *testing.T) {
 	} {
 		dir, err := filepath.Abs(filepath.Join("..", "..", "samples", c.dir))
 		require.NoError(t, err)
-		r, _, err := traceJVMField(project{c.dir, dir, "jvm"}, filepath.Join(dir, c.file), c.line, false)
+		r, _, err := traceJVMField(t.Context(), project{c.dir, dir, "jvm"}, filepath.Join(dir, c.file), c.line, false)
 		require.NoError(t, err)
 		assert.Subset(t, flat(r), c.want, "%s:%d", c.file, c.line)
 	}

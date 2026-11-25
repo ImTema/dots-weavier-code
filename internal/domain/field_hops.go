@@ -50,20 +50,16 @@ func hopsOf(g *graph, n int32) []Hop {
 // project, so the trees can be grafted into another project's trace.
 func (run *fieldRun) traceHop(ctx context.Context, addr string) (*FieldTrace, error) {
 	i := strings.LastIndex(addr, ":")
-	line, err := strconv.Atoi(addr[i+1:])
-	if i < 0 || err != nil {
+	if _, err := strconv.Atoi(addr[i+1:]); i < 0 || err != nil {
 		return nil, fmt.Errorf("bad handler address %q", addr)
 	}
 	proj, _, _ := strings.Cut(addr, ":")
 	var r *FieldTrace
+	var err error
 	if strings.HasSuffix(addr[:i], ".go") {
-		r, err = run.trace(ctx, addr, requestParam)
+		r, err = run.trace(ctx, addr, requestParam, 1)
 	} else {
-		for l := line; l < line+12; l++ { // annotations, then the signature
-			if r, err = run.trace(ctx, addr[:i]+":"+strconv.Itoa(l), nil); err == nil {
-				break
-			}
-		}
+		r, err = run.trace(ctx, addr, nil, 12) // annotations, then the signature
 	}
 	if err != nil {
 		return nil, err

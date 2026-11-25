@@ -174,45 +174,51 @@ func (t *jtrace) fieldSeeds(rel string, ln int) {
 	}
 }
 
-// traceJVMField traces the value computed at rel:line in a Java or Kotlin project.
-// Cancelling ctx stops it after the project is parsed.
-func traceJVMField(ctx context.Context, seedProject project, file string, ln int, tests bool) (*FieldTrace, string, error) {
+// traceJVMField traces the value computed at rel:line in a Java or Kotlin
+// project. It parses the project once and seeds at the first of lines lines
+// from ln on that computes a value (a declaration's annotations, then its
+// signature), and returns that line. Cancelling ctx stops it after the project
+// is parsed.
+func traceJVMField(ctx context.Context, seedProject project, file string, ln, lines int, tests bool) (*FieldTrace, int, error) {
 	rel, err := filepath.Rel(seedProject.dir, file)
 	if err != nil {
-		return nil, "", err
+		return nil, 0, err
 	}
 	rel = filepath.ToSlash(rel)
 	g := &graph{ids: map[string]int32{}, Impls: map[string][]int32{}}
 	jp, st, err := loadJVM(g, seedProject)
 	if err != nil {
-		return nil, "", err
+		return nil, 0, err
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, "", err
+		return nil, 0, err
 	}
 	t := &jtrace{jp: jp, tests: tests, uses: map[*jvmFunc]map[string][]*sitter.Node{}, defs: map[*jvmFunc]map[string][]jdef{},
 		rets: map[*jvmFunc][]*sitter.Node{}, reads: map[jfield][]jref{}, stores: map[jfield][]jref{}, ftype: map[jfield]string{}}
 	t.ftrace = newFtrace(t)
 	t.warnings = st.warnings
 	t.index()
-	var in *jvmFunc
-	for _, fn := range jp.funcs {
-		n := g.Nodes[fn.id]
-		if fn.file.rel == rel && n.Line <= ln && ln <= n.End && (in == nil || n.End-n.Line < g.Nodes[in.id].End-g.Nodes[in.id].Line) {
-			in = fn
+	at := ln
+	for ; at < ln+max(lines, 1) && len(t.fwd.order) == 0; at++ { // seeding a line with no value changes nothing
+		var in *jvmFunc
+		for _, fn := range jp.funcs {
+			n := g.Nodes[fn.id]
+			if fn.file.rel == rel && n.Line <= at && at <= n.End && (in == nil || n.End-n.Line < g.Nodes[in.id].End-g.Nodes[in.id].Line) {
+				in = fn
+			}
+		}
+		if in != nil {
+			t.jseeds(in, at)
+		}
+		if len(t.fwd.order) == 0 {
+			t.fieldSeeds(rel, at)
 		}
 	}
-	if in != nil {
-		t.jseeds(in, ln)
-	}
 	if len(t.fwd.order) == 0 {
-		t.fieldSeeds(rel, ln)
-	}
-	if len(t.fwd.order) == 0 {
-		return nil, "", fmt.Errorf("no value computed at %s:%d in project %s", rel, ln, seedProject.Name)
+		return nil, 0, fmt.Errorf("no value computed at %s:%d in project %s", rel, ln, seedProject.Name)
 	}
 	if err := t.run(ctx); err != nil {
-		return nil, "", err
+		return nil, 0, err
 	}
-	return t.result(newPrinter(seedProject, nil)), rel, nil
+	return t.result(newPrinter(seedProject, nil)), at - 1, nil
 }

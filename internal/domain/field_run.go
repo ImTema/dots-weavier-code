@@ -31,8 +31,9 @@ func continueRun(r *FieldTrace, progress func(string)) (*fieldRun, error) {
 }
 
 // trace traces the value at addr ([project:]rel/path:LINE in the run's folder)
-// and attaches call paths and hops. keep, if set, picks a Go trace's seeds.
-func (run *fieldRun) trace(ctx context.Context, addr string, keep func(ssa.Value) bool) (*FieldTrace, error) {
+// and attaches call paths and hops. keep, if set, picks a Go trace's seeds. A
+// JVM trace seeds at the first of lines lines from LINE on that computes a value.
+func (run *fieldRun) trace(ctx context.Context, addr string, keep func(ssa.Value) bool, lines int) (*FieldTrace, error) {
 	q := run.q
 	loc, lang, line, err := parseFieldAddr(addr)
 	if err != nil {
@@ -49,7 +50,7 @@ func (run *fieldRun) trace(ctx context.Context, addr string, keep func(ssa.Value
 	var r *FieldTrace
 	if lang == "jvm" {
 		report(q.Progress, "tracing "+seedProject.Name)
-		r, _, err = traceJVMField(ctx, seedProject, file, line, q.IncludeTests)
+		r, line, err = traceJVMField(ctx, seedProject, file, line, lines, q.IncludeTests)
 	} else {
 		var t *tracker
 		if t, err = traceField(ctx, projects, seedProject, file, line, q.IncludeTests, q.maxProjects(), keep, q.Progress); err == nil {

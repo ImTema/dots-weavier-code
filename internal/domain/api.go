@@ -497,7 +497,7 @@ func TraceField(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, er
 	}
 	q.Dir = dir
 	run := &fieldRun{q: q}
-	r, err := run.trace(ctx, addr, nil)
+	r, err := run.trace(ctx, addr, nil, 1)
 	if err != nil {
 		return nil, err
 	}

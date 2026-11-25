@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -93,6 +94,18 @@ func (src *OverviewSource) FolderOf(addr string) (string, error) {
 	for _, p := range ps {
 		if p.Name == name {
 			return deepest(src.folders, p.dir), nil
+		}
+	}
+	// No project of that name: addr may be an unprefixed rel/path[:LINE] instead.
+	loc := addr
+	if i := strings.LastIndex(addr, ":"); i >= 0 {
+		if _, err := strconv.Atoi(addr[i+1:]); err == nil {
+			loc = addr[:i]
+		}
+	}
+	if lang := langOfExt(loc); lang != "" {
+		if f, err := folderWithFile(src.folders, loc, lang); err == nil {
+			return f, nil
 		}
 	}
 	return "", fmt.Errorf("project %q not found in workspace %s", name, src.ws)

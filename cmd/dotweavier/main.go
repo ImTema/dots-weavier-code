@@ -4,22 +4,26 @@
 //	dotweavier init [DIR] [--workspace NAME]
 //	dotweavier index [DIR] [--workspace NAME]
 //	dotweavier trace path -A <addr> -B <addr> [--workspace NAME] [--max-paths 10] [--include-tests]
-//	dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--depth N] [--include-tests] [--format text|ui]
+//	dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--depth N] [--include-tests] [--format text|ui|html]
 //
 // Addresses: project::Type.Method, project:rel/path.go:Type.Method, project:rel/path.go:LINE.
 package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	_ "embed"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -30,8 +34,8 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
   dotweavier init [DIR] [--workspace NAME]    add DIR (default: current folder) to workspace NAME (default: default); its projects are detected, not indexed
   dotweavier index [DIR] [--workspace NAME]   index the project in DIR (default: current folder) and its modules into workspace NAME (default: default)
-  dotweavier trace path -A <addr> -B <addr> [--workspace NAME] [--max-paths N] [--include-tests] [--format text|ui]
-  dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--project DIR] [--depth N] [--include-tests] [--max-projects N] [--follow N] [--export FILE] [--format text|ui]`)
+  dotweavier trace path -A <addr> -B <addr> [--workspace NAME] [--max-paths N] [--include-tests] [--format text|ui|html]
+  dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--project DIR] [--depth N] [--include-tests] [--max-projects N] [--follow N] [--export FILE] [--format text|ui|html]`)
 	os.Exit(2)
 }
 
@@ -140,7 +144,7 @@ func runTrace(args []string) {
 	bFlag := fl.String("B", "", "end symbol address")
 	maxPaths := fl.Int("max-paths", 10, "number of paths to print")
 	tests := fl.Bool("include-tests", false, "include test nodes (_test.go, mock/fake packages)")
-	format := fl.String("format", "text", "text (one line per path) or ui (galaxy view written to ~/.dotweavier/ui/trace-path.html)")
+	format := fl.String("format", "text", "text (one line per path), ui (serve the overview and open the paths in it) or html (one self-contained file in ~/.dotweavier/ui, opened)")
 	_ = fl.Parse(args)
 
 	r, err := domain.TracePath(domain.PathQuery{Workspace: *wsFlag, A: *aFlag, B: *bFlag, MaxPaths: *maxPaths, IncludeTests: *tests})
@@ -150,10 +154,15 @@ func runTrace(args []string) {
 		r.Indexes, r.Nodes, r.Edges, r.GRPCHops, r.PubsubHops, r.GRPCCalls, r.ServedMethods)
 	fmt.Fprintf(os.Stderr, "A = %s\nB = %s\n", r.A, r.B)
 	switch *format {
-	case "ui":
+	case "ui": // the page traces again on the server, with its defaults (10 paths, no tests)
+		ws := cmp.Or(*wsFlag, domain.DefaultWorkspace)
+		serveOverview(overviewAddr, ws, overviewMaxNodes, "/ui/trace-path.html?"+url.Values{"a": {*aFlag}, "b": {*bFlag}}.Encode())
+	case "html":
 		html, err := pathUI(r.Paths, *aFlag, *bFlag)
 		must(err)
-		fmt.Printf("%d paths -> file://%s\n", len(r.Paths), writeUI("trace-path.html", html))
+		page := writeUI("trace-path.html", html)
+		fmt.Printf("%d paths -> file://%s\n", len(r.Paths), page)
+		openPage(page)
 	default:
 		if len(r.Paths) == 0 {
 			fmt.Println("no path")
@@ -173,7 +182,7 @@ func runTraceField(ctx context.Context, args []string) {
 	depth := fl.Int("depth", 0, "text: print at most N levels of each tree (0: all); ui: levels open at first (0: 6)")
 	tests := fl.Bool("include-tests", false, "include test code (_test.go, mock/fake packages)")
 	maxProjects := fl.Int("max-projects", 10, "load at most N projects when following fields shared across projects")
-	format := fl.String("format", "text", "text (two trees) or ui (tree view written to ~/.dotweavier/ui/trace-field.html)")
+	format := fl.String("format", "text", "text (two trees), ui (serve the overview and open the run in it) or html (one self-contained file in ~/.dotweavier/ui, opened)")
 	export := fl.String("export", "", "also write the result as one self-contained HTML file, e.g. trace.html")
 	follow := fl.Int("follow", 0, "follow gRPC/HTTP/Pub/Sub hops into other projects, N services deep (at most 10 hops)")
 	// Accept the address before or after the flags.
@@ -188,6 +197,13 @@ func runTraceField(ctx context.Context, args []string) {
 	}
 	if len(pos) != 1 {
 		usage()
+	}
+	explicit := false
+	fl.Visit(func(f *flag.Flag) { explicit = explicit || f.Name == "project" })
+	if !explicit { // the current folder, else the registered workspace folder that has the file
+		dir, err := domain.FieldDir(*ws, pos[0])
+		must(err)
+		*ws = dir
 	}
 	q := domain.FieldQuery{Dir: *ws, IncludeTests: *tests, MaxProjects: *maxProjects}
 	r, err := domain.TraceField(ctx, q, pos[0])
@@ -212,10 +228,17 @@ func runTraceField(ctx context.Context, args []string) {
 	case "ui":
 		data, err := fieldData(r, pos[0], *depth)
 		must(err)
-		page := writeUI("trace-field.html", []byte(fieldUITemplate))
 		name, err := saveFieldRun(data, pos[0])
 		must(err)
-		fmt.Printf("lifecycle of %s -> file://%s?t=%s\n", pos[0], page, name)
+		wsName, err := domain.WorkspaceOf(*ws)
+		must(err)
+		serveOverview(overviewAddr, wsName, overviewMaxNodes, "/ui/trace-field.html?t="+url.QueryEscape(name))
+	case "html":
+		data, err := fieldData(r, pos[0], *depth)
+		must(err)
+		page := writeUI("trace-field_"+traceName(pos[0])+".html", exportField(data))
+		fmt.Printf("lifecycle of %s -> file://%s\n", pos[0], page)
+		openPage(page)
 	default:
 		fmt.Fprintf(os.Stderr, "%d steps\n", lifecycle(os.Stdout, r, *depth))
 	}
@@ -500,6 +523,18 @@ func writeUI(name string, html []byte) string {
 	must(os.MkdirAll(filepath.Dir(out), 0o755))
 	must(os.WriteFile(out, html, 0o644))
 	return out
+}
+
+// openPage opens the static page at path in the default browser; no server runs.
+// A failure only warns: the link is already printed.
+func openPage(path string) {
+	cmd := map[string][]string{"darwin": {"open"}, "windows": {"rundll32", "url.dll,FileProtocolHandler"}}[runtime.GOOS]
+	if cmd == nil {
+		cmd = []string{"xdg-open"}
+	}
+	if err := exec.Command(cmd[0], append(cmd[1:], path)...).Start(); err != nil {
+		fmt.Fprintln(os.Stderr, "could not open the browser:", err)
+	}
 }
 
 func must(err error) {

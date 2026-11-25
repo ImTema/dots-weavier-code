@@ -2,6 +2,7 @@ package domain
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -56,6 +57,9 @@ func Source(ws, loc string) (*SourceFile, error) {
 	return &SourceFile{Project: p.Name, File: filepath.ToSlash(rel), Line: line, Text: string(b)}, nil
 }
 
+// errNoProject: no project has the file an address names.
+var errNoProject = errors.New("no project has")
+
 // resolveFile finds the project and absolute path of [project:]rel/path.go.
 func resolveFile(projects []project, s string) (project, string, error) {
 	name, file, ok := strings.Cut(s, ":")
@@ -86,7 +90,7 @@ func resolveFile(projects []project, s string) (project, string, error) {
 	}
 	switch len(hits) {
 	case 0:
-		return project{}, "", fmt.Errorf("no project has %s", s)
+		return project{}, "", fmt.Errorf("%w %s", errNoProject, s)
 	case 1:
 		return hits[0], filepath.Join(hits[0].dir, file), nil
 	}

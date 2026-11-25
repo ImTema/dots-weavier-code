@@ -66,7 +66,8 @@ Flags:
 
 - `--max-paths N` (default 10)
 - `--include-tests`: also follow `_test.go` files and mock/fake packages
-- `--format ui`: write an interactive view to `~/.dotweavier/ui/trace-path.html`
+- `--format ui`: start the overview server (`127.0.0.1:7357`) and open the paths in it; Ctrl-C stops it
+- `--format html`: write a self-contained view to `~/.dotweavier/ui/trace-path.html` and open it
 
 ### 3. Trace a value's lifecycle
 
@@ -76,6 +77,8 @@ dotweavier trace field java/inventory:src/main/java/com/example/inventory/reserv
 dotweavier trace field kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:47
 ```
 
+Without `--project` and without a `project:` prefix, the file is looked up under the current folder, then in the registered workspace folders.
+
 The line must compute a value, declare a parameter, or declare a field. The output is two trees: where the value comes from, and where it goes. Java and Kotlin files are traced from source within their own project (ADR 0007).
 
 Flags:
@@ -84,7 +87,8 @@ Flags:
 - `--max-projects N`: how many projects to load when following fields shared across projects (default 10)
 - `--include-tests`
 - `--follow N`: follow gRPC, HTTP and Pub/Sub calls into the services that handle them, N services deep (at most 10 calls)
-- `--format ui`: write a tree view to `~/.dotweavier/ui/trace-field.html`; every run is kept in `~/.dotweavier/trace-field-history`
+- `--format ui`: start the overview server (`127.0.0.1:7357`) and open the run in it, where hops can be followed and sources read; Ctrl-C stops it. Every run is kept in `~/.dotweavier/trace-field-history`. With the overview already running, the page opens there.
+- `--format html`: write one self-contained file, like `--export`, to `~/.dotweavier/ui/trace-field_<address>.html` and open it
 
 #### Example: follow a value into other services
 

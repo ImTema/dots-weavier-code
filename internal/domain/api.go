@@ -7,6 +7,7 @@ package domain
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"go/token"
 	"go/types"
@@ -334,24 +335,123 @@ func (q FieldQuery) maxProjects() int {
 	return q.MaxProjects
 }
 
+// parseFieldAddr splits [project:]rel/path.{go,java,kt}:LINE into its file part,
+// language and line.
+func parseFieldAddr(addr string) (loc, lang string, line int, err error) {
+	i := strings.LastIndex(addr, ":")
+	line, err = strconv.Atoi(addr[i+1:])
+	lang = langOfExt(addr[:max(i, 0)])
+	if i < 0 || err != nil || lang == "" {
+		return "", "", 0, fmt.Errorf("bad address %q, want [project:]rel/path.{go,java,kt}:LINE", addr)
+	}
+	return addr[:i], lang, line, nil
+}
+
+// langOfExt is the language of a source file by its extension, "" if unknown.
+func langOfExt(file string) string {
+	return map[string]string{".go": "go", ".java": "jvm", ".kt": "jvm"}[filepath.Ext(file)]
+}
+
+// langProjects is the projects under dir written in lang.
+func langProjects(dir, lang string) ([]project, error) {
+	ps, err := discover(dir)
+	return slices.DeleteFunc(ps, func(p project) bool { return p.lang != lang }), err
+}
+
+// FieldDir is the folder to trace addr in: dir when one of its projects has the
+// file, else the one registered workspace folder whose projects have it. So an
+// address from an indexed project traces from any current folder.
+func FieldDir(dir, addr string) (string, error) {
+	loc, lang, _, err := parseFieldAddr(addr)
+	if err != nil {
+		return "", err
+	}
+	ps, err := langProjects(dir, lang)
+	if err != nil {
+		return "", err
+	}
+	_, _, miss := resolveFile(ps, loc)
+	if miss == nil {
+		return dir, nil
+	}
+	fs, err := registryList(`SELECT DISTINCT dir FROM workspace_folders`)
+	if err != nil {
+		return "", err
+	}
+	f, err := folderWithFile(fs, loc, lang)
+	if errors.Is(err, errNoProject) {
+		return "", miss
+	}
+	return f, err
+}
+
+// folderWithFile is the one folder of folders whose projects in lang have the file
+// loc ([project:]rel/path) names. The innermost folder wins over a folder
+// containing it, as in OverviewSource.FolderOf. A missing folder is skipped.
+func folderWithFile(folders []string, loc, lang string) (string, error) {
+	folders = slices.Clone(folders)
+	slices.SortFunc(folders, func(a, b string) int { return cmp.Compare(len(b), len(a)) })
+	found := map[string]bool{} // absolute files already found
+	var hits []string
+	for _, f := range folders {
+		ps, err := langProjects(f, lang)
+		if err != nil {
+			continue // a registered folder that was moved or deleted
+		}
+		_, abs, err := resolveFile(ps, loc)
+		if err != nil {
+			if !errors.Is(err, errNoProject) {
+				return "", err // in several projects of one folder: the user must pick
+			}
+			continue
+		}
+		if !found[abs] {
+			found[abs] = true
+			hits = append(hits, f)
+		}
+	}
+	switch len(hits) {
+	case 0:
+		return "", fmt.Errorf("%w %s", errNoProject, loc)
+	case 1:
+		return hits[0], nil
+	}
+	return "", fmt.Errorf("%s is in several workspace folders (%s); pass --project DIR", loc, strings.Join(hits, ", "))
+}
+
+// WorkspaceOf is a registered workspace with a folder containing dir, or "" if none.
+func WorkspaceOf(dir string) (string, error) {
+	all, err := Workspaces()
+	if err != nil {
+		return "", err
+	}
+	for _, ws := range all {
+		fs, err := folders(ws)
+		if err != nil {
+			return "", err
+		}
+		if deepest(fs, dir) != "" {
+			return ws, nil
+		}
+	}
+	return "", nil
+}
+
 // TraceField traces the value computed at [project:]rel/path.go:LINE in both
 // directions, live over SSA of the projects under ws. A .java or .kt file is
 // traced from its project's syntax instead (jvm_field.go).
 // Cancelling ctx stops it between package loads.
 func TraceField(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, error) {
 	ws, tests, maxProjects := q.Dir, q.IncludeTests, q.maxProjects()
-	i := strings.LastIndex(addr, ":")
-	line, err := strconv.Atoi(addr[i+1:])
-	lang := map[string]string{".go": "go", ".java": "jvm", ".kt": "jvm"}[filepath.Ext(addr[:max(i, 0)])]
-	if i < 0 || err != nil || lang == "" {
-		return nil, fmt.Errorf("bad address %q, want [project:]rel/path.{go,java,kt}:LINE", addr)
-	}
-	projects, err := discover(ws)
+	loc, lang, line, err := parseFieldAddr(addr)
 	if err != nil {
 		return nil, err
 	}
-	projects = slices.DeleteFunc(projects, func(p project) bool { return p.lang != lang })
-	seedProject, file, err := resolveFile(projects, addr[:i])
+	projects, err := langProjects(ws, lang)
+	if err != nil {
+		return nil, err
+	}
+	seedProject, file, err := resolveFile(projects, loc)
 	if err != nil {
 		return nil, err
 	}

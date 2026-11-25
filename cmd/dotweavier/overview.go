@@ -26,13 +26,25 @@ var overviewPage []byte
 //go:embed overview_assets
 var overviewAssets embed.FS
 
+// The overview's defaults, also used when a trace opens its run in the overview.
+const (
+	overviewAddr     = "127.0.0.1:7357"
+	overviewMaxNodes = 20000
+)
+
 func runOverview(args []string) {
 	fl := flag.NewFlagSet("overview", flag.ExitOnError)
-	addr := fl.String("addr", "127.0.0.1:7357", "listen address")
+	addr := fl.String("addr", overviewAddr, "listen address")
 	ws := fl.String("workspace", "", "registered workspace to show (default: the only one registered; with several, the page asks)")
-	maxNodes := fl.Int("max-nodes", 20000, "draw at most N functions: cross-project ones first, then the most connected (0: no cap)")
+	maxNodes := fl.Int("max-nodes", overviewMaxNodes, "draw at most N functions: cross-project ones first, then the most connected (0: no cap)")
 	_ = fl.Parse(args)
+	serveOverview(*addr, *ws, *maxNodes, "")
+}
 
+// serveOverview serves the overview and the trace pages on addr until killed, over
+// workspace ws ("": the only registered one, else the page asks). With open set
+// (a path like /ui/trace-field.html?t=RUN), it opens that page in the browser.
+func serveOverview(addr, ws string, maxNodes int, open string) {
 	// Only one workspace is active at a time; the page can switch to another registered one.
 	var cur atomic.Pointer[domain.OverviewSource]
 	activate := func(name string) error {
@@ -54,8 +66,8 @@ func runOverview(args []string) {
 	all, err := domain.Workspaces()
 	must(err)
 	switch {
-	case *ws != "":
-		must(activate(*ws))
+	case ws != "":
+		must(activate(ws))
 	case len(all) == 0:
 		must(errors.New("no workspace registered; run: dotweavier index DIR"))
 	case len(all) == 1:
@@ -89,7 +101,7 @@ func runOverview(args []string) {
 			return
 		}
 		shown := show(r)
-		o := src.Build(shown, *maxNodes)
+		o := src.Build(shown, maxNodes)
 		data, err := json.Marshal(o)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -118,7 +130,7 @@ func runOverview(args []string) {
 			return
 		}
 		t0 := time.Now()
-		paths, exhausted := src.Paths(int32(a), int32(b), k, show(r), *maxNodes)
+		paths, exhausted := src.Paths(int32(a), int32(b), k, show(r), maxNodes)
 		ms := time.Since(t0).Milliseconds()
 		fmt.Fprintf(os.Stderr, "paths %d -> %d: %d paths in %dms (exhausted=%v)\n", a, b, len(paths), ms, exhausted)
 		w.Header().Set("Content-Type", "application/json")
@@ -215,7 +227,7 @@ func runOverview(args []string) {
 	})
 	mux.Handle("GET /overview_assets/", http.FileServerFS(overviewAssets))
 	// Field trace page, served so it can continue a trace: GET /ui/trace-field.html?t=RUN
-	// (the same static page the CLI writes), GET /trace-field-history/RUN.js, and
+	// (what `trace field --format ui` opens), GET /trace-field-history/RUN.js, and
 	// POST /trace-field?addr=ADDR, which traces like the CLI, saves the run and returns its name.
 	// Trace path page for two symbol addresses, traced like `dotweavier trace path --format ui`
 	// over the active workspace: GET /ui/trace-path.html?a=ADDR&b=ADDR. Opened from a weaved path.
@@ -395,9 +407,19 @@ func runOverview(args []string) {
 		reply(http.StatusOK, map[string]any{"run": name})
 	})
 
-	ln, err := net.Listen("tcp", *addr) // loopback by default: the page exposes source names
+	ln, err := net.Listen("tcp", addr) // loopback by default: the page exposes source names
+	if err != nil && open != "" {
+		// Most likely a running overview; it shares the run history, so open the page there.
+		fmt.Fprintln(os.Stderr, "dotweavier: not serving:", err)
+		openPage("http://" + addr + open)
+		return
+	}
 	must(err)
 	fmt.Printf("overview -> http://%s/\n", ln.Addr())
 	fmt.Printf("field traces -> http://%s/ui/trace-field.html\n", ln.Addr())
+	if open != "" {
+		fmt.Printf("opened -> http://%s%s (Ctrl-C stops the server)\n", ln.Addr(), open)
+		openPage(fmt.Sprintf("http://%s%s", ln.Addr(), open))
+	}
 	must(http.Serve(ln, mux))
 }

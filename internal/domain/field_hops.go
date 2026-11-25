@@ -73,15 +73,9 @@ func TraceHop(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, erro
 }
 
 func traceGoHandler(ctx context.Context, q FieldQuery, loc string, line int) (*FieldTrace, error) {
-	projects, err := discover(q.Dir)
+	gos, err := langProjects(q.Dir, "go")
 	if err != nil {
 		return nil, err
-	}
-	var gos []project
-	for _, p := range projects {
-		if p.lang == "go" {
-			gos = append(gos, p)
-		}
 	}
 	seedProject, file, err := resolveFile(gos, loc)
 	if err != nil {

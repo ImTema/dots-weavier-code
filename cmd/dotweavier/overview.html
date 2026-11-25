@@ -1,5 +1,4 @@
 <!doctype html>
-<!-- galaxy overview of every indexed project. -->
 <html><head><meta charset="utf-8"><title>dotweavier overview</title>
 <style>
 html,body{margin:0;height:100%;background:#02030a;color:#cdd5ff;font:12px/1.45 ui-monospace,Menlo,monospace;overflow:hidden}
@@ -155,7 +154,6 @@ import {LineSegmentsGeometry} from '/overview_assets/lines/LineSegmentsGeometry.
 import {LineMaterial} from '/overview_assets/lines/LineMaterial.js';
 
 const $ = id => document.getElementById(id);
-// gRPC full methods start with '/'; HTTP routes come as "GET /path".
 // Hops between projects, one colour and one toggle per edge kind (D.linkKinds).
 const LINK = {grpc: ['gRPC', '#ff4fe8', '✈'], http: ['HTTP', '#3ee08f', '⇄'], pubsub: ['Pub/Sub', '#ffd23f', '✉'], 'pubsub:guess': ['Pub/Sub, guess (message type only)', '#a8893a', '✉'], lib: ['Library call', '#4fc3ff', '⧉']};
 const linkLabel = (kind, m) => kind + (m ? ' ' + m : '');
@@ -182,28 +180,23 @@ const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 1, 1e6)
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.zoomToCursor = true; // wheel zooms toward the point under the cursor
-// A trackpad pinch (ctrl+wheel; gesture events in Safari) over the drawers would zoom the whole
-// page. Block it there; over the canvas OrbitControls already turns it into a scene zoom.
+// A pinch (ctrl+wheel; gesture events in Safari) outside the canvas would zoom the whole page.
 addEventListener('wheel', e => { if (e.ctrlKey && e.target !== renderer.domElement) e.preventDefault(); }, {passive: false});
 for (const g of ['gesturestart', 'gesturechange']) addEventListener(g, e => e.preventDefault());
-// Left drag always orbits, right drag always pans. OrbitControls swaps the two when
-// ctrl/meta/shift is held, and macOS ctrl-click arrives as a right click with ctrlKey,
-// so pre-swap the mapping before its own pointerdown handler runs.
+// Left drag orbits, right drag pans: pre-swap what OrbitControls swaps under ctrl/meta/shift, macOS ctrl-click included.
 renderer.domElement.addEventListener('pointerdown', e => {
   const mod = e.ctrlKey || e.metaKey || e.shiftKey;
   controls.mouseButtons.LEFT = mod ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
   controls.mouseButtons.RIGHT = mod ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
 }, {capture: true});
 
-// Everything below is rebuilt by load(): hiding a project re-lays-out the whole
-// overview on the server, so positions, edges and indices all change.
+// Rebuilt by load(): hiding a project re-lays-out the whole overview, so positions, edges and indices change.
 let D = null, N = 0, P = 0, pcol = [], R = 1;
 let stars = null, calls = null, hl = null, links = {}; // links: kind -> segments of that kind
 let out = [], inn = [];
 let labels = [];
 let focus = null; // {node: i} or {edge: {s, t, via}}
-// added: indexed projects, kept in step with /projects on every load; hidden: added but unchecked.
-// Both are kept per workspace: nested workspaces name the same project differently.
+// added: indexed projects; hidden: added but unchecked. Both per workspace, as nested workspaces name projects differently.
 const added = new Set(), hidden = new Set();
 let setsKey = '';
 const shownProjects = () => [...added].filter(p => !hidden.has(p));
@@ -214,9 +207,7 @@ const m4 = new THREE.Matrix4(), v = new THREE.Vector3(), q4 = new THREE.Quaterni
 const where = i => `${D.projects[D.proj[i]]}:${D.files[D.file[i]]}:${D.line[i]}`;
 const swatch = i => `<span class="sw" style="background:#${pcol[D.proj[i]].getHexString()}"></span>`;
 
-// Star skin: a camera-facing quad per instance with a white-hot core and a soft halo
-// in the project colour. Additive, so dimmed stars (colour scaled down) fade out.
-// The core keeps the old sphere's radius (the instance scale); the halo reaches HALO times further.
+// Star skin: additive camera-facing quads, so dimmed stars fade out; the halo reaches HALO times the core's radius.
 const HALO = 2.2;
 const starMaterial = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -246,8 +237,7 @@ const starMaterial = new THREE.ShaderMaterial({
       gl_FragColor = vec4(c, 1.0);
     }`,
 });
-// Every edge is a screen-space line (WebGL draws plain lines 1px wide whatever linewidth says).
-// width in px; dash = [dash, gap] in world units, sized to the layout: dotted calls, dashed weaved paths.
+// Screen-space lines, as WebGL draws plain lines 1px wide whatever linewidth says; dash = [dash, gap] in world units.
 function segments(pairs, colorOf, opacity, width, dash) {
   const pos = new Float32Array(pairs.length * 3), col = new Float32Array(pairs.length * 3);
   for (let k = 0; k < pairs.length; k++) {
@@ -268,10 +258,7 @@ const EDGE_W = 1; // px, every edge
 const callDash = () => [R / 300, R / 150], weavedDash = () => [R / 40, R / 60];
 function drop(o) { if (o) { scene.remove(o); o.geometry.dispose(); o.material.dispose(); } return null; }
 
-// With "calls inside projects" off, only boundary nodes (ends of shown link hops) stay,
-// and each call path from one boundary node to the next is drawn as one straight
-// "weaved path" edge; clicking it finds the paths between the two. Every other star is hidden
-// (scale 0, and project() puts it behind the camera so nothing picks or names it).
+// With calls off only boundary nodes stay, joined by weaved paths; project() puts the hidden ones behind the camera.
 let shown = new Uint8Array(0), nearCalls = null, nearPairs = [];
 const starScale = i => shown[i] ? 0.35 + 0.3 * Math.log2(1 + D.deg[i]) : 0;
 function applyCalls() {
@@ -299,9 +286,7 @@ function applyCalls() {
 }
 
 let loadSeq = 0, dataBytes = 0;
-// What this page allocated itself: every vertex, index and instance buffer in the
-// scene (uploaded to the GPU, and kept in JS too) plus the layout JSON it parsed.
-// The browser's own overhead (JS engine, DOM, textures, canvas) is not counted.
+// What this page allocated itself: the scene's buffers and the parsed layout JSON, not the browser's own overhead.
 function pageBytes() {
   const seen = new Set();
   let gpu = 0;
@@ -334,8 +319,7 @@ async function load(refit) {
   }
   if (seq !== loadSeq) return; // a newer toggle already asked for another layout
   detected = det.projects || []; root = det.root; invalid = det.invalid || [];
-  // In overview = indexed, however it was indexed (Sync here or the CLI); Remove deletes the index.
-  // Only show/hide is a per-browser choice. A changed set needs a layout for the new set.
+  // In overview = indexed, by Sync or the CLI; only show/hide is a per-browser choice.
   const indexed = new Set(detected.filter(d => d.indexed).map(d => d.name));
   let changed = false;
   for (const p of indexed) if (!added.has(p)) { added.add(p); changed = true; }
@@ -399,10 +383,7 @@ async function load(refit) {
   findPaths();
 }
 
-// Project panel (top right): every project detected under the project folder. Nothing is
-// in the overview until you press Sync, which re-indexes the project and adds it.
-// Added projects get a checkbox (show/hide), Sync again to re-index, × to remove.
-// The search box filters the list; all/none apply to added projects it matches.
+// Project panel: every detected project, added to the overview by Sync; all/none apply to the added ones the search matches.
 const ago = t => { const s = (Date.now() - Date.parse(t)) / 1000; return s < 90 ? 'just now' : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 129600 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`; };
 const matching = () => { const s = $('pq').value.toLowerCase(); return [...added].filter(p => p.toLowerCase().includes(s)); };
 let famOf = r => [r]; // project -> [project, ...its modules], rebuilt by renderProjects
@@ -488,8 +469,7 @@ async function removeInvalid() {
 }
 $('pq').oninput = () => renderProjects();
 const collapsed = new Set(JSON.parse(localStorage.getItem('dw.collapsed') || '[]'));
-// Resizable project panel: it is pinned top-right, so the grip sits bottom-left and
-// grows the panel leftwards and downwards. Double-click toggles a large size.
+// Resizable project panel, pinned top-right so the grip sits bottom-left; double-click toggles a large size.
 (() => {
   const pp = $('pp'), grip = $('ppGrip');
   // h caps the height (max-height), so a short list never leaves empty space below its last entry.
@@ -522,7 +502,7 @@ const post = async (what, p) => {
   return j;
 };
 const note = (p, text) => { syncNote.set(p, text); setTimeout(() => { if (syncNote.get(p) === text) { syncNote.delete(p); renderProjects(); } }, 4000); };
-// Sync: the server re-indexes only if a Go source file changed since the index was built.
+// Sync: the server re-indexes only if a source file changed since the index was built.
 async function sync(p) {
   const wasAdded = famOf(p).every(n => added.has(n));
   syncing.add(p); syncErr.delete(p); syncNote.delete(p); renderProjects();
@@ -604,8 +584,7 @@ function flyTo(target, dist) {
   anim = {t: 0, fromT: controls.target.clone(), toT: target.clone(), fromP: camera.position.clone(), toP: target.clone().add(dir.multiplyScalar(dist))};
 }
 function flyToProject(i) { flyTo(new THREE.Vector3(D.centers[3*i], D.centers[3*i+1], D.centers[3*i+2]), 30 * Math.cbrt(D.sizes[i]) + 40); }
-// The view orbits the midpoint of each shown project's most connected star (most calls
-// in and out): one project orbits its hub, two orbit the middle of the axis between theirs.
+// The view orbits the midpoint of each shown project's most connected star.
 function hub() {
   const best = new Map(); // project -> its most connected star
   for (let i = 0; i < N; i++) { const b = best.get(D.proj[i]); if (b === undefined || D.deg[i] > D.deg[b]) best.set(D.proj[i], i); }
@@ -615,8 +594,7 @@ function hub() {
 }
 const nodePos = i => new THREE.Vector3(D.pos[3*i], D.pos[3*i+1], D.pos[3*i+2]);
 
-// Focus: a node (it, its callers and callees stay lit, the rest dims; incoming
-// edges cyan, outgoing orange) or an edge (its two ends stay lit, the edge white).
+// Focus a node (it and its neighbours stay lit) or an edge (its two ends stay lit).
 function setFocus(f) {
   focus = f;
   hl = drop(hl);
@@ -725,8 +703,7 @@ if (!$('showLabels').checked) $('labels').style.display = 'none';
 // Picking in screen space: project every star once per camera move.
 let sx = new Float32Array(0), sy = sx, sz = sx;
 let projected = false, mouse = null, hover = -1;
-// Function names: the stars nearest the camera, once they are closer than NAME_DIST,
-// a share of the layout radius so the start view (about 2.3 R away) shows none.
+// Function names of the nearest stars within NAME_DIST, a share of R so the start view (about 2.3 R away) shows none.
 // ponytail: fixed cap of MAX_NAMES; declutter overlapping labels if dense clusters need it.
 const MAX_NAMES = 150, NAME_OPACITY = 0.95, NAME_WHITE = 0.45; // colour mixed toward white for legibility
 let NAME_DIST = 150;
@@ -798,8 +775,7 @@ function pickNode(mx, my) {
   }
   return best;
 }
-// Nearest edge within 5px. With a node focused only its lit edges count, so a
-// click near the selection picks a caller/callee edge, not a dimmed one behind it.
+// Nearest edge within 5px; with a node focused only its lit edges count, not dimmed ones behind.
 function pickEdge(mx, my) {
   if (!projected) project();
   let best = null, bd = 25;
@@ -843,10 +819,7 @@ addEventListener('resize', () => {
 });
 controls.addEventListener('change', () => projected = false);
 
-// Directions, map-style: A and B fields, ranked alternative paths, the chosen
-// path drawn on top coloured by certainty (blue sure, orange guess, a hop between projects in its kind's colour)
-// and listed step by step. Ends are graph ids, so they survive a relayout.
-// Ends are stored as project:file:name keys: node ids change when a sync re-merges the indexes.
+// Directions, map-style; ends are stored as project:file:name keys, as node ids change when a sync re-merges.
 let idOf = new Map(), keyOf = new Map();
 const nodeKey = i => `${D.projects[D.proj[i]]}:${D.files[D.file[i]]}:${D.name[i]}`;
 const ends = {a: null, b: null};
@@ -882,9 +855,7 @@ function setEnd(f, i) {
   findPaths();
 }
 
-// A/B typeahead: every whitespace-separated word must appear in the function name
-// or its project ("scoring-system score" finds score* in scoring-system only).
-// Exact names first, then Type.name suffix matches, then the most connected.
+// A/B typeahead: every word must appear in the function or project name ("scoring-system score").
 let hay = [];
 function matchNodes(q, limit) {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -1085,8 +1056,7 @@ function pickPath(mx, my) {
   return best;
 }
 
-// Reset puts the camera back on its first view: centred on the hub, upright, from the front.
-// Projects, selection, directions, search and toggles stay as they are.
+// Reset moves only the camera back to its first view.
 $('reset').onclick = () => {
   const h = hub();
   anim = {t: 0, fromT: controls.target.clone(), toT: h.clone(), fromP: camera.position.clone(), toP: new THREE.Vector3(h.x, h.y + R * 0.6, h.z + R * 2.2)};

@@ -18,8 +18,7 @@ func (t *jtrace) local(fn *jvmFunc, name string) bool {
 	return ok || slices.Contains(fn.names, name)
 }
 
-// record is the project type a call constructs, when it has components to fill:
-// a Java record or a Kotlin class with a primary constructor.
+// record is the Java record or Kotlin primary-constructor class a call constructs, if any.
 func (t *jtrace) record(fn *jvmFunc, cp callParts) *jvmType {
 	if cp.ctor == "" {
 		return nil
@@ -53,8 +52,7 @@ func (t *jtrace) key(ty *jvmType, name string) (jfield, bool) {
 	return k, true
 }
 
-// member resolves name on a receiver: this, a typed value, or a type outside the
-// project, whose getters (protobuf messages) are fields too.
+// member resolves name on this, a typed value, or a type outside the project whose getters are fields too.
 func (t *jtrace) member(fn *jvmFunc, recv *sitter.Node, name string, getter bool) (jfield, bool) {
 	if recv != nil && isThis(recv) {
 		return t.key(fn.owner, name)
@@ -139,8 +137,7 @@ func (t *jtrace) lambdaCall(f *jvmFile, l *sitter.Node) (*sitter.Node, callParts
 	return p, cp, ok
 }
 
-// index scans every kept function once: variable uses and definitions, results,
-// field reads and stores.
+// index scans every kept function once for variable uses and definitions, results, field reads and stores.
 func (t *jtrace) index() {
 	fns := slices.DeleteFunc(slices.Clone(t.jp.funcs), func(fn *jvmFunc) bool { return !t.keep(fn) })
 	// Field initializers run in a function of their own.

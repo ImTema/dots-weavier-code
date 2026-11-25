@@ -8,8 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// A module joins the outermost shown project containing it, even when it is listed
-// before that project; a module of a hidden project heads its own group.
+// A module joins the outermost shown project containing it, whatever the order; a hidden project's module heads its own group.
 func TestModuleGroups(t *testing.T) {
 	names := []string{"apid/payment/sdk", "apid", "scoring", "apid/checkout/sdk", "apid/checkout", "other/sdk", "scoringx"}
 	shown := []int{0, 1, 2, 3, 4, 5, 6} // "other" is not shown

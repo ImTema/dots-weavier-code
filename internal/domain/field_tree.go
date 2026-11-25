@@ -20,8 +20,7 @@ type tnode struct {
 	over  []token.Pos // stores overwriting a tainted field with an unrelated value
 }
 
-// tree folds a walk's keys into source lines: keys on the same line (or without a
-// position, like SSA plumbing) join the line their value came from.
+// tree folds a walk's keys into source lines; keys on one line or without a position join the line their value came from.
 func (w *walk) tree() []*tnode {
 	at := map[tkey]*tnode{}
 	type lineKey struct {
@@ -93,8 +92,7 @@ func (w *walk) tree() []*tnode {
 	return roots
 }
 
-// overwrites lists stores into f of values in neither tree: places where the
-// tracked value is replaced, e.g. `if app.ResultID == nil { app.ResultID = NewResultID() }`.
+// overwrites lists stores into f of values in neither tree, where the tracked value is replaced.
 func (t *tracker) overwrites(f fieldKey) []token.Pos {
 	var out []token.Pos
 	for st := range t.stores(f) {

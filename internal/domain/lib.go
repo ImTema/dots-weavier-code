@@ -7,17 +7,12 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
-// Library hops join a static call into a dependency to the same function in the
-// indexed project that owns it, on the function's full name, which carries the
-// package path but no module version: "lib (*example.com/libs/client.Client).List".
-// A call into a version other than the indexed checkout still joins.
+// Library hops join on a function's full name without module version, so any version joins: "lib (*example.com/libs/client.Client).List".
 // ponytail: static calls only; a call through a dependency's interface stays an
 // external node, add it when a target needs it.
 const libKey = "lib "
 
-// libFunc is the key under which function f is called from, or serves, another
-// project: a top-level exported function, or an exported method of an exported
-// type, outside the standard library and internal packages. "" for anything else.
+// libFunc is the key of an exported function or method outside the standard library and internal packages, or "".
 func libFunc(f *ssa.Function) string {
 	if o := f.Origin(); o != nil {
 		f = o

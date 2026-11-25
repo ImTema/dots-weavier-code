@@ -1,4 +1,3 @@
-// Data and layout for the galaxy overview of every indexed project.
 package domain
 
 import (
@@ -46,15 +45,14 @@ type OverviewGraph struct {
 	Limit        int       `json:"limit"` // the node cap; 0 means none
 }
 
-// OverviewSource is every index merged once; Build lays it out per request and
-// Sync re-indexes one project, then merges again.
+// OverviewSource is every index of a workspace merged once, and again after each change.
 type OverviewSource struct {
-	ws      string       // the workspace name
+	ws      string
 	folders []string     // its registered folders, absolute
 	mu      sync.RWMutex // guards g: Sync swaps it while requests read it
 	g       *graph
-	warns   []string   // of the last merge, e.g. unreadable indexes
-	sync    sync.Mutex // one Sync at a time
+	warns   []string
+	sync    sync.Mutex // one index write at a time: Sync, Remove, RemoveInvalid
 }
 
 // LoadOverview merges the indexes of workspace ws, the only workspace it shows.
@@ -80,9 +78,7 @@ func (src *OverviewSource) Warnings() []string {
 // Workspace is the name of the workspace this overview shows.
 func (src *OverviewSource) Workspace() string { return src.ws }
 
-// FolderOf is the folder that names the project of address addr ([project:]rest)
-// in this workspace: field traces and Source run over that folder, where the
-// project has the same name.
+// FolderOf is the folder that field traces and Source of address addr ([project:]rest) run over.
 // ponytail: a field trace sees only the projects under that one folder; trace over
 // every folder of the workspace if hops into other folders are needed.
 func (src *OverviewSource) FolderOf(addr string) (string, error) {
@@ -122,7 +118,7 @@ func mergedGraph(folders []string) (*graph, []string, error) {
 	return g, warns, nil
 }
 
-// DetectedProject is one project under the project folder and the state of its index.
+// DetectedProject is one project of the workspace and the state of its index.
 type DetectedProject struct {
 	Name    string         `json:"name"`
 	Indexed bool           `json:"indexed"`
@@ -133,7 +129,7 @@ type DetectedProject struct {
 	Links   map[string]int `json:"links,omitempty"`  // outgoing link hops by kind
 }
 
-// Detect lists the projects under the project folder; it reads only each index's meta row.
+// Detect lists the projects of the workspace; it reads only each index's meta row.
 func (src *OverviewSource) Detect() ([]DetectedProject, error) {
 	ps, err := projectsIn(src.folders)
 	if err != nil {
@@ -155,8 +151,7 @@ func (src *OverviewSource) Detect() ([]DetectedProject, error) {
 	return out, nil
 }
 
-// counts tallies the merged graph per project, the same nodes and edges an
-// overview would draw for it before the node cap.
+// counts tallies per project the nodes and edges an overview draws before the node cap.
 func (src *OverviewSource) counts() (nodes, edges map[string]int, links map[string]map[string]int) {
 	src.mu.RLock()
 	defer src.mu.RUnlock()
@@ -194,8 +189,7 @@ func indexBuilt(dir string) (time.Time, bool) {
 	return built, err == nil
 }
 
-// detected returns the detected project with this name. Request input is only
-// ever turned into a store path through a name discover produced.
+// family is project name, first, then its nested projects; request input reaches a store path only through them.
 func (src *OverviewSource) family(name string) ([]project, error) {
 	ps, err := projectsIn(src.folders)
 	if err != nil {
@@ -229,10 +223,7 @@ var errChanged = errors.New("changed")
 
 var sourceExt = map[string]bool{".go": true, ".java": true, ".kt": true, ".kts": true, ".proto": true}
 
-// changedSince reports whether any source of the project (.go, .java, .kt, .proto, a manifest, go.sum,
-// or a directory, whose mtime moves when a file is added, removed or renamed)
-// is newer than t. Nested modules, vendor, testdata and dot-dirs are other
-// projects or not analyzed, the same skips as discover.
+// changedSince reports whether a source file or directory of the project is newer than t; a directory's mtime moves on add, remove or rename.
 // shortcut: mtimes only, so a checkout that restores old mtimes looks unchanged; hash contents if that bites.
 func changedSince(dir string, t time.Time) bool {
 	jvm := langOf(dir) == "jvm"
@@ -249,7 +240,7 @@ func changedSince(dir string, t time.Time) bool {
 				return filepath.SkipDir
 			}
 		}
-		if !d.IsDir() && !sourceExt[filepath.Ext(p)] && !slices.ContainsFunc(manifests, func(m struct{ file, lang string }) bool { return m.file == d.Name() }) && d.Name() != "go.sum" {
+		if !d.IsDir() && !isSourceFile(d.Name()) {
 			return nil
 		}
 		if info, err := d.Info(); err == nil && info.ModTime().After(t) {
@@ -258,6 +249,10 @@ func changedSince(dir string, t time.Time) bool {
 		return nil
 	})
 	return errors.Is(err, errChanged)
+}
+
+func isSourceFile(name string) bool {
+	return sourceExt[filepath.Ext(name)] || name == "go.sum" || slices.ContainsFunc(manifests, func(m struct{ file, lang string }) bool { return m.file == name })
 }
 
 // SyncResult is what Sync did for one project of the family.
@@ -269,10 +264,7 @@ type SyncResult struct {
 	Warnings []string `json:"warnings,omitempty"`
 }
 
-// Sync syncs a project and every project nested in its folder. Each keeps its
-// own index and is re-indexed only if a source file is newer than that index.
-// The graph is re-merged once if anything was re-indexed; node ids then change,
-// so clients must reload their layout.
+// Sync re-indexes the stale projects of a family and re-merges; node ids then change, so clients reload their layout.
 func (src *OverviewSource) Sync(project string) ([]SyncResult, error) {
 	src.sync.Lock()
 	defer src.sync.Unlock()
@@ -330,8 +322,7 @@ func (src *OverviewSource) Remove(project string) ([]string, error) {
 	return removed, src.remerge()
 }
 
-// Invalid lists the invalid indexes of this workspace: indexes whose project is
-// no longer detected where it was found.
+// Invalid lists the projects whose index is no longer detected where it was found.
 func (src *OverviewSource) Invalid() ([]string, error) {
 	files, err := src.invalid()
 	out := slices.Sorted(maps.Values(files))
@@ -358,8 +349,7 @@ func (src *OverviewSource) invalid() (map[string]string, error) {
 	return files, nil
 }
 
-// RemoveInvalid deletes every invalid index of this workspace and returns their projects.
-// A nested workspace sharing such an index loses it too: its project is gone for both.
+// RemoveInvalid deletes every invalid index, also for nested workspaces sharing it, and returns their projects.
 func (src *OverviewSource) RemoveInvalid() ([]string, error) {
 	src.sync.Lock()
 	defer src.sync.Unlock()
@@ -389,9 +379,7 @@ func (src *OverviewSource) remerge() error {
 	return nil
 }
 
-// Build lays out every non-test, non-external function outside the hidden
-// projects: one cluster per project, one sub-cluster per package directory.
-// Hidden projects free their space, so the rest is laid out as if they were never indexed.
+// Build lays out the functions of the shown projects as if hidden projects were never indexed.
 func (src *OverviewSource) Build(show map[string]bool, limit int) *OverviewGraph {
 	src.mu.RLock()
 	defer src.mu.RUnlock()
@@ -472,8 +460,7 @@ type vec [3]float64
 // minStarGap is the closest two stars may sit, in world units; a star's core is 0.35-1.5 wide.
 const minStarGap = 2.0
 
-// separate breaks up crowded spots: each pass pushes every pair closer than gap apart,
-// each star by half the overlap. A grid of gap-sized cells keeps a pass near O(n).
+// separate pushes apart stars closer than gap, half the overlap each, finding pairs over a grid of gap-sized cells.
 func separate(pos []vec, gap float64, passes int) {
 	cell := func(p vec) [3]int {
 		return [3]int{int(math.Floor(p[0] / gap)), int(math.Floor(p[1] / gap)), int(math.Floor(p[2] / gap))}
@@ -530,22 +517,18 @@ func cross(a, b vec) vec {
 	return vec{a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]}
 }
 
-// groupRing is how a project's group is laid out: modules at dist from the
-// project's centre, the whole group within outer of it.
+// groupRing places a group around its project's centre: modules at dist, everything within outer.
 type groupRing struct{ dist, outer float64 }
 
-// moduleGroups groups the shown projects (indexes into names, biggest first) as
-// [project, its modules...]: a module joins the outermost shown project whose
-// folder contains it, otherwise it heads its own group. Groups keep the order of
-// their projects. ring is keyed by each group's project.
+// moduleGroups groups shown projects (biggest first) as [project, its modules...] under the outermost shown project containing them.
 func moduleGroups(names []string, shown []int, radius []float64, gap float64) ([][]int, map[int]groupRing) {
 	idx := map[string]int{}
 	for _, i := range shown {
 		idx[names[i]] = i
 	}
-	head := func(i int) int { // outermost shown project containing names[i], or i
+	outermost := func(i int) int {
 		n := names[i]
-		for j := range len(n) { // shortest prefix first: the outermost project
+		for j := range len(n) {
 			if n[j] == '/' {
 				if h, ok := idx[n[:j]]; ok {
 					return h
@@ -554,16 +537,16 @@ func moduleGroups(names []string, shown []int, radius []float64, gap float64) ([
 		}
 		return i
 	}
-	at := map[int]int{} // head -> its group's index
+	groupOf := map[int]int{}
 	var groups [][]int
 	for _, i := range shown {
-		h := head(i)
-		if _, ok := at[h]; !ok {
-			at[h] = len(groups)
+		h := outermost(i)
+		if _, ok := groupOf[h]; !ok {
+			groupOf[h] = len(groups)
 			groups = append(groups, []int{h})
 		}
 		if h != i {
-			groups[at[h]] = append(groups[at[h]], i)
+			groups[groupOf[h]] = append(groups[groupOf[h]], i)
 		}
 	}
 	ring := map[int]groupRing{}
@@ -596,8 +579,7 @@ func inBall(key string) vec {
 	}
 }
 
-// layout seeds projects on a Fibonacci sphere, packages around their project and
-// functions around their package, then pulls each function toward its callees.
+// layout puts projects on a Fibonacci sphere, packages around projects, functions around packages, then smooths functions toward their neighbours.
 // shortcut: anchored neighbour smoothing, no Barnes-Hut repulsion; upgrade if clusters look mushy.
 func (o *OverviewGraph) layout() {
 	const spread = 7.0 // world units per cbrt(node)
@@ -610,15 +592,12 @@ func (o *OverviewGraph) layout() {
 			radius[i] = spread * math.Cbrt(float64(n))
 		}
 	}
-	// A module is drawn beside its project: each shown project and the shown modules
-	// inside it form one group, placed on the sphere as one cluster.
 	groups, ring := moduleGroups(o.Projects, shown, radius, gap)
 	sum := 0.0
 	for _, g := range groups {
 		sum += ring[g[0]].outer * ring[g[0]].outer
 	}
-	// Sphere surface ~ 4πR² must hold every group's disc πr²; R >= 0.5*sqrt(sum)
-	// fits them exactly, 0.55 keeps groups nearly touching.
+	// Sphere area 4πR² holds every group's disc πr² at R = 0.5*sqrt(sum); 0.55 keeps groups nearly touching.
 	R := 0.55 * math.Sqrt(sum)
 	centers := make([]vec, len(o.Projects))
 	golden := math.Pi * (3 - math.Sqrt(5))
@@ -703,9 +682,7 @@ type OverviewPath struct {
 	Iface   int      `json:"iface"`
 }
 
-// Paths returns up to k ranked paths a->b (fewest guesses, then fewest hops) that
-// stay out of hidden projects, so every path can be drawn on the current layout.
-// exhausted is false when the search hit its limit and more paths may exist.
+// Paths returns up to k paths a->b over drawn functions, fewest guesses then hops; exhausted is false when more may exist.
 func (src *OverviewSource) Paths(a, b int32, k int, show map[string]bool, limit int) (paths []OverviewPath, exhausted bool) {
 	src.mu.RLock()
 	defer src.mu.RUnlock()
@@ -764,10 +741,7 @@ func hiddenExcept(g *graph, show map[string]bool) map[string]bool {
 	return hide
 }
 
-// selectNodes picks the functions an overview draws: every non-test function of a
-// shown project, capped at limit (0: no cap). Over the cap it keeps functions with
-// an edge to another project first (the links between projects are the point of
-// the overview), then the most connected. total is the count before the cap.
+// selectNodes keeps shown non-test functions up to limit (0: none), cross-project ones first; total is the count before the cap.
 func selectNodes(g *graph, hide map[string]bool, limit int) (keep []bool, total int) {
 	keep = make([]bool, len(g.Nodes))
 	for i, n := range g.Nodes {
@@ -817,15 +791,11 @@ func selectNodes(g *graph, hide map[string]bool, limit int) (keep []bool, total 
 	return keep, total
 }
 
-// boundaryNodes marks the overview nodes another project can reach or that reach
-// another project: every handler the index registered for a gRPC method, HTTP
-// route or pubsub topic (served even when nothing indexed calls it, like
-// POST /orders), and both ends of every hop between projects. Library calls do
-// not count: a getter or constructor from another module is not an entry point.
+// boundaryNodes marks registered gRPC, HTTP and pubsub handlers, called or not, and both ends of every non-library hop.
 func boundaryNodes(g *graph, idx []int32, o *OverviewGraph) []bool {
 	boundary := make([]bool, len(o.Name))
 	for key, hs := range g.Impls {
-		if strings.HasPrefix(key, libKey) {
+		if strings.HasPrefix(key, libKey) { // a library function is not an entry point
 			continue
 		}
 		for _, h := range hs {
@@ -842,10 +812,7 @@ func boundaryNodes(g *graph, idx []int32, o *OverviewGraph) []bool {
 	return boundary
 }
 
-// weavedPaths returns s,t pairs: for every boundary node s, each boundary node t reached
-// from s along calls without passing through another one. The overview
-// draws each pair as one edge instead of the calls between. hidden has one count per
-// pair: the nodes between s and t on those call paths, which the edge stands for.
+// weavedPaths pairs each boundary node s with the boundary nodes its calls reach first; hidden counts each pair's nodes between.
 // ponytail: one DFS per boundary node, plus one backward walk per pair; fine at the 20k node cap.
 func weavedPaths(boundary []bool, calls []int32) (pairs, hidden []int32) {
 	n := len(boundary)

@@ -10,16 +10,14 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
-// HTTP hops join a client request to the handler of its route on the method
-// and the path, with every path parameter reduced to {}: "http GET /customers/{}".
+// HTTP hops join on method and path, each path parameter reduced to {}: "http GET /customers/{}".
 // ponytail: exact path match only; prefix routes ("/static/") and {x...} tails
 // are not matched, add them when a target uses them.
 const httpKey = "http "
 
 var pathParam = regexp.MustCompile(`\{[^}/]*\}`)
 
-// httpRoute is the key of one route, or "" if s is not a request path.
-// method "*" stands for a route that serves every method.
+// httpRoute is the key of one route, method "*" serving every method, or "" if path is not a request path.
 func httpRoute(method, path string) string {
 	if !strings.HasPrefix(path, "/") {
 		return ""
@@ -27,8 +25,7 @@ func httpRoute(method, path string) string {
 	return httpKey + strings.ToUpper(method) + " " + pathParam.ReplaceAllString(path, "{}")
 }
 
-// httpServes registers Go net/http handlers: ServeMux.Handle/HandleFunc and
-// http.Handle/HandleFunc with a constant pattern ("GET /customers/{id}").
+// httpServes registers net/http handlers given to Handle or HandleFunc with a constant pattern.
 func httpServes(g *graph, prog *ssa.Program, c *ssa.CallCommon, nodeOf func(*ssa.Function) int32, keep func(*ssa.Function) bool) {
 	sc := c.StaticCallee()
 	if sc == nil || sc.Object() == nil || sc.Object().Pkg() == nil || sc.Object().Pkg().Path() != "net/http" ||
@@ -56,8 +53,7 @@ func httpServes(g *graph, prog *ssa.Program, c *ssa.CallCommon, nodeOf func(*ssa
 	}
 }
 
-// handlerFunc finds the function behind a handler argument: a function, a
-// closure, a bound method value (h.getCustomer), or a conversion of one.
+// handlerFunc finds the function behind a handler argument: a function, closure, bound method value, or a conversion of one.
 func handlerFunc(prog *ssa.Program, v ssa.Value) *ssa.Function {
 	for {
 		switch x := v.(type) {
@@ -84,9 +80,7 @@ func handlerFunc(prog *ssa.Program, v ssa.Value) *ssa.Function {
 
 var ktorVerbs = map[string]string{"get": "GET", "post": "POST", "put": "PUT", "delete": "DELETE", "patch": "PATCH", "head": "HEAD", "options": "OPTIONS"}
 
-// ktorRequest records a Ktor client request (client.get("…/customers/$id")) as
-// an HTTP call. Interpolations become {}; a leading base URL, an interpolation
-// or a scheme and host, is dropped, so only the path is matched.
+// ktorRequest records a Ktor client request (client.get("…/customers/$id")) as an HTTP call on its path alone.
 func (jp *jvmProject) ktorRequest(fn *jvmFunc, recv, name string, suffix *sitter.Node) {
 	verb, ok := ktorVerbs[name]
 	if !ok || recv != "HttpClient" || suffix == nil {

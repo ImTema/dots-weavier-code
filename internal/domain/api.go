@@ -1,7 +1,4 @@
-// Package domain is dotweavier's logic: indexing Go projects into per-project
-// stores, tracing call paths between symbols and tracing a value's lifecycle.
-// It returns plain results; each interface (the CLI now, a UI later) renders
-// them its own way.
+// Package domain indexes projects and traces call paths and value lifecycles across them.
 package domain
 
 import (
@@ -34,9 +31,7 @@ type IndexResult struct {
 	Err      error
 }
 
-// Index indexes the projects of a workspace, or only the named ones, each into
-// the one index of its folder. Cancelling ctx stops it between projects and
-// package loads; a project's index is written whole or not at all.
+// Index indexes a workspace's projects, or the named ones; ctx stops it between package loads, and an index is written whole or not at all.
 func Index(ctx context.Context, o IndexOptions) error {
 	done := o.Progress
 	if done == nil {
@@ -84,9 +79,7 @@ func Index(ctx context.Context, o IndexOptions) error {
 	return nil
 }
 
-// InitWorkspace registers folder dir in workspace ws (DefaultWorkspace for ""),
-// creating ws if it does not exist, and returns the projects detected under dir,
-// named as ws names them. Nothing is indexed.
+// InitWorkspace registers folder dir in workspace ws, creating ws, and returns the projects under dir without indexing them.
 func InitWorkspace(dir, ws string) ([]string, error) {
 	if ws == "" {
 		ws = DefaultWorkspace
@@ -120,9 +113,7 @@ func projectsUnder(ws, dir string) ([]string, error) {
 	return names, err
 }
 
-// IndexProject indexes the project in folder dir, with its modules, into
-// workspace ws (DefaultWorkspace for ""), creating ws if it does not exist. If no
-// folder of ws contains dir, dir's parent folder is registered in ws first.
+// IndexProject indexes the project in dir with its modules into ws, first registering dir's parent folder if no folder of ws contains dir.
 func IndexProject(ctx context.Context, dir, ws string, progress func(IndexResult)) error {
 	if ws == "" {
 		ws = DefaultWorkspace
@@ -216,9 +207,7 @@ type PathQuery struct {
 	Progress     func(string) // optional: told each phase as it starts
 }
 
-// TracePath finds up to maxPaths call paths from address a to address b over
-// every project indexed in workspace ws (DefaultWorkspace for ""). Addresses:
-// project::Type.Method, project:rel/path.go:Type.Method, project:rel/path.go:LINE.
+// TracePath finds up to maxPaths call paths a->b, each address project::Type.Method, project:rel/path.go:Type.Method or project:rel/path.go:LINE.
 func TracePath(q PathQuery) (*PathTrace, error) {
 	a, b, maxPaths, tests := q.A, q.B, q.MaxPaths, q.IncludeTests
 	ws, fs, err := workspaceFolders(q.Workspace)
@@ -346,8 +335,7 @@ func (q FieldQuery) maxProjects() int {
 	return q.MaxProjects
 }
 
-// parseFieldAddr splits [project:]rel/path.{go,java,kt}:LINE into its file part,
-// language and line.
+// parseFieldAddr splits [project:]rel/path.{go,java,kt}:LINE into its file part, language and line.
 func parseFieldAddr(addr string) (loc, lang string, line int, err error) {
 	i := strings.LastIndex(addr, ":")
 	line, err = strconv.Atoi(addr[i+1:])
@@ -369,9 +357,7 @@ func langProjects(dir, lang string) ([]project, error) {
 	return slices.DeleteFunc(ps, func(p project) bool { return p.lang != lang }), err
 }
 
-// FieldDir is the folder to trace addr in: dir when one of its projects has the
-// file, else the one registered workspace folder whose projects have it. So an
-// address from an indexed project traces from any current folder.
+// FieldDir is the folder to trace addr in: dir if one of its projects has the file, else the registered folder whose projects do.
 func FieldDir(dir, addr string) (string, error) {
 	loc, lang, _, err := parseFieldAddr(addr)
 	if err != nil {
@@ -396,9 +382,7 @@ func FieldDir(dir, addr string) (string, error) {
 	return f, err
 }
 
-// folderWithFile is the one folder of folders whose projects in lang have the file
-// loc ([project:]rel/path) names. The innermost folder wins over a folder
-// containing it, as in OverviewSource.FolderOf. A missing folder is skipped.
+// folderWithFile is the innermost of folders whose projects in lang have the file loc ([project:]rel/path) names.
 func folderWithFile(folders []string, loc, lang string) (string, error) {
 	folders = slices.Clone(folders)
 	slices.SortFunc(folders, func(a, b string) int { return cmp.Compare(len(b), len(a)) })
@@ -448,10 +432,7 @@ func WorkspaceOf(dir string) (string, error) {
 	return "", nil
 }
 
-// TraceField traces the value computed at [project:]rel/path.go:LINE in both
-// directions, live over SSA of the projects under ws. A .java or .kt file is
-// traced from its project's syntax instead (jvm_field.go).
-// Cancelling ctx stops it between package loads.
+// TraceField traces the value at [project:]rel/path.go:LINE both ways over SSA, or over syntax for .java and .kt; ctx stops it between package loads.
 func TraceField(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, error) {
 	ws, tests, maxProjects := q.Dir, q.IncludeTests, q.maxProjects()
 	loc, lang, line, err := parseFieldAddr(addr)
@@ -530,8 +511,7 @@ func (p *printer) step(n *tnode) *FieldStep {
 	return s
 }
 
-// printer turns a finished trace into Steps: paths relative to the projects,
-// source lines read from disk.
+// printer turns a finished trace into Steps, with project-relative paths and source lines read from disk.
 type printer struct {
 	t           *tracker
 	seedProject project   // files here show without a project prefix

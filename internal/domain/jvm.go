@@ -1,5 +1,3 @@
-// JVM extractor: Java and Kotlin projects (Maven or Gradle) read from source
-// with tree-sitter, no build and no classpath (ADR 0007).
 package domain
 
 import (
@@ -87,7 +85,7 @@ func extractJVM(g *graph, p project) (loadStats, error) {
 	return st, err
 }
 
-// loadJVM parses the project and resolves its calls into g.
+// loadJVM parses a Java or Kotlin project from source with tree-sitter, without a build (ADR 0007), and resolves its calls into g.
 func loadJVM(g *graph, p project) (jp *jvmProject, st loadStats, err error) {
 	t0 := time.Now()
 	jp = &jvmProject{g: g, p: p, types: map[string][]*jvmType{}, subs: map[string][]*jvmType{}, top: map[string][]*jvmFunc{},
@@ -201,8 +199,7 @@ func (jp *jvmProject) addSuper(t *jvmType, s string) {
 	}
 }
 
-// addFunc makes a node for a function with a body; abstract methods have none,
-// the same as Go interface methods.
+// addFunc makes a node for a function with a body; abstract methods get none, like Go interface methods.
 func (jp *jvmProject) addFunc(f *jvmFile, owner *jvmType, name string, decl, params, body *sitter.Node) {
 	if body == nil {
 		return
@@ -452,8 +449,7 @@ func typeChild(n *sitter.Node) *sitter.Node {
 	return nil
 }
 
-// kotlinVarType is a property's declared type, or the class it is constructed
-// from (val x = Foo(...)), or "".
+// kotlinVarType is a property's declared type, or the class it is constructed from (val x = Foo(...)), or "".
 func kotlinVarType(f *jvmFile, v, decl *sitter.Node) string {
 	if ty := typeChild(v); ty != nil {
 		return simpleType(ty.Content(f.src))
@@ -574,8 +570,7 @@ func (jp *jvmProject) calls(fn *jvmFunc) {
 	walk(fn.body)
 }
 
-// typeOf is the simple type name of a receiver expression, or "" when it
-// cannot be told from declarations alone (a chained call, a library value).
+// typeOf is the simple type name of a receiver expression, or "" when declarations alone cannot tell it.
 func (jp *jvmProject) typeOf(fn *jvmFunc, n *sitter.Node) string {
 	f := fn.file
 	switch n.Type() {
@@ -634,8 +629,7 @@ func (jp *jvmProject) fieldOwner(t *jvmType, name string) *jvmType {
 	return find(t)
 }
 
-// pick narrows the project types of one simple name to those the file can mean:
-// the imported one, else those in its package, else all of them.
+// pick narrows the project types named simple to the imported one, else those in the file's package, else all.
 func (jp *jvmProject) pick(f *jvmFile, simple string) []*jvmType {
 	ts := jp.types[simple]
 	if len(ts) < 2 {
@@ -692,9 +686,7 @@ func (jp *jvmProject) inherited(t *jvmType, name string, seen map[*jvmType]bool)
 	return nil
 }
 
-// overrides collects name on every project subtype of simple, transitively.
-// Supertypes are matched by simple name, so a type whose own declaration did
-// not parse still reaches its implementers.
+// overrides collects name on every project subtype of simple, matching supertypes by simple name so an unparsed declaration still counts.
 func (jp *jvmProject) overrides(simple, name string, seen map[*jvmType]bool, out *[]*jvmFunc) {
 	for _, s := range jp.subs[simple] {
 		if seen[s] {
@@ -706,10 +698,7 @@ func (jp *jvmProject) overrides(simple, name string, seen map[*jvmType]bool, out
 	}
 }
 
-// linkMember links a call of name on a receiver of type simple. A method found
-// on a class is a direct call; anything that may run instead of it, every
-// override in a subtype and every implementation behind an interface, is a guess:
-// no value tracking says which concrete type reaches the call (ADR 0005).
+// linkMember links a call of name on a receiver of type simple: the method found is a call, every override or implementation a guess (ADR 0005).
 func (jp *jvmProject) linkMember(fn *jvmFunc, at *sitter.Node, simple, name string, arity int) {
 	if simple == "" {
 		return
@@ -738,8 +727,7 @@ func (jp *jvmProject) linkMember(fn *jvmFunc, at *sitter.Node, simple, name stri
 	}
 }
 
-// linkLocal links an unqualified call: a method of the enclosing class chain,
-// else a Kotlin top-level function in the same package or imported.
+// linkLocal links an unqualified call to the enclosing class chain, else to a Kotlin top-level function of the package or its imports.
 func (jp *jvmProject) linkLocal(fn *jvmFunc, at *sitter.Node, name string, arity int) {
 	for t := fn.owner; t != nil; t = t.outer {
 		if ms := jp.inherited(t, name, map[*jvmType]bool{}); len(ms) > 0 {
@@ -772,10 +760,7 @@ var (
 	protoRPC     = regexp.MustCompile(`\brpc\s+(\w+)\s*\(`)
 )
 
-// grpcHandlers registers the project's gRPC server methods under their full
-// method names, so join links clients in any project to them. A server class
-// is found by its supertype, generated from a .proto in the project: X
-// (Quarkus, Mutiny), XImplBase (grpc-java) or XCoroutineImplBase (grpc-kotlin).
+// grpcHandlers registers gRPC server methods by full method name, finding servers by generated supertype: X, XImplBase or XCoroutineImplBase.
 // ponytail: protos are read from this project only; also read dependency
 // jars when a server's contract lives in a library.
 func (jp *jvmProject) grpcHandlers(protos []string) {

@@ -14,10 +14,7 @@ import (
 
 var update = flag.Bool("update", false, "rewrite golden files under testdata/")
 
-// TestTraceFieldGolden pins both trees of Go, Java and Kotlin field traces, so
-// refactors of field*.go and jvm_field.go can be checked byte for byte. Call paths
-// and hops come from the user's index and are left out. Run with -update after an
-// intended change.
+// TestTraceFieldGolden pins both trees of Go, Java and Kotlin field traces, without the index's call paths and hops; -update rewrites it.
 func TestTraceFieldGolden(t *testing.T) {
 	for _, c := range []struct{ ws, addr string }{
 		{"../../cmd/dotweavier/testdata", "fieldproj:main.go:16"},

@@ -22,8 +22,7 @@ type SourceFile struct {
 // maxSource caps what Source returns; generated files can be huge.
 const maxSource = 2 << 20
 
-// Source reads the file at [project:]rel/path[:LINE] in a project under ws. Only
-// files inside a project are served: a path that leaves it (../) is an error.
+// Source reads the file at [project:]rel/path[:LINE] in a project under ws; a path leaving the project is an error.
 func Source(ws, loc string) (*SourceFile, error) {
 	line := 0
 	if i := strings.LastIndex(loc, ":"); i >= 0 {

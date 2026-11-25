@@ -11,10 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// A workspace is a name with registered folders. Indexing a project outside every
-// folder of the workspace registers its parent folder there, creating the
-// workspace; a project folder has one index, shared by every workspace that
-// contains it; an index whose folder is gone is invalid in every such workspace.
+// Indexing outside a workspace's folders registers the parent folder, and one index per project folder is shared by every workspace.
 func TestWorkspaceRegistryAndInvalid(t *testing.T) {
 	isolate(t)
 	ws := t.TempDir()
@@ -49,8 +46,7 @@ func TestWorkspaceRegistryAndInvalid(t *testing.T) {
 	fs, _ := folders(DefaultWorkspace)
 	assert.Equal(t, []string{svc}, fs, "want the project's parent")
 
-	// A custom workspace is created on first use and reused after. Its folder
-	// contains svc, so it names the same index svc/a.
+	// A custom workspace is created on first use; its folder contains svc, so it names the same index svc/a.
 	names, err := InitWorkspace(ws, "team")
 	require.NoError(t, err)
 	assert.Contains(t, names, "svc/a")
@@ -81,8 +77,7 @@ func TestWorkspaceRegistryAndInvalid(t *testing.T) {
 	_, loaded, _, _ := loadIndexes([]string{filepath.Join(ws, "other"), svc}, nil)
 	assert.True(t, loaded["a"] && loaded["b"], "default loads %v, want a and b", loaded)
 
-	// A field address resolves from any folder through the registered folders;
-	// the innermost registered folder wins.
+	// A field address resolves from any folder through the innermost registered folder.
 	elsewhere := t.TempDir()
 	dir, err := FieldDir(elsewhere, "b.go:3")
 	assert.NoError(t, err)

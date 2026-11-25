@@ -22,8 +22,7 @@ func fnOf(k tkey) *ssa.Function {
 	return nil
 }
 
-// useful drops values that only describe the datum (bools, errors) and contexts:
-// log.WithFields(ctx, "id", id) would otherwise drag every ctx downstream along.
+// useful drops values that only describe the datum (bools, errors) and contexts, which would drag every ctx downstream.
 func useful(t types.Type) bool {
 	if p, ok := t.Underlying().(*types.Pointer); ok { // a local or captured variable
 		t = p.Elem()
@@ -69,10 +68,7 @@ func (t *tracker) referrers(v ssa.Value) []ssa.Instruction {
 	return nil
 }
 
-// walk is one direction of propagation. Calls are matched one level deep: a function
-// entered from a call site (forward through a parameter, backward through a return)
-// leaves only through that site, unless it was reached on its own (seed, field,
-// capture), which makes it free to leave through every call site.
+// walk is one direction of propagation, matching calls one level deep (ADR 0009).
 type walk struct {
 	t       *tracker
 	back    bool
@@ -98,8 +94,7 @@ func (w *walk) taint(k, from tkey, how flow, pos token.Pos) {
 		w.order = append(w.order, k)
 		w.queue = append(w.queue, k)
 	}
-	// Checked on every way in, not just the first, so the result does not depend
-	// on the order the walk happens to visit things.
+	// Checked on every way in, so the result does not depend on visit order.
 	enter, exit := fArg, fReturn
 	if w.back {
 		enter, exit = fReturn, fArg
@@ -360,8 +355,7 @@ func (w *walk) result(in ssa.CallInstruction, i int, from ssa.Value, how flow) {
 	}
 }
 
-// callbacks guesses that a dependency hands the tainted value (or its elements, as
-// lo.Map does) to a project function passed in the same call.
+// callbacks guesses that a dependency hands the tainted value (or its elements, as lo.Map does) to a project function passed in the same call.
 func (w *walk) callbacks(in ssa.CallInstruction, args []ssa.Value, v ssa.Value) {
 	vt := v.Type()
 	var elem types.Type
@@ -446,8 +440,7 @@ func (w *walk) valueBack(v ssa.Value) {
 	}
 }
 
-// readBack goes from a field read to the field's stores, or for a library struct to
-// its object.
+// readBack goes from a field read to the field's stores, or for a library struct to its object.
 func (w *walk) readBack(v, x ssa.Value, i int) {
 	if k, _, ok := w.t.fieldOf(x.Type(), i); ok {
 		w.taint(k, v, fRead, v.Pos())
@@ -510,9 +503,7 @@ func (w *walk) callBack(call *ssa.Call, i int, from ssa.Value) {
 		}
 		return
 	}
-	// A call outside the project derives its result from its receiver (id.String())
-	// or its one data argument (uuid.Parse(s)). With several inputs the call itself is
-	// the origin: geouuid.NewV8WithCountry(createdAt, country) makes a new ID.
+	// Outside the project a result derives from its receiver (id.String()) or one data argument (uuid.Parse(s)); with several inputs the call is the origin.
 	args := argsOf(call)
 	if sc := call.Call.StaticCallee(); call.Call.IsInvoke() || sc != nil && sc.Signature.Recv() != nil {
 		args = args[:min(1, len(args))]

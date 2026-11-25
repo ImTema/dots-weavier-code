@@ -1,4 +1,3 @@
-// Tree-sitter syntax helpers for the Java and Kotlin field trace (jvm_field.go).
 package domain
 
 import (
@@ -54,8 +53,7 @@ func isIdent(n *sitter.Node) bool {
 
 func isThis(n *sitter.Node) bool { return n.Type() == "this" || n.Type() == "this_expression" }
 
-// exprIdent reports an identifier that reads a variable, not one that names
-// something (a declaration, a member after a dot, a called function).
+// exprIdent reports an identifier that reads a variable rather than naming a declaration, member or called function.
 func exprIdent(n *sitter.Node) bool {
 	if !isIdent(n) {
 		return false
@@ -89,8 +87,7 @@ func exprIdent(n *sitter.Node) bool {
 	return true
 }
 
-// callParts splits a call: receiver (nil for none), method name or constructed
-// type, and arguments with their Kotlin names; a trailing lambda is the last argument.
+// callParts splits a call into receiver, method or constructed type, and arguments with their Kotlin names, a trailing lambda last.
 type callParts struct {
 	recv       *sitter.Node
 	name, ctor string

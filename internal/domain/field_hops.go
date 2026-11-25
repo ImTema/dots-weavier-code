@@ -10,9 +10,7 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
-// A Hop is a call from a step's function into another project, taken from the
-// index: gRPC, HTTP or Pub/Sub. Following it continues the field trace in the
-// handler, seeded at the request the handler receives.
+// A Hop is an indexed gRPC, HTTP or Pub/Sub call from a step's function into another project's handler.
 type Hop struct {
 	Kind     string `json:"kind"`               // grpc, http, pubsub, pubsub:guess
 	Method   string `json:"method"`             // full gRPC method, "GET /customers/{}", topic
@@ -22,8 +20,7 @@ type Hop struct {
 	Followed bool   `json:"followed,omitempty"` // its trace is grafted under the step
 }
 
-// hopsOf lists the cross-project hops out of node n. Handlers without a file
-// (stale or external nodes) cannot be traced and are left out.
+// hopsOf lists the cross-project hops out of node n whose handler has a file to trace.
 func hopsOf(g *graph, n int32) []Hop {
 	var hs []Hop
 	from := g.Nodes[n]
@@ -41,12 +38,7 @@ func hopsOf(g *graph, n int32) []Hop {
 	return hs
 }
 
-// TraceHop traces the request a handler receives: addr is the handler's
-// declaration, as in Hop.Addr. In Go the seeds are the handler's parameters
-// except the receiver, a context.Context and an http.ResponseWriter. A JVM
-// declaration may start with annotations, so the first line from addr on that
-// yields a trace is the signature. Every location in the result carries its
-// project, so the trees can be grafted into another project's trace.
+// TraceHop traces the request the handler declared at addr (Hop.Addr) receives, every location qualified by project for grafting.
 func TraceHop(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, error) {
 	i := strings.LastIndex(addr, ":")
 	line, err := strconv.Atoi(addr[i+1:])
@@ -117,8 +109,7 @@ func qualifyLocs(ss []*FieldStep, project string) {
 	}
 }
 
-// FollowHop grafts the trace of hop k of the lifecycle step at path (indexes from
-// r.Uses down through Kids) under that step, behind a step of the hop's kind.
+// FollowHop grafts the trace of hop k of the lifecycle step at path (indexes from r.Uses down through Kids) under that step.
 func FollowHop(ctx context.Context, q FieldQuery, r *FieldTrace, path []int, k int) error {
 	s, err := stepAt(r.Uses, path)
 	if err != nil {
@@ -141,14 +132,12 @@ func FollowHop(ctx context.Context, q FieldQuery, r *FieldTrace, path []int, k i
 	return nil
 }
 
-// hopStep is the step a followed hop adds under its caller: the handler, with the
-// request's trace below it.
+// hopStep is the handler step a followed hop adds under its caller, the request's trace below it.
 func hopStep(h *Hop, kids []*FieldStep) *FieldStep {
 	return &FieldStep{Kind: h.Kind, Name: h.Method, Loc: h.Addr, Code: h.Method, Fn: h.Fn, Kids: kids}
 }
 
-// FollowHops follows every hop on the lifecycle side, then the hops in what it
-// grafted, depth services deep, at most budget hops in all.
+// FollowHops follows the lifecycle's hops and those in what they graft, depth services deep, at most budget hops in all.
 // ponytail: breadth-first with a flat budget; per-service limits if traces fan out.
 func FollowHops(ctx context.Context, fq FieldQuery, r *FieldTrace, depth, budget int) (followed int, errs []error) {
 	type at struct {

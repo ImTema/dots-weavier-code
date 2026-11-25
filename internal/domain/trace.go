@@ -1,4 +1,3 @@
-// Path tracing: resolving addresses and ranking call paths between two nodes.
 package domain
 
 import (
@@ -99,10 +98,7 @@ const (
 	popLimit = 5_000_000
 )
 
-// trace returns up to k simple paths a->b, fewest guesses first then fewest hops.
-// It is A* over simple paths; the heuristic is the exact (guesses, hops) distance
-// to b on the reverse graph, so paths come out in rank order and search never
-// enters nodes that cannot reach b.
+// trace returns up to k simple paths a->b in rank order, by A* with the exact (guesses, hops) distance to b as heuristic.
 func (g *graph) trace(a, b int32, k int) (paths []*state, exhausted bool) {
 	rev := make([][]edge, len(g.Nodes))
 	for from, es := range g.Out {

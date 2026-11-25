@@ -1,12 +1,4 @@
-// The dotweavier CLI: parses flags, calls internal/domain and renders its
-// results as text or as a self-contained HTML page.
-//
-//	dotweavier init [DIR] [--workspace NAME]
-//	dotweavier index [DIR] [--workspace NAME]
-//	dotweavier trace path -A <addr> -B <addr> [--workspace NAME] [--max-paths 10] [--include-tests]
-//	dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--depth N] [--include-tests] [--format text|ui|html]
-//
-// Addresses: project::Type.Method, project:rel/path.go:Type.Method, project:rel/path.go:LINE.
+// Command dotweavier indexes projects and traces call paths and value lifecycles; usage prints its commands.
 package main
 
 import (
@@ -44,8 +36,7 @@ func main() {
 		usage()
 	}
 	start := time.Now()
-	// Ctrl-C cancels a long index or field trace; indexes are written whole or not at all.
-	// Only those two catch it: every other command keeps Ctrl-C's default exit.
+	// Ctrl-C cancels only index and field trace, which write indexes whole or not at all.
 	cancellable := func() context.Context {
 		ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
 		return ctx
@@ -90,8 +81,7 @@ func warn(ws []string) {
 	}
 }
 
-// dirAndWorkspace parses the optional folder argument (default: the current folder)
-// and --workspace of init and index; flags may come before or after the folder.
+// dirAndWorkspace parses init's and index's optional folder and --workspace, in either order.
 func dirAndWorkspace(cmd string, args []string) (dir, ws string) {
 	fl := flag.NewFlagSet(cmd, flag.ExitOnError)
 	wsFlag := fl.String("workspace", domain.DefaultWorkspace, "workspace name; created if it does not exist")
@@ -362,8 +352,7 @@ type uiPath struct {
 	GRPC  []string `json:"grpc"`
 }
 
-// pathUI renders the union of all paths as one self-contained HTML page: a node or
-// edge shared by several paths appears once and lists every path through it.
+// pathUI renders the union of all paths as one self-contained HTML page, each shared node or edge once.
 func pathUI(paths []domain.Path, a, b string) ([]byte, error) {
 	data := struct {
 		A        string   `json:"a"`
@@ -412,7 +401,6 @@ func pathUI(paths []domain.Path, a, b string) ([]byte, error) {
 }
 
 // fieldData is one trace for the static field page: a script that sets window.TRACE.
-// Both trees: origin grows left of the seed, uses right.
 func fieldData(r *domain.FieldTrace, addr string, open int) ([]byte, error) {
 	js, err := json.Marshal(fieldRun{addr, open, r.Origin, r.Uses}) // escapes <, > and &, so it is safe inside a script
 	if err != nil {
@@ -421,9 +409,7 @@ func fieldData(r *domain.FieldTrace, addr string, open int) ([]byte, error) {
 	return append(append([]byte("window.TRACE = "), js...), ";\n"...), nil
 }
 
-// saveFieldRun keeps every field trace run in ~/.dotweavier/trace-field-history as
-// <time>_<address>.js, plus latest.js, and rewrites index.js (window.HISTORY, newest
-// first) so the page can list past runs. It returns the run's name for ?t=.
+// saveFieldRun saves a field trace run to the history folder, with latest.js and index.js, and returns its name for ?t=.
 // ponytail: history is never pruned; add a cap when the folder grows large.
 func saveFieldRun(data []byte, addr string) (string, error) {
 	dir := historyDir()
@@ -470,8 +456,7 @@ func saveFieldRun(data []byte, addr string) (string, error) {
 
 func historyDir() string { return dotDir("trace-field-history") }
 
-// dotDir is a folder under ~/.dotweavier. Without a home folder it exits rather
-// than fall back to the current folder, which may be a target project.
+// dotDir is a folder under ~/.dotweavier; without a home folder it exits rather than write into a target project.
 func dotDir(name string) string {
 	home, err := os.UserHomeDir()
 	must(err)
@@ -500,8 +485,7 @@ func loadFieldRun(name string) (*fieldRun, error) {
 	return r, json.Unmarshal(b, r)
 }
 
-// exportField is the field page with one run inlined: a single file that opens
-// anywhere, without the history folder or a server. data is what fieldData returns.
+// exportField is the field page with the run data inlined, a single file that opens without a server.
 func exportField(data []byte) []byte {
 	page := fieldUITemplate
 	i := strings.Index(page, "<script>")
@@ -537,8 +521,7 @@ func writeUI(name string, html []byte) string {
 	return out
 }
 
-// openPage opens the static page at path in the default browser; no server runs.
-// A failure only warns: the link is already printed.
+// openPage opens the static page at path in the default browser, only warning on failure: the link is already printed.
 func openPage(path string) {
 	cmd := map[string][]string{"darwin": {"open"}, "windows": {"rundll32", "url.dll,FileProtocolHandler"}}[runtime.GOOS]
 	if cmd == nil {

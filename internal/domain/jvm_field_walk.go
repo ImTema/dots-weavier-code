@@ -314,8 +314,7 @@ func (w *jwalk) callArg(k jexpr, fn *jvmFunc, call, e *sitter.Node) {
 	w.callbacks(k, fn, cp)
 }
 
-// callOn follows a tainted receiver into a method called on it. A project
-// method's this is not tracked; its fields are reached as fields.
+// callOn follows a tainted receiver into a method called on it; a project method's this is reached through its fields.
 func (w *jwalk) callOn(k jexpr, fn *jvmFunc, call *sitter.Node) {
 	t := w.t
 	if len(t.callees(fn, call)) > 0 {
@@ -332,8 +331,7 @@ func (w *jwalk) callOn(k jexpr, fn *jvmFunc, call *sitter.Node) {
 	w.callbacks(k, fn, cp)
 }
 
-// callbacks guesses that a library call hands the tainted value (or its elements,
-// as stream().map does) to the lambdas passed in the same call.
+// callbacks guesses that a library call hands the tainted value (or its elements, as stream().map does) to the lambdas passed in the same call.
 func (w *jwalk) callbacks(k jexpr, fn *jvmFunc, cp callParts) {
 	for _, a := range cp.args {
 		for _, p := range lambdaParams(fn.file, a) {
@@ -442,8 +440,7 @@ func (w *jwalk) callBack(k jexpr, fn *jvmFunc, call *sitter.Node) {
 		}
 		return
 	}
-	// A library call derives its result from its receiver (id.trim()) or its one
-	// data argument (UUID.fromString(s)); with several inputs the call is the origin.
+	// A library result derives from its receiver (id.trim()) or one data argument (UUID.fromString(s)); with several inputs the call is the origin.
 	args := cp.args
 	if cp.recv != nil && !(isIdent(cp.recv) && isUpper(f.text(cp.recv)) && !t.local(fn, f.text(cp.recv))) {
 		args = []*sitter.Node{cp.recv}

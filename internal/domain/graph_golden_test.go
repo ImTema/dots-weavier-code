@@ -12,10 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestGraphGolden pins graph.go end to end over samples/: what extract stores per
-// project, the hops join adds between projects, and the paths trace ranks. Nodes
-// are written by name, not number, so the files survive reordering. Run with
-// -update after an intended change.
+// TestGraphGolden pins what extract stores, join adds and trace ranks over samples/, nodes by name; -update rewrites it.
 func TestGraphGolden(t *testing.T) {
 	isolate(t)
 	_, err := InitWorkspace("../../samples", "")

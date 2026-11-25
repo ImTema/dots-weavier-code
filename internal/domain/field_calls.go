@@ -6,12 +6,7 @@ import (
 	"strings"
 )
 
-// attachCalls gives every field step the best call path, over the indexed graph,
-// between the seed's function and the step's function: the path trace that
-// reflects how the value got there. The value can flow either way along calls
-// (an argument goes down, a return comes up), so it tries seed -> step first and
-// then step -> seed. Steps in the seed's function, struct fields and steps in
-// unindexed projects get no path.
+// attachCalls gives each field step the best indexed call path from the seed's function, or to it when the value came up a return.
 // ponytail: one trace per distinct function, each rebuilding the reverse graph;
 // share one reverse graph if large trees get slow.
 func attachCalls(r *FieldTrace, ws, seedProject, seedFile string, seedLine int) {

@@ -27,8 +27,7 @@ func (w *jwalk) tree() []*jnode {
 	lines := map[lineKey]*jnode{}
 	fields := map[jfield]*jnode{}
 	var roots []*jnode
-	// A plain read of a variable that leads nowhere (x == null, x.isBlank()) only
-	// describes the value; the Go walk drops those by their bool type.
+	// A read that leads nowhere (x == null, x.isBlank()) only describes the value, as Go's bool drop.
 	next := map[any][]any{}
 	for _, k := range w.order {
 		next[w.hits[k].from] = append(next[w.hits[k].from], k)

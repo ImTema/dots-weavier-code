@@ -67,11 +67,13 @@ func TestTraceFieldGolden(t *testing.T) {
 	} {
 		cases = append(cases, fieldCase{c.ws, c.addr, 0})
 	}
-	// Hops followed: gRPC Go to Go, gRPC Go to Java, Pub/Sub Go to Go.
+	// Hops followed: gRPC Go to Go, gRPC Go to Java, Pub/Sub Go to Go, HTTP
+	// Kotlin to Go (into a handler registered as a method value).
 	cases = append(cases,
 		fieldCase{"../../samples/golang", "orders:internal/pricer/pricer.go:23", 2},
 		fieldCase{"../../samples", "golang/orders:internal/inventory/client.go:26", 1},
 		fieldCase{"../../samples", "golang/orders:internal/events/publisher.go:44", 1},
+		fieldCase{"../../samples", "kotlin/shipping:src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:26", 1},
 	)
 	for _, c := range cases {
 		name := strings.NewReplacer("/", "_", ":", "_").Replace(c.addr)

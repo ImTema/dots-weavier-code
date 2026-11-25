@@ -77,7 +77,9 @@ func (t *tracker) seeds(prog *ssa.Program, file string, line int) []ssa.Value {
 	cand := map[ssa.Value]bool{}
 	var order []ssa.Value
 	for f := range ssautil.AllFunctions(prog) {
-		if !t.keep(f) || t.fset.Position(f.Pos()).Filename != file {
+		// A synthetic wrapper (h.getCustomer's getCustomer$bound) shares its
+		// method's position but is not declared on the line.
+		if !t.keep(f) || f.Synthetic != "" || t.fset.Position(f.Pos()).Filename != file {
 			continue
 		}
 		for _, p := range f.Params {

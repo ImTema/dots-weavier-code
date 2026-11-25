@@ -162,11 +162,17 @@ addEventListener('mouseup',e=>{svg.style.cursor='grab'; const was=drag; drag=nul
   if(n.kids.length&&(!n.open||e.altKey))n.open=!n.open; sel=n; draw(); details();}); // click opens and selects; alt-click closes
 // Trackpad: two-finger scroll pans (left/right and up/down), pinch zooms (the browser
 // reports a pinch as wheel + ctrlKey). Cmd+scroll zooms too, for a mouse wheel.
+const zoomAt=(x,y,k)=>{const wx=(x-view.x)/view.k, wy=(y-view.y)/view.k;
+  view.k=Math.min(8,Math.max(.05,k)); view.x=x-wx*view.k; view.y=y-wy*view.k; apply();};
+let pinch=null; // Safari pinch: gesture events with an absolute scale, not ctrl+wheel
 svg.addEventListener('wheel',e=>{e.preventDefault();
   if(!e.ctrlKey&&!e.metaKey){view.x-=e.deltaX; view.y-=e.deltaY; apply(); return;}
-  const f=Math.exp(-e.deltaY*(e.ctrlKey?.012:.004)), wx=(e.clientX-view.x)/view.k, wy=(e.clientY-view.y)/view.k;
-  view.k=Math.min(3,Math.max(.05,view.k*f)); view.x=e.clientX-wx*view.k; view.y=e.clientY-wy*view.k; apply();},{passive:false});
-for(const g of ['gesturestart','gesturechange'])addEventListener(g,e=>e.preventDefault()); // Safari: no page zoom
+  if(pinch)return;
+  const dy=e.deltaY*(e.deltaMode===1?16:1); // Firefox reports lines, not pixels
+  zoomAt(e.clientX,e.clientY,view.k*Math.exp(-dy*(e.ctrlKey?.06:.01)));},{passive:false});
+addEventListener('gesturestart',e=>{e.preventDefault(); pinch={k:view.k,x:e.clientX,y:e.clientY};});
+addEventListener('gesturechange',e=>{e.preventDefault(); if(pinch)zoomAt(pinch.x,pinch.y,pinch.k*e.scale**2);}); // squared: a full pinch spans more zoom
+addEventListener('gestureend',e=>{e.preventDefault(); pinch=null;});
 function search(step){const q=document.getElementById('q').value.trim().toLowerCase(); hits=[];
   if(q){all.forEach(n=>{const d={...n.d,kids:0}; if(JSON.stringify(d).toLowerCase().includes(q)){hits.push(n); for(let p=n.parent;p;p=p.parent)p.open=true;}});}
   draw(); document.getElementById('hits').textContent=q?`${hits.length} matches${hits.length?' · enter: next':''}`:'';

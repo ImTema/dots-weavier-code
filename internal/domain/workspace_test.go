@@ -61,7 +61,7 @@ func TestWorkspaceRegistryAndInvalid(t *testing.T) {
 	assert.Equal(t, []string{DefaultWorkspace, "team"}, all)
 	for name, want := range map[string]string{DefaultWorkspace: "a", "team": "svc/a"} {
 		fs, _ := folders(name)
-		g, loaded, _, err := loadIndexes(fs)
+		g, loaded, _, err := loadIndexes(fs, nil)
 		require.NoError(t, err)
 		assert.True(t, loaded[want], "%s loads %v, want %s", name, loaded, want)
 		assert.Len(t, loaded, 2, "%s: want %s and its module", name, want)
@@ -78,7 +78,7 @@ func TestWorkspaceRegistryAndInvalid(t *testing.T) {
 	require.NoError(t, IndexProject(ctx, filepath.Join(ws, "other/b"), "", noop))
 	fs, _ = folders(DefaultWorkspace)
 	assert.Equal(t, []string{filepath.Join(ws, "other"), svc}, fs)
-	_, loaded, _, _ := loadIndexes([]string{filepath.Join(ws, "other"), svc})
+	_, loaded, _, _ := loadIndexes([]string{filepath.Join(ws, "other"), svc}, nil)
 	assert.True(t, loaded["a"] && loaded["b"], "default loads %v, want a and b", loaded)
 
 	// A field address resolves from any folder through the registered folders;

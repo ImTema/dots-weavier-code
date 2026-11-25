@@ -416,7 +416,7 @@ func indexesIn(folders []string) (map[string]string, error) {
 // loadIndexes merges the index of every project inside folders (absolute) into
 // one graph, each project named as indexesIn names it; unreadable indexes are
 // skipped, with a warning each.
-func loadIndexes(folders []string) (*graph, map[string]bool, []string, error) {
+func loadIndexes(folders []string, progress func(string)) (*graph, map[string]bool, []string, error) {
 	files, err := indexesIn(folders)
 	if err != nil {
 		return nil, nil, nil, err
@@ -424,7 +424,10 @@ func loadIndexes(folders []string) (*graph, map[string]bool, []string, error) {
 	var warnings []string
 	g := &graph{ids: map[string]int32{}, Impls: map[string][]int32{}}
 	loaded := map[string]bool{}
+	i := 0
 	for f, name := range files {
+		i++
+		report(progress, fmt.Sprintf("loading index %s (%d/%d)", name, i, len(files)))
 		s, err := load(f)
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("skip index %s: %v", f, err))

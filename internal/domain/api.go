@@ -213,6 +213,7 @@ type PathQuery struct {
 	A, B         string // symbol addresses
 	MaxPaths     int
 	IncludeTests bool
+	Progress     func(string) // optional: told each phase as it starts
 }
 
 // TracePath finds up to maxPaths call paths from address a to address b over
@@ -232,7 +233,7 @@ func TracePath(q PathQuery) (*PathTrace, error) {
 	if err != nil {
 		return nil, err
 	}
-	g, loaded, warnings, err := loadIndexes(fs)
+	g, loaded, warnings, err := loadIndexes(fs, q.Progress)
 	if err != nil {
 		return nil, err
 	}
@@ -244,6 +245,7 @@ func TracePath(q PathQuery) (*PathTrace, error) {
 	if !tests {
 		g.dropTests()
 	}
+	report(q.Progress, fmt.Sprintf("joining %d nodes", len(g.Nodes)))
 	g.join()
 	r := &PathTrace{Warnings: warnings, Indexes: len(loaded), Nodes: len(g.Nodes), GRPCCalls: len(g.Calls), ServedMethods: len(g.Impls)}
 	for _, es := range g.Out {
@@ -266,6 +268,7 @@ func TracePath(q PathQuery) (*PathTrace, error) {
 		return nil, err
 	}
 	r.A, r.B = g.node(na), g.node(nb)
+	report(q.Progress, "searching paths")
 	states, exhausted := g.trace(na, nb, maxPaths)
 	r.Exhausted = exhausted
 	for _, s := range states {
@@ -325,7 +328,15 @@ type FieldTrace struct {
 type FieldQuery struct {
 	Dir          string // folder whose projects (and modules) are analysed
 	IncludeTests bool
-	MaxProjects  int // load at most this many projects when following shared fields; 0: 10
+	MaxProjects  int          // load at most this many projects when following shared fields; 0: 10
+	Progress     func(string) // optional: told each phase as it starts
+}
+
+// report tells progress, if any, that phase starts.
+func report(progress func(string), phase string) {
+	if progress != nil {
+		progress(phase)
+	}
 }
 
 func (q FieldQuery) maxProjects() int {
@@ -456,6 +467,7 @@ func TraceField(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, er
 		return nil, err
 	}
 	if lang == "jvm" {
+		report(q.Progress, "tracing "+seedProject.Name)
 		r, rel, err := traceJVMField(seedProject, file, line, tests)
 		if err != nil {
 			return nil, err
@@ -463,7 +475,7 @@ func TraceField(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, er
 		attachCalls(r, ws, seedProject.Name, rel, line)
 		return r, nil
 	}
-	t, err := traceField(ctx, projects, seedProject, file, line, tests, maxProjects, nil)
+	t, err := traceField(ctx, projects, seedProject, file, line, tests, maxProjects, nil, q.Progress)
 	if err != nil {
 		return nil, err
 	}

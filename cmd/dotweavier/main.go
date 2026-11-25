@@ -147,8 +147,13 @@ func runTrace(args []string) {
 	format := fl.String("format", "text", "text (one line per path), ui (serve the overview and open the paths in it) or html (one self-contained file in ~/.dotweavier/ui, opened)")
 	_ = fl.Parse(args)
 
-	r, err := domain.TracePath(domain.PathQuery{Workspace: *wsFlag, A: *aFlag, B: *bFlag, MaxPaths: *maxPaths, IncludeTests: *tests})
+	phase, done := status("trace path")
+	r, err := domain.TracePath(domain.PathQuery{Workspace: *wsFlag, A: *aFlag, B: *bFlag, MaxPaths: *maxPaths, IncludeTests: *tests, Progress: phase})
+	if err != nil {
+		done("err=%v", err)
+	}
 	must(err)
+	done("%d paths", len(r.Paths))
 	warn(r.Warnings)
 	fmt.Fprintf(os.Stderr, "loaded %d indexes: nodes=%d edges=%d grpcHops=%d pubsubHops=%d grpcClientCalls=%d servedMethods=%d\n",
 		r.Indexes, r.Nodes, r.Edges, r.GRPCHops, r.PubsubHops, r.GRPCCalls, r.ServedMethods)
@@ -205,15 +210,22 @@ func runTraceField(ctx context.Context, args []string) {
 		must(err)
 		*ws = dir
 	}
-	q := domain.FieldQuery{Dir: *ws, IncludeTests: *tests, MaxProjects: *maxProjects}
+	phase, done := status("trace field " + pos[0])
+	q := domain.FieldQuery{Dir: *ws, IncludeTests: *tests, MaxProjects: *maxProjects, Progress: phase}
 	r, err := domain.TraceField(ctx, q, pos[0])
+	if err != nil {
+		done("err=%v", err)
+	}
 	must(err)
+	done("origin=%d uses=%d", len(r.Origin), len(r.Uses))
 	warn(r.Warnings)
 	if *follow > 0 {
 		seen := len(r.Warnings)
+		phase, done := status("follow hops")
+		q.Progress = phase
 		n, errs := domain.FollowHops(ctx, q, r, *follow, maxFollow)
+		done("followed %d hops", n)
 		warn(r.Warnings[seen:])
-		fmt.Fprintf(os.Stderr, "followed %d hops\n", n)
 		for _, e := range errs {
 			fmt.Fprintln(os.Stderr, "hop not followed:", e)
 		}

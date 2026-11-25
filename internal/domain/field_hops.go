@@ -81,7 +81,7 @@ func traceGoHandler(ctx context.Context, q FieldQuery, loc string, line int) (*F
 	if err != nil {
 		return nil, err
 	}
-	t, err := traceField(ctx, gos, seedProject, file, line, q.IncludeTests, q.maxProjects(), requestParam)
+	t, err := traceField(ctx, gos, seedProject, file, line, q.IncludeTests, q.maxProjects(), requestParam, q.Progress)
 	if err != nil {
 		return nil, err
 	}
@@ -193,6 +193,7 @@ func FollowHops(ctx context.Context, fq FieldQuery, r *FieldTrace, depth, budget
 				continue
 			}
 			seen[h.Addr] = true
+			report(fq.Progress, fmt.Sprintf("hop %d: %s %s", followed+1, h.Kind, h.Method))
 			if err := FollowHop(ctx, fq, r, q.path, k); err != nil {
 				errs = append(errs, fmt.Errorf("%s %s: %w", s.Hops[k].Kind, s.Hops[k].Method, err))
 				continue

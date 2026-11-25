@@ -34,7 +34,7 @@ func TestGraphGolden(t *testing.T) {
 		golden(t, strings.ReplaceAll(s.Project, "/", "_")+".txt", dumpGraph(&s.Graph, false))
 	}
 
-	g, _, _, err := loadIndexes([]string{ws})
+	g, _, _, err := loadIndexes([]string{ws}, nil)
 	require.NoError(t, err)
 	g.join()
 	golden(t, "joined.txt", dumpGraph(g, true))

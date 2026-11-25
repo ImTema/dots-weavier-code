@@ -166,7 +166,7 @@ func importers(projects []project) map[string][]project {
 // traceField runs both walks from file:line in seedProject, loading further projects that
 // import a reached field's package, up to maxProjects in total. A non-nil seedOK
 // keeps only the line's values it accepts as seeds.
-func traceField(ctx context.Context, projects []project, seedProject project, file string, line int, tests bool, maxProjects int, seedOK func(ssa.Value) bool) (*tracker, error) {
+func traceField(ctx context.Context, projects []project, seedProject project, file string, line int, tests bool, maxProjects int, seedOK func(ssa.Value) bool, progress func(string)) (*tracker, error) {
 	var modules []string
 	moduleOf := map[string]string{} // project name -> module path
 	for _, p := range projects {
@@ -188,6 +188,7 @@ func traceField(ctx context.Context, projects []project, seedProject project, fi
 			if ctx.Err() != nil {
 				break
 			}
+			report(progress, fmt.Sprintf("loading %s (%d/%d)", p.Name, len(loaded)-len(ps)+i+1, len(loaded)))
 			var st loadStats
 			prog, own, err := loadSSA(ctx, p, tests, &st, t.fset)
 			t.warnings = append(t.warnings, st.warnings...)
@@ -233,6 +234,7 @@ func traceField(ctx context.Context, projects []project, seedProject project, fi
 	var imps map[string][]project
 	asked := map[string]bool{}
 	for {
+		report(progress, fmt.Sprintf("walking %d projects", len(loaded)))
 		t.back.run()
 		t.fwd.run()
 		var next []project

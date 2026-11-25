@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"slices"
 	"strconv"
@@ -45,6 +46,12 @@ func runOverview(args []string) {
 // workspace ws ("": the only registered one, else the page asks). With open set
 // (a path like /ui/trace-field.html?t=RUN), it opens that page in the browser.
 func serveOverview(addr, ws string, maxNodes int, open string) {
+	// Listen before loading the workspace: a running overview is reused, not loaded twice.
+	ln, err := net.Listen("tcp", addr) // loopback by default: the page exposes source names
+	if err != nil && open != "" && reuseOverview(addr, ws, open) {
+		return
+	}
+	must(err)
 	// Only one workspace is active at a time; the page can switch to another registered one.
 	var cur atomic.Pointer[domain.OverviewSource]
 	activate := func(name string) error {
@@ -237,11 +244,14 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 			return
 		}
 		a, b := r.URL.Query().Get("a"), r.URL.Query().Get("b")
-		res, err := domain.TracePath(domain.PathQuery{Workspace: src.Workspace(), A: a, B: b, MaxPaths: 10})
+		phase, done := status("trace path " + a + " -> " + b)
+		res, err := domain.TracePath(domain.PathQuery{Workspace: src.Workspace(), A: a, B: b, MaxPaths: 10, Progress: phase})
 		if err != nil {
+			done("err=%v", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		done("%d paths (exhausted=%v), %d indexes, nodes=%d edges=%d", len(res.Paths), res.Exhausted, res.Indexes, res.Nodes, res.Edges)
 		warn(res.Warnings)
 		html, err := pathUI(res.Paths, a, b)
 		if err != nil {
@@ -323,15 +333,16 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 			return
 		}
 		tr := &domain.FieldTrace{Origin: run.Origin, Uses: run.Uses}
-		t0 := time.Now()
+		phase, done := status("follow " + q.Get("run"))
 		dir, err := src.FolderOf(run.Addr)
 		if err != nil {
+			done("err=%v", err)
 			reply(http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
 			return
 		}
 		if q.Get("path") == "" {
 			depth, _ := strconv.Atoi(q.Get("depth"))
-			n, errs := domain.FollowHops(r.Context(), domain.FieldQuery{Dir: dir}, tr, max(depth, 1), maxFollow)
+			n, errs := domain.FollowHops(r.Context(), domain.FieldQuery{Dir: dir, Progress: phase}, tr, max(depth, 1), maxFollow)
 			if n == 0 && len(errs) > 0 {
 				err = errs[0]
 			}
@@ -347,7 +358,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 			}
 			if err == nil {
 				k, _ := strconv.Atoi(q.Get("hop"))
-				err = domain.FollowHop(r.Context(), domain.FieldQuery{Dir: dir}, tr, path, k)
+				err = domain.FollowHop(r.Context(), domain.FieldQuery{Dir: dir, Progress: phase}, tr, path, k)
 			}
 		}
 		warn(tr.Warnings)
@@ -358,7 +369,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 				name, err = saveFieldRun(data, run.Addr)
 			}
 		}
-		fmt.Fprintf(os.Stderr, "follow %s path=%s hop=%s: run=%s err=%v (%s)\n", q.Get("run"), q.Get("path"), q.Get("hop"), name, err, time.Since(t0).Round(time.Millisecond))
+		done("path=%s hop=%s: run=%s err=%v", q.Get("path"), q.Get("hop"), name, err)
 		if err != nil {
 			reply(http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
 			return
@@ -375,7 +386,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 			return
 		}
 		a := r.URL.Query().Get("addr")
-		t0 := time.Now()
+		phase, done := status("trace field " + a)
 		reply := func(code int, v map[string]any) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(code)
@@ -383,11 +394,12 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		}
 		var tr *domain.FieldTrace
 		dir, err := src.FolderOf(a)
+		fq := domain.FieldQuery{Dir: dir, Progress: phase}
 		if err == nil {
-			tr, err = domain.TraceField(r.Context(), domain.FieldQuery{Dir: dir}, a)
+			tr, err = domain.TraceField(r.Context(), fq, a)
 		}
 		if n, _ := strconv.Atoi(r.URL.Query().Get("follow")); err == nil && n > 0 {
-			domain.FollowHops(r.Context(), domain.FieldQuery{Dir: dir}, tr, n, maxFollow) // a hop that fails stays unfollowed
+			domain.FollowHops(r.Context(), fq, tr, n, maxFollow) // a hop that fails stays unfollowed
 		}
 		if tr != nil {
 			warn(tr.Warnings)
@@ -399,7 +411,11 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 				name, err = saveFieldRun(data, a)
 			}
 		}
-		fmt.Fprintf(os.Stderr, "trace field %s: run=%s err=%v (%s)\n", a, name, err, time.Since(t0).Round(time.Millisecond))
+		var origin, uses int
+		if tr != nil {
+			origin, uses = len(tr.Origin), len(tr.Uses)
+		}
+		done("origin=%d uses=%d run=%s err=%v", origin, uses, name, err)
 		if err != nil {
 			reply(http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
 			return
@@ -407,14 +423,6 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		reply(http.StatusOK, map[string]any{"run": name})
 	})
 
-	ln, err := net.Listen("tcp", addr) // loopback by default: the page exposes source names
-	if err != nil && open != "" {
-		// Most likely a running overview; it shares the run history, so open the page there.
-		fmt.Fprintln(os.Stderr, "dotweavier: not serving:", err)
-		openPage("http://" + addr + open)
-		return
-	}
-	must(err)
 	fmt.Printf("overview -> http://%s/\n", ln.Addr())
 	fmt.Printf("field traces -> http://%s/ui/trace-field.html\n", ln.Addr())
 	if open != "" {
@@ -422,4 +430,38 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		openPage(fmt.Sprintf("http://%s%s", ln.Addr(), open))
 	}
 	must(http.Serve(ln, mux))
+}
+
+// reuseOverview opens the page open on the overview already serving addr, after
+// making ws its active workspace if ws is set. It reports false when what holds
+// addr is not a dotweavier overview, or it cannot switch to ws.
+func reuseOverview(addr, ws, open string) bool {
+	c := &http.Client{Timeout: 3 * time.Second}
+	resp, err := c.Get("http://" + addr + "/workspaces")
+	if err != nil {
+		return false
+	}
+	var cur struct{ Active string }
+	err = json.NewDecoder(resp.Body).Decode(&cur)
+	resp.Body.Close()
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return false
+	}
+	if ws != "" && ws != cur.Active {
+		req, _ := http.NewRequest("POST", "http://"+addr+"/workspace?"+url.Values{"dir": {ws}}.Encode(), nil)
+		req.Header.Set("X-Dotweavier", "1")
+		c.Timeout = 0 // loading a workspace can take a while
+		resp, err := c.Do(req)
+		if err != nil {
+			return false
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNoContent {
+			return false
+		}
+		fmt.Fprintf(os.Stderr, "switched the running overview to workspace %s\n", ws)
+	}
+	fmt.Printf("opened -> http://%s%s (on the running overview)\n", addr, open)
+	openPage("http://" + addr + open)
+	return true
 }

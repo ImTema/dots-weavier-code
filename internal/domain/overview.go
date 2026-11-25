@@ -113,7 +113,7 @@ func (src *OverviewSource) FolderOf(addr string) (string, error) {
 
 // mergedGraph merges the indexes of every project inside the absolute folders, joined and without tests.
 func mergedGraph(folders []string) (*graph, []string, error) {
-	g, _, warns, err := loadIndexes(folders)
+	g, _, warns, err := loadIndexes(folders, nil)
 	if err != nil {
 		return nil, nil, err
 	}

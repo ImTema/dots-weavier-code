@@ -138,9 +138,44 @@
             }
            ]
           }
+         ],
+         "hops": [
+          {
+           "kind": "grpc",
+           "method": "/inventory.v1.InventoryService/Reserve",
+           "project": "java/inventory",
+           "fn": "InventoryGrpcService.reserve",
+           "addr": "java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:31"
+          }
          ]
         }
-       ]
+       ],
+       "call": {
+        "Steps": [
+         {
+          "Node": {
+           "Project": "golang/orders",
+           "File": "internal/order/order.go",
+           "Name": "Service.Place",
+           "Line": 82
+          },
+          "Via": "",
+          "Method": ""
+         },
+         {
+          "Node": {
+           "Project": "golang/orders",
+           "File": "internal/pricer/pricer.go",
+           "Name": "Client.Price",
+           "Line": 21
+          },
+          "Via": "iface:sure",
+          "Method": ""
+         }
+        ],
+        "Sure": 1,
+        "Iface": 1
+       }
       },
       {
        "kind": "read",
@@ -181,7 +216,7 @@
               },
               {
                "kind": "read",
-               "loc": "fulfillment:internal/events/subscriber.go:82",
+               "loc": "golang/fulfillment:internal/events/subscriber.go:82",
                "code": "CustomerId: e.GetCustomerId(),",
                "before": "OrderId:    e.GetOrderId(),",
                "after": "Units:      e.GetUnits(),",
@@ -190,7 +225,7 @@
               },
               {
                "kind": "read",
-               "loc": "pricing:internal/events/subscriber.go:70",
+               "loc": "golang/pricing:internal/events/subscriber.go:70",
                "code": "if s.ledger.Record(e.GetOrderId(), e.GetCustomerId()) {",
                "before": "}",
                "after": "slog.InfoContext(ctx, \"order recorded\", \"order\", e.GetOrderId(), \"customer\", e.GetCustomerId(),",
@@ -199,17 +234,17 @@
                "kids": [
                 {
                  "kind": "arg",
-                 "loc": "pricing:internal/loyalty/ledger.go:21",
+                 "loc": "golang/pricing:internal/loyalty/ledger.go:21",
                  "code": "func (l *Ledger) Record(orderID, customerID string) bool {",
                  "before": "// customer or an order already recorded.",
                  "after": "if orderID == \"\" || customerID == \"\" {",
                  "type": "string",
                  "fn": "Ledger.Record",
-                 "via": "pricing:internal/events/subscriber.go:70",
+                 "via": "golang/pricing:internal/events/subscriber.go:70",
                  "kids": [
                   {
                    "kind": "container",
-                   "loc": "pricing:internal/loyalty/ledger.go:32",
+                   "loc": "golang/pricing:internal/loyalty/ledger.go:32",
                    "code": "l.counts[customerID]++",
                    "before": "l.seen[orderID] = true",
                    "after": "return true",
@@ -222,7 +257,7 @@
               },
               {
                "kind": "read",
-               "loc": "pricing:internal/events/subscriber.go:71",
+               "loc": "golang/pricing:internal/events/subscriber.go:71",
                "code": "slog.InfoContext(ctx, \"order recorded\", \"order\", e.GetOrderId(), \"customer\", e.GetCustomerId(),",
                "before": "if s.ledger.Record(e.GetOrderId(), e.GetCustomerId()) {",
                "after": "\"orders\", s.ledger.Orders(e.GetCustomerId()))",
@@ -231,7 +266,7 @@
               },
               {
                "kind": "read",
-               "loc": "pricing:internal/events/subscriber.go:72",
+               "loc": "golang/pricing:internal/events/subscriber.go:72",
                "code": "\"orders\", s.ledger.Orders(e.GetCustomerId()))",
                "before": "slog.InfoContext(ctx, \"order recorded\", \"order\", e.GetOrderId(), \"customer\", e.GetCustomerId(),",
                "after": "}",
@@ -240,17 +275,83 @@
                "kids": [
                 {
                  "kind": "arg",
-                 "loc": "pricing:internal/loyalty/ledger.go:37",
+                 "loc": "golang/pricing:internal/loyalty/ledger.go:37",
                  "code": "func (l *Ledger) Orders(customerID string) int {",
                  "before": "// Orders returns how many distinct orders customerID has placed.",
                  "after": "l.mu.Lock()",
                  "type": "string",
                  "fn": "Ledger.Orders",
-                 "via": "pricing:internal/events/subscriber.go:72"
+                 "via": "golang/pricing:internal/events/subscriber.go:72",
+                 "call": {
+                  "Steps": [
+                   {
+                    "Node": {
+                     "Project": "golang/orders",
+                     "File": "internal/pricer/pricer.go",
+                     "Name": "Client.Price",
+                     "Line": 21
+                    },
+                    "Via": "",
+                    "Method": ""
+                   },
+                   {
+                    "Node": {
+                     "Project": "golang/pricing",
+                     "File": "internal/server/server.go",
+                     "Name": "Server.Quote",
+                     "Line": 43
+                    },
+                    "Via": "grpc",
+                    "Method": "/pricing.v1.PricingService/Quote"
+                   },
+                   {
+                    "Node": {
+                     "Project": "golang/pricing",
+                     "File": "internal/loyalty/ledger.go",
+                     "Name": "Ledger.Orders",
+                     "Line": 37
+                    },
+                    "Via": "call",
+                    "Method": ""
+                   }
+                  ],
+                  "Sure": 0,
+                  "Iface": 0
+                 }
                 }
                ]
               }
              ]
+            }
+           ],
+           "hops": [
+            {
+             "kind": "pubsub",
+             "method": "topic order-placed",
+             "project": "golang/fulfillment",
+             "fn": "Subscriber.Run$1",
+             "addr": "golang/fulfillment:internal/events/subscriber.go:56"
+            },
+            {
+             "kind": "pubsub",
+             "method": "topic order-placed",
+             "project": "golang/pricing",
+             "fn": "Subscriber.Run$1",
+             "addr": "golang/pricing:internal/events/subscriber.go:51"
+            },
+            {
+             "kind": "pubsub:guess",
+             "method": "type example.com/samples/orders/api/events/v1.OrderPlaced",
+             "project": "golang/fulfillment",
+             "fn": "Subscriber.Handle",
+             "addr": "golang/fulfillment:internal/events/subscriber.go:75"
+            },
+            {
+             "kind": "pubsub:guess",
+             "method": "type example.com/samples/orders/api/events/v1.OrderPlaced",
+             "project": "golang/pricing",
+             "fn": "Subscriber.Handle",
+             "addr": "golang/pricing:internal/events/subscriber.go:65"
             }
            ]
           },
@@ -270,7 +371,7 @@
              "kids": [
               {
                "kind": "read",
-               "loc": "fulfillment:api/fulfillment/v1/fulfillment.pb.go:73",
+               "loc": "golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:73",
                "code": "return x.CustomerId",
                "before": "if x != nil {",
                "after": "}",
@@ -279,7 +380,7 @@
                "kids": [
                 {
                  "kind": "return",
-                 "loc": "fulfillment:internal/server/server.go:28",
+                 "loc": "golang/fulfillment:internal/server/server.go:28",
                  "code": "CustomerID: req.GetCustomerId(),",
                  "before": "ID:         req.GetOrderId(),",
                  "after": "Units:      req.GetUnits(),",
@@ -293,7 +394,7 @@
                    "kids": [
                     {
                      "kind": "read",
-                     "loc": "fulfillment:internal/plan/planner.go:56",
+                     "loc": "golang/fulfillment:internal/plan/planner.go:56",
                      "code": "if o.ID == \"\" || o.CustomerID == \"\" {",
                      "before": "func (p *Planner) Plan(ctx context.Context, o Order) (Shipment, bool, error) {",
                      "after": "return Shipment{}, false, fmt.Errorf(\"%w: missing order or customer\", ErrInvalid)",
@@ -302,7 +403,7 @@
                     },
                     {
                      "kind": "read",
-                     "loc": "fulfillment:internal/plan/quote.go:21",
+                     "loc": "golang/fulfillment:internal/plan/quote.go:21",
                      "code": "region, ship, err := p.rates.Rate(ctx, o.CustomerID, o.Units)",
                      "before": "func (p *Planner) quote(ctx context.Context, o Order) (costs, error) {",
                      "after": "if err != nil {",
@@ -311,17 +412,17 @@
                      "kids": [
                       {
                        "kind": "arg",
-                       "loc": "fulfillment:internal/shipping/client.go:33",
+                       "loc": "golang/fulfillment:internal/shipping/client.go:33",
                        "code": "func (c *Client) Rate(ctx context.Context, customerID string, units int64) (string, int64, error) {",
                        "before": "// and returns the customer's region with the delivery price.",
                        "after": "u, err := url.Parse(c.base)",
                        "type": "string",
                        "fn": "Client.Rate",
-                       "via": "fulfillment:internal/plan/quote.go:21",
+                       "via": "golang/fulfillment:internal/plan/quote.go:21",
                        "kids": [
                         {
                          "kind": "container",
-                         "loc": "fulfillment:internal/shipping/client.go:39",
+                         "loc": "golang/fulfillment:internal/shipping/client.go:39",
                          "code": "u.RawQuery = url.Values{\"customer_id\": {customerID}, \"units\": {strconv.FormatInt(units, 10)}}.Encode()",
                          "before": "u = u.JoinPath(\"rates\")",
                          "after": "req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)",
@@ -330,7 +431,7 @@
                          "kids": [
                           {
                            "kind": "transform",
-                           "loc": "fulfillment:internal/shipping/client.go:40",
+                           "loc": "golang/fulfillment:internal/shipping/client.go:40",
                            "code": "req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)",
                            "before": "u.RawQuery = url.Values{\"customer_id\": {customerID}, \"units\": {strconv.FormatInt(units, 10)}}.Encode()",
                            "after": "if err != nil {",
@@ -339,7 +440,7 @@
                            "kids": [
                             {
                              "kind": "transform",
-                             "loc": "fulfillment:internal/shipping/client.go:44",
+                             "loc": "golang/fulfillment:internal/shipping/client.go:44",
                              "code": "resp, err := c.http.Do(req)",
                              "before": "}",
                              "after": "if err != nil {",
@@ -348,7 +449,7 @@
                              "kids": [
                               {
                                "kind": "container",
-                               "loc": "fulfillment:internal/shipping/client.go:48",
+                               "loc": "golang/fulfillment:internal/shipping/client.go:48",
                                "code": "defer resp.Body.Close()",
                                "before": "}",
                                "after": "if resp.StatusCode != http.StatusOK {",
@@ -357,7 +458,7 @@
                               },
                               {
                                "kind": "container",
-                               "loc": "fulfillment:internal/shipping/client.go:49",
+                               "loc": "golang/fulfillment:internal/shipping/client.go:49",
                                "code": "if resp.StatusCode != http.StatusOK {",
                                "before": "defer resp.Body.Close()",
                                "after": "return \"\", 0, fmt.Errorf(\"get rate: unexpected status %s\", resp.Status)",
@@ -366,7 +467,7 @@
                               },
                               {
                                "kind": "container",
-                               "loc": "fulfillment:internal/shipping/client.go:50",
+                               "loc": "golang/fulfillment:internal/shipping/client.go:50",
                                "code": "return \"\", 0, fmt.Errorf(\"get rate: unexpected status %s\", resp.Status)",
                                "before": "if resp.StatusCode != http.StatusOK {",
                                "after": "}",
@@ -375,7 +476,7 @@
                               },
                               {
                                "kind": "container",
-                               "loc": "fulfillment:internal/shipping/client.go:53",
+                               "loc": "golang/fulfillment:internal/shipping/client.go:53",
                                "code": "if err := json.NewDecoder(resp.Body).Decode(\u0026r); err != nil {",
                                "before": "var r rate",
                                "after": "return \"\", 0, fmt.Errorf(\"decode rate: %w\", err)",
@@ -394,7 +495,7 @@
                     },
                     {
                      "kind": "read",
-                     "loc": "fulfillment:internal/plan/quote.go:43",
+                     "loc": "golang/fulfillment:internal/plan/quote.go:43",
                      "code": "tax, err := p.taxOn(ctx, o.CustomerID, region, ins)",
                      "before": "}",
                      "after": "if err != nil {",
@@ -403,33 +504,42 @@
                      "kids": [
                       {
                        "kind": "arg",
-                       "loc": "fulfillment:internal/plan/quote.go:52",
+                       "loc": "golang/fulfillment:internal/plan/quote.go:52",
                        "code": "func (p *Planner) taxOn(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
                        "before": "// a pricing restart drops the odd call. A cancelled ctx is not retried.",
                        "after": "tax, err := p.askTax(ctx, customerID, region, cents)",
                        "type": "string",
                        "fn": "Planner.taxOn",
-                       "via": "fulfillment:internal/plan/quote.go:43",
+                       "via": "golang/fulfillment:internal/plan/quote.go:43",
                        "kids": [
                         {
                          "kind": "arg",
-                         "loc": "fulfillment:internal/plan/quote.go:61",
+                         "loc": "golang/fulfillment:internal/plan/quote.go:61",
                          "code": "func (p *Planner) askTax(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
                          "before": "// askTax is one call to pricing, bounded by taxTimeout.",
                          "after": "ctx, cancel := context.WithTimeout(ctx, taxTimeout)",
                          "type": "string",
                          "fn": "Planner.askTax",
-                         "via": "fulfillment:internal/plan/quote.go:53",
+                         "via": "golang/fulfillment:internal/plan/quote.go:53",
                          "kids": [
                           {
                            "kind": "arg",
-                           "loc": "fulfillment:internal/pricing/client.go:24",
+                           "loc": "golang/fulfillment:internal/pricing/client.go:24",
                            "code": "func (c *Client) Tax(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
                            "before": "// cents and returns only its tax.",
                            "after": "resp, err := c.rpc.Quote(ctx, \u0026pricingv1.QuoteRequest{",
                            "type": "string",
                            "fn": "Client.Tax",
-                           "via": "fulfillment:internal/plan/quote.go:64"
+                           "via": "golang/fulfillment:internal/plan/quote.go:64",
+                           "hops": [
+                            {
+                             "kind": "grpc",
+                             "method": "/pricing.v1.PricingService/Quote",
+                             "project": "golang/pricing",
+                             "fn": "Server.Quote",
+                             "addr": "golang/pricing:internal/server/server.go:43"
+                            }
+                           ]
                           }
                          ]
                         }
@@ -445,11 +555,46 @@
               }
              ]
             }
+           ],
+           "hops": [
+            {
+             "kind": "grpc",
+             "method": "/fulfillment.v1.FulfillmentService/Schedule",
+             "project": "golang/fulfillment",
+             "fn": "Server.Schedule",
+             "addr": "golang/fulfillment:internal/server/server.go:25"
+            }
            ]
           }
          ]
         }
-       ]
+       ],
+       "call": {
+        "Steps": [
+         {
+          "Node": {
+           "Project": "golang/orders",
+           "File": "internal/order/order.go",
+           "Name": "Service.Place",
+           "Line": 82
+          },
+          "Via": "",
+          "Method": ""
+         },
+         {
+          "Node": {
+           "Project": "golang/orders",
+           "File": "internal/pricer/pricer.go",
+           "Name": "Client.Price",
+           "Line": 21
+          },
+          "Via": "iface:sure",
+          "Method": ""
+         }
+        ],
+        "Sure": 1,
+        "Iface": 1
+       }
       }
      ]
     },
@@ -460,7 +605,7 @@
      "kids": [
       {
        "kind": "read",
-       "loc": "pricing:api/pricing/v1/pricing.pb.go:125",
+       "loc": "golang/pricing:api/pricing/v1/pricing.pb.go:125",
        "code": "return x.CustomerId",
        "before": "if x != nil {",
        "after": "}",
@@ -469,7 +614,7 @@
        "kids": [
         {
          "kind": "return",
-         "loc": "pricing:internal/server/server.go:47",
+         "loc": "golang/pricing:internal/server/server.go:47",
          "code": "tier, err := s.tiers.Tier(ctx, req.GetCustomerId())",
          "before": "}",
          "after": "if err != nil {",
@@ -478,17 +623,17 @@
          "kids": [
           {
            "kind": "arg",
-           "loc": "pricing:internal/customers/client.go:27",
+           "loc": "golang/pricing:internal/customers/client.go:27",
            "code": "func (c *Client) Tier(ctx context.Context, id string) (string, error) {",
            "before": "// Anonymous and unknown customers price as standard.",
            "after": "if id == \"\" {",
            "type": "string",
            "fn": "Client.Tier",
-           "via": "pricing:internal/server/server.go:47",
+           "via": "golang/pricing:internal/server/server.go:47",
            "kids": [
             {
              "kind": "transform",
-             "loc": "pricing:internal/customers/client.go:31",
+             "loc": "golang/pricing:internal/customers/client.go:31",
              "code": "u, err := url.JoinPath(c.base, ordersapi.CustomerPath, url.PathEscape(id))",
              "before": "}",
              "after": "if err != nil {",
@@ -497,7 +642,7 @@
              "kids": [
               {
                "kind": "transform",
-               "loc": "pricing:internal/customers/client.go:35",
+               "loc": "golang/pricing:internal/customers/client.go:35",
                "code": "req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)",
                "before": "}",
                "after": "if err != nil {",
@@ -506,7 +651,7 @@
                "kids": [
                 {
                  "kind": "transform",
-                 "loc": "pricing:internal/customers/client.go:39",
+                 "loc": "golang/pricing:internal/customers/client.go:39",
                  "code": "resp, err := c.http.Do(req)",
                  "before": "}",
                  "after": "if err != nil {",
@@ -515,60 +660,410 @@
                  "kids": [
                   {
                    "kind": "container",
-                   "loc": "pricing:internal/customers/client.go:43",
+                   "loc": "golang/pricing:internal/customers/client.go:43",
                    "code": "defer resp.Body.Close()",
                    "before": "}",
                    "type": "*io.ReadCloser",
-                   "fn": "Client.Tier"
+                   "fn": "Client.Tier",
+                   "call": {
+                    "Steps": [
+                     {
+                      "Node": {
+                       "Project": "golang/orders",
+                       "File": "internal/pricer/pricer.go",
+                       "Name": "Client.Price",
+                       "Line": 21
+                      },
+                      "Via": "",
+                      "Method": ""
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/pricing",
+                       "File": "internal/server/server.go",
+                       "Name": "Server.Quote",
+                       "Line": 43
+                      },
+                      "Via": "grpc",
+                      "Method": "/pricing.v1.PricingService/Quote"
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/pricing",
+                       "File": "internal/customers/client.go",
+                       "Name": "Client.Tier",
+                       "Line": 27
+                      },
+                      "Via": "iface:sure",
+                      "Method": ""
+                     }
+                    ],
+                    "Sure": 1,
+                    "Iface": 1
+                   }
                   },
                   {
                    "kind": "container",
-                   "loc": "pricing:internal/customers/client.go:45",
+                   "loc": "golang/pricing:internal/customers/client.go:45",
                    "code": "if resp.StatusCode == http.StatusNotFound {",
                    "after": "return ordersapi.TierStandard, nil",
                    "type": "*int",
-                   "fn": "Client.Tier"
+                   "fn": "Client.Tier",
+                   "call": {
+                    "Steps": [
+                     {
+                      "Node": {
+                       "Project": "golang/orders",
+                       "File": "internal/pricer/pricer.go",
+                       "Name": "Client.Price",
+                       "Line": 21
+                      },
+                      "Via": "",
+                      "Method": ""
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/pricing",
+                       "File": "internal/server/server.go",
+                       "Name": "Server.Quote",
+                       "Line": 43
+                      },
+                      "Via": "grpc",
+                      "Method": "/pricing.v1.PricingService/Quote"
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/pricing",
+                       "File": "internal/customers/client.go",
+                       "Name": "Client.Tier",
+                       "Line": 27
+                      },
+                      "Via": "iface:sure",
+                      "Method": ""
+                     }
+                    ],
+                    "Sure": 1,
+                    "Iface": 1
+                   }
                   },
                   {
                    "kind": "container",
-                   "loc": "pricing:internal/customers/client.go:47",
+                   "loc": "golang/pricing:internal/customers/client.go:47",
                    "code": "} else if resp.StatusCode != http.StatusOK {",
                    "before": "return ordersapi.TierStandard, nil",
                    "after": "return \"\", fmt.Errorf(\"get customer: unexpected status %s\", resp.Status)",
                    "type": "*int",
-                   "fn": "Client.Tier"
+                   "fn": "Client.Tier",
+                   "call": {
+                    "Steps": [
+                     {
+                      "Node": {
+                       "Project": "golang/orders",
+                       "File": "internal/pricer/pricer.go",
+                       "Name": "Client.Price",
+                       "Line": 21
+                      },
+                      "Via": "",
+                      "Method": ""
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/pricing",
+                       "File": "internal/server/server.go",
+                       "Name": "Server.Quote",
+                       "Line": 43
+                      },
+                      "Via": "grpc",
+                      "Method": "/pricing.v1.PricingService/Quote"
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/pricing",
+                       "File": "internal/customers/client.go",
+                       "Name": "Client.Tier",
+                       "Line": 27
+                      },
+                      "Via": "iface:sure",
+                      "Method": ""
+                     }
+                    ],
+                    "Sure": 1,
+                    "Iface": 1
+                   }
                   },
                   {
                    "kind": "container",
-                   "loc": "pricing:internal/customers/client.go:48",
+                   "loc": "golang/pricing:internal/customers/client.go:48",
                    "code": "return \"\", fmt.Errorf(\"get customer: unexpected status %s\", resp.Status)",
                    "before": "} else if resp.StatusCode != http.StatusOK {",
                    "after": "}",
                    "type": "*string",
-                   "fn": "Client.Tier"
+                   "fn": "Client.Tier",
+                   "call": {
+                    "Steps": [
+                     {
+                      "Node": {
+                       "Project": "golang/orders",
+                       "File": "internal/pricer/pricer.go",
+                       "Name": "Client.Price",
+                       "Line": 21
+                      },
+                      "Via": "",
+                      "Method": ""
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/pricing",
+                       "File": "internal/server/server.go",
+                       "Name": "Server.Quote",
+                       "Line": 43
+                      },
+                      "Via": "grpc",
+                      "Method": "/pricing.v1.PricingService/Quote"
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/pricing",
+                       "File": "internal/customers/client.go",
+                       "Name": "Client.Tier",
+                       "Line": 27
+                      },
+                      "Via": "iface:sure",
+                      "Method": ""
+                     }
+                    ],
+                    "Sure": 1,
+                    "Iface": 1
+                   }
                   },
                   {
                    "kind": "container",
-                   "loc": "pricing:internal/customers/client.go:51",
+                   "loc": "golang/pricing:internal/customers/client.go:51",
                    "code": "if err := json.NewDecoder(resp.Body).Decode(\u0026cust); err != nil {",
                    "before": "var cust ordersapi.Customer",
                    "after": "return \"\", fmt.Errorf(\"decode customer: %w\", err)",
                    "type": "*io.ReadCloser",
-                   "fn": "Client.Tier"
+                   "fn": "Client.Tier",
+                   "call": {
+                    "Steps": [
+                     {
+                      "Node": {
+                       "Project": "golang/orders",
+                       "File": "internal/pricer/pricer.go",
+                       "Name": "Client.Price",
+                       "Line": 21
+                      },
+                      "Via": "",
+                      "Method": ""
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/pricing",
+                       "File": "internal/server/server.go",
+                       "Name": "Server.Quote",
+                       "Line": 43
+                      },
+                      "Via": "grpc",
+                      "Method": "/pricing.v1.PricingService/Quote"
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/pricing",
+                       "File": "internal/customers/client.go",
+                       "Name": "Client.Tier",
+                       "Line": 27
+                      },
+                      "Via": "iface:sure",
+                      "Method": ""
+                     }
+                    ],
+                    "Sure": 1,
+                    "Iface": 1
+                   }
                   }
-                 ]
+                 ],
+                 "call": {
+                  "Steps": [
+                   {
+                    "Node": {
+                     "Project": "golang/orders",
+                     "File": "internal/pricer/pricer.go",
+                     "Name": "Client.Price",
+                     "Line": 21
+                    },
+                    "Via": "",
+                    "Method": ""
+                   },
+                   {
+                    "Node": {
+                     "Project": "golang/pricing",
+                     "File": "internal/server/server.go",
+                     "Name": "Server.Quote",
+                     "Line": 43
+                    },
+                    "Via": "grpc",
+                    "Method": "/pricing.v1.PricingService/Quote"
+                   },
+                   {
+                    "Node": {
+                     "Project": "golang/pricing",
+                     "File": "internal/customers/client.go",
+                     "Name": "Client.Tier",
+                     "Line": 27
+                    },
+                    "Via": "iface:sure",
+                    "Method": ""
+                   }
+                  ],
+                  "Sure": 1,
+                  "Iface": 1
+                 }
                 }
-               ]
+               ],
+               "call": {
+                "Steps": [
+                 {
+                  "Node": {
+                   "Project": "golang/orders",
+                   "File": "internal/pricer/pricer.go",
+                   "Name": "Client.Price",
+                   "Line": 21
+                  },
+                  "Via": "",
+                  "Method": ""
+                 },
+                 {
+                  "Node": {
+                   "Project": "golang/pricing",
+                   "File": "internal/server/server.go",
+                   "Name": "Server.Quote",
+                   "Line": 43
+                  },
+                  "Via": "grpc",
+                  "Method": "/pricing.v1.PricingService/Quote"
+                 },
+                 {
+                  "Node": {
+                   "Project": "golang/pricing",
+                   "File": "internal/customers/client.go",
+                   "Name": "Client.Tier",
+                   "Line": 27
+                  },
+                  "Via": "iface:sure",
+                  "Method": ""
+                 }
+                ],
+                "Sure": 1,
+                "Iface": 1
+               }
               }
-             ]
+             ],
+             "call": {
+              "Steps": [
+               {
+                "Node": {
+                 "Project": "golang/orders",
+                 "File": "internal/pricer/pricer.go",
+                 "Name": "Client.Price",
+                 "Line": 21
+                },
+                "Via": "",
+                "Method": ""
+               },
+               {
+                "Node": {
+                 "Project": "golang/pricing",
+                 "File": "internal/server/server.go",
+                 "Name": "Server.Quote",
+                 "Line": 43
+                },
+                "Via": "grpc",
+                "Method": "/pricing.v1.PricingService/Quote"
+               },
+               {
+                "Node": {
+                 "Project": "golang/pricing",
+                 "File": "internal/customers/client.go",
+                 "Name": "Client.Tier",
+                 "Line": 27
+                },
+                "Via": "iface:sure",
+                "Method": ""
+               }
+              ],
+              "Sure": 1,
+              "Iface": 1
+             }
             }
-           ]
+           ],
+           "call": {
+            "Steps": [
+             {
+              "Node": {
+               "Project": "golang/orders",
+               "File": "internal/pricer/pricer.go",
+               "Name": "Client.Price",
+               "Line": 21
+              },
+              "Via": "",
+              "Method": ""
+             },
+             {
+              "Node": {
+               "Project": "golang/pricing",
+               "File": "internal/server/server.go",
+               "Name": "Server.Quote",
+               "Line": 43
+              },
+              "Via": "grpc",
+              "Method": "/pricing.v1.PricingService/Quote"
+             },
+             {
+              "Node": {
+               "Project": "golang/pricing",
+               "File": "internal/customers/client.go",
+               "Name": "Client.Tier",
+               "Line": 27
+              },
+              "Via": "iface:sure",
+              "Method": ""
+             }
+            ],
+            "Sure": 1,
+            "Iface": 1
+           }
           }
-         ]
+         ],
+         "call": {
+          "Steps": [
+           {
+            "Node": {
+             "Project": "golang/orders",
+             "File": "internal/pricer/pricer.go",
+             "Name": "Client.Price",
+             "Line": 21
+            },
+            "Via": "",
+            "Method": ""
+           },
+           {
+            "Node": {
+             "Project": "golang/pricing",
+             "File": "internal/server/server.go",
+             "Name": "Server.Quote",
+             "Line": 43
+            },
+            "Via": "grpc",
+            "Method": "/pricing.v1.PricingService/Quote"
+           }
+          ],
+          "Sure": 0,
+          "Iface": 0
+         }
         },
         {
          "kind": "return",
-         "loc": "pricing:internal/server/server.go:56",
+         "loc": "golang/pricing:internal/server/server.go:56",
          "code": "ship, err := s.shipping.Rate(ctx, req.GetCustomerId(), quote.Units(lines))",
          "before": "}",
          "after": "if err != nil {",
@@ -577,17 +1072,17 @@
          "kids": [
           {
            "kind": "arg",
-           "loc": "pricing:internal/shipping/client.go:32",
+           "loc": "golang/pricing:internal/shipping/client.go:32",
            "code": "func (c *Client) Rate(ctx context.Context, customerID string, units int64) (int64, error) {",
            "before": "// Rate makes the HTTP hop GET {base}/rates?customer_id=ID\u0026units=N to shipping.",
            "after": "if units \u003c= 0 {",
            "type": "string",
            "fn": "Client.Rate",
-           "via": "pricing:internal/server/server.go:56",
+           "via": "golang/pricing:internal/server/server.go:56",
            "kids": [
             {
              "kind": "container",
-             "loc": "pricing:internal/shipping/client.go:42",
+             "loc": "golang/pricing:internal/shipping/client.go:42",
              "code": "\"customer_id\": {customerID},",
              "before": "u.RawQuery = url.Values{",
              "after": "\"units\":       {strconv.FormatInt(units, 10)},",
@@ -596,7 +1091,7 @@
              "kids": [
               {
                "kind": "transform",
-               "loc": "pricing:internal/shipping/client.go:44",
+               "loc": "golang/pricing:internal/shipping/client.go:44",
                "code": "}.Encode()",
                "before": "\"units\":       {strconv.FormatInt(units, 10)},",
                "type": "string",
@@ -604,7 +1099,7 @@
                "kids": [
                 {
                  "kind": "container",
-                 "loc": "pricing:internal/shipping/client.go:41",
+                 "loc": "golang/pricing:internal/shipping/client.go:41",
                  "code": "u.RawQuery = url.Values{",
                  "before": "u = u.JoinPath(\"rates\")",
                  "after": "\"customer_id\": {customerID},",
@@ -613,7 +1108,7 @@
                  "kids": [
                   {
                    "kind": "transform",
-                   "loc": "pricing:internal/shipping/client.go:46",
+                   "loc": "golang/pricing:internal/shipping/client.go:46",
                    "code": "req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)",
                    "after": "if err != nil {",
                    "type": "string",
@@ -621,7 +1116,7 @@
                    "kids": [
                     {
                      "kind": "transform",
-                     "loc": "pricing:internal/shipping/client.go:50",
+                     "loc": "golang/pricing:internal/shipping/client.go:50",
                      "code": "resp, err := c.http.Do(req)",
                      "before": "}",
                      "after": "if err != nil {",
@@ -630,64 +1125,521 @@
                      "kids": [
                       {
                        "kind": "container",
-                       "loc": "pricing:internal/shipping/client.go:54",
+                       "loc": "golang/pricing:internal/shipping/client.go:54",
                        "code": "defer resp.Body.Close()",
                        "before": "}",
                        "type": "*io.ReadCloser",
-                       "fn": "Client.Rate"
+                       "fn": "Client.Rate",
+                       "call": {
+                        "Steps": [
+                         {
+                          "Node": {
+                           "Project": "golang/orders",
+                           "File": "internal/pricer/pricer.go",
+                           "Name": "Client.Price",
+                           "Line": 21
+                          },
+                          "Via": "",
+                          "Method": ""
+                         },
+                         {
+                          "Node": {
+                           "Project": "golang/pricing",
+                           "File": "internal/server/server.go",
+                           "Name": "Server.Quote",
+                           "Line": 43
+                          },
+                          "Via": "grpc",
+                          "Method": "/pricing.v1.PricingService/Quote"
+                         },
+                         {
+                          "Node": {
+                           "Project": "golang/pricing",
+                           "File": "internal/shipping/client.go",
+                           "Name": "Client.Rate",
+                           "Line": 32
+                          },
+                          "Via": "iface:sure",
+                          "Method": ""
+                         }
+                        ],
+                        "Sure": 1,
+                        "Iface": 1
+                       }
                       },
                       {
                        "kind": "container",
-                       "loc": "pricing:internal/shipping/client.go:56",
+                       "loc": "golang/pricing:internal/shipping/client.go:56",
                        "code": "if resp.StatusCode != http.StatusOK {",
                        "after": "return 0, fmt.Errorf(\"get rate: unexpected status %s\", resp.Status)",
                        "type": "*int",
-                       "fn": "Client.Rate"
+                       "fn": "Client.Rate",
+                       "call": {
+                        "Steps": [
+                         {
+                          "Node": {
+                           "Project": "golang/orders",
+                           "File": "internal/pricer/pricer.go",
+                           "Name": "Client.Price",
+                           "Line": 21
+                          },
+                          "Via": "",
+                          "Method": ""
+                         },
+                         {
+                          "Node": {
+                           "Project": "golang/pricing",
+                           "File": "internal/server/server.go",
+                           "Name": "Server.Quote",
+                           "Line": 43
+                          },
+                          "Via": "grpc",
+                          "Method": "/pricing.v1.PricingService/Quote"
+                         },
+                         {
+                          "Node": {
+                           "Project": "golang/pricing",
+                           "File": "internal/shipping/client.go",
+                           "Name": "Client.Rate",
+                           "Line": 32
+                          },
+                          "Via": "iface:sure",
+                          "Method": ""
+                         }
+                        ],
+                        "Sure": 1,
+                        "Iface": 1
+                       }
                       },
                       {
                        "kind": "container",
-                       "loc": "pricing:internal/shipping/client.go:57",
+                       "loc": "golang/pricing:internal/shipping/client.go:57",
                        "code": "return 0, fmt.Errorf(\"get rate: unexpected status %s\", resp.Status)",
                        "before": "if resp.StatusCode != http.StatusOK {",
                        "after": "}",
                        "type": "*string",
-                       "fn": "Client.Rate"
+                       "fn": "Client.Rate",
+                       "call": {
+                        "Steps": [
+                         {
+                          "Node": {
+                           "Project": "golang/orders",
+                           "File": "internal/pricer/pricer.go",
+                           "Name": "Client.Price",
+                           "Line": 21
+                          },
+                          "Via": "",
+                          "Method": ""
+                         },
+                         {
+                          "Node": {
+                           "Project": "golang/pricing",
+                           "File": "internal/server/server.go",
+                           "Name": "Server.Quote",
+                           "Line": 43
+                          },
+                          "Via": "grpc",
+                          "Method": "/pricing.v1.PricingService/Quote"
+                         },
+                         {
+                          "Node": {
+                           "Project": "golang/pricing",
+                           "File": "internal/shipping/client.go",
+                           "Name": "Client.Rate",
+                           "Line": 32
+                          },
+                          "Via": "iface:sure",
+                          "Method": ""
+                         }
+                        ],
+                        "Sure": 1,
+                        "Iface": 1
+                       }
                       },
                       {
                        "kind": "container",
-                       "loc": "pricing:internal/shipping/client.go:60",
+                       "loc": "golang/pricing:internal/shipping/client.go:60",
                        "code": "if err := json.NewDecoder(resp.Body).Decode(\u0026r); err != nil {",
                        "before": "var r rate",
                        "after": "return 0, fmt.Errorf(\"decode rate: %w\", err)",
                        "type": "*io.ReadCloser",
-                       "fn": "Client.Rate"
+                       "fn": "Client.Rate",
+                       "call": {
+                        "Steps": [
+                         {
+                          "Node": {
+                           "Project": "golang/orders",
+                           "File": "internal/pricer/pricer.go",
+                           "Name": "Client.Price",
+                           "Line": 21
+                          },
+                          "Via": "",
+                          "Method": ""
+                         },
+                         {
+                          "Node": {
+                           "Project": "golang/pricing",
+                           "File": "internal/server/server.go",
+                           "Name": "Server.Quote",
+                           "Line": 43
+                          },
+                          "Via": "grpc",
+                          "Method": "/pricing.v1.PricingService/Quote"
+                         },
+                         {
+                          "Node": {
+                           "Project": "golang/pricing",
+                           "File": "internal/shipping/client.go",
+                           "Name": "Client.Rate",
+                           "Line": 32
+                          },
+                          "Via": "iface:sure",
+                          "Method": ""
+                         }
+                        ],
+                        "Sure": 1,
+                        "Iface": 1
+                       }
                       }
-                     ]
+                     ],
+                     "call": {
+                      "Steps": [
+                       {
+                        "Node": {
+                         "Project": "golang/orders",
+                         "File": "internal/pricer/pricer.go",
+                         "Name": "Client.Price",
+                         "Line": 21
+                        },
+                        "Via": "",
+                        "Method": ""
+                       },
+                       {
+                        "Node": {
+                         "Project": "golang/pricing",
+                         "File": "internal/server/server.go",
+                         "Name": "Server.Quote",
+                         "Line": 43
+                        },
+                        "Via": "grpc",
+                        "Method": "/pricing.v1.PricingService/Quote"
+                       },
+                       {
+                        "Node": {
+                         "Project": "golang/pricing",
+                         "File": "internal/shipping/client.go",
+                         "Name": "Client.Rate",
+                         "Line": 32
+                        },
+                        "Via": "iface:sure",
+                        "Method": ""
+                       }
+                      ],
+                      "Sure": 1,
+                      "Iface": 1
+                     }
                     }
-                   ]
+                   ],
+                   "call": {
+                    "Steps": [
+                     {
+                      "Node": {
+                       "Project": "golang/orders",
+                       "File": "internal/pricer/pricer.go",
+                       "Name": "Client.Price",
+                       "Line": 21
+                      },
+                      "Via": "",
+                      "Method": ""
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/pricing",
+                       "File": "internal/server/server.go",
+                       "Name": "Server.Quote",
+                       "Line": 43
+                      },
+                      "Via": "grpc",
+                      "Method": "/pricing.v1.PricingService/Quote"
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/pricing",
+                       "File": "internal/shipping/client.go",
+                       "Name": "Client.Rate",
+                       "Line": 32
+                      },
+                      "Via": "iface:sure",
+                      "Method": ""
+                     }
+                    ],
+                    "Sure": 1,
+                    "Iface": 1
+                   }
                   }
-                 ]
+                 ],
+                 "call": {
+                  "Steps": [
+                   {
+                    "Node": {
+                     "Project": "golang/orders",
+                     "File": "internal/pricer/pricer.go",
+                     "Name": "Client.Price",
+                     "Line": 21
+                    },
+                    "Via": "",
+                    "Method": ""
+                   },
+                   {
+                    "Node": {
+                     "Project": "golang/pricing",
+                     "File": "internal/server/server.go",
+                     "Name": "Server.Quote",
+                     "Line": 43
+                    },
+                    "Via": "grpc",
+                    "Method": "/pricing.v1.PricingService/Quote"
+                   },
+                   {
+                    "Node": {
+                     "Project": "golang/pricing",
+                     "File": "internal/shipping/client.go",
+                     "Name": "Client.Rate",
+                     "Line": 32
+                    },
+                    "Via": "iface:sure",
+                    "Method": ""
+                   }
+                  ],
+                  "Sure": 1,
+                  "Iface": 1
+                 }
                 }
-               ]
+               ],
+               "call": {
+                "Steps": [
+                 {
+                  "Node": {
+                   "Project": "golang/orders",
+                   "File": "internal/pricer/pricer.go",
+                   "Name": "Client.Price",
+                   "Line": 21
+                  },
+                  "Via": "",
+                  "Method": ""
+                 },
+                 {
+                  "Node": {
+                   "Project": "golang/pricing",
+                   "File": "internal/server/server.go",
+                   "Name": "Server.Quote",
+                   "Line": 43
+                  },
+                  "Via": "grpc",
+                  "Method": "/pricing.v1.PricingService/Quote"
+                 },
+                 {
+                  "Node": {
+                   "Project": "golang/pricing",
+                   "File": "internal/shipping/client.go",
+                   "Name": "Client.Rate",
+                   "Line": 32
+                  },
+                  "Via": "iface:sure",
+                  "Method": ""
+                 }
+                ],
+                "Sure": 1,
+                "Iface": 1
+               }
               }
-             ]
+             ],
+             "call": {
+              "Steps": [
+               {
+                "Node": {
+                 "Project": "golang/orders",
+                 "File": "internal/pricer/pricer.go",
+                 "Name": "Client.Price",
+                 "Line": 21
+                },
+                "Via": "",
+                "Method": ""
+               },
+               {
+                "Node": {
+                 "Project": "golang/pricing",
+                 "File": "internal/server/server.go",
+                 "Name": "Server.Quote",
+                 "Line": 43
+                },
+                "Via": "grpc",
+                "Method": "/pricing.v1.PricingService/Quote"
+               },
+               {
+                "Node": {
+                 "Project": "golang/pricing",
+                 "File": "internal/shipping/client.go",
+                 "Name": "Client.Rate",
+                 "Line": 32
+                },
+                "Via": "iface:sure",
+                "Method": ""
+               }
+              ],
+              "Sure": 1,
+              "Iface": 1
+             }
             }
-           ]
+           ],
+           "call": {
+            "Steps": [
+             {
+              "Node": {
+               "Project": "golang/orders",
+               "File": "internal/pricer/pricer.go",
+               "Name": "Client.Price",
+               "Line": 21
+              },
+              "Via": "",
+              "Method": ""
+             },
+             {
+              "Node": {
+               "Project": "golang/pricing",
+               "File": "internal/server/server.go",
+               "Name": "Server.Quote",
+               "Line": 43
+              },
+              "Via": "grpc",
+              "Method": "/pricing.v1.PricingService/Quote"
+             },
+             {
+              "Node": {
+               "Project": "golang/pricing",
+               "File": "internal/shipping/client.go",
+               "Name": "Client.Rate",
+               "Line": 32
+              },
+              "Via": "iface:sure",
+              "Method": ""
+             }
+            ],
+            "Sure": 1,
+            "Iface": 1
+           }
           }
-         ]
+         ],
+         "call": {
+          "Steps": [
+           {
+            "Node": {
+             "Project": "golang/orders",
+             "File": "internal/pricer/pricer.go",
+             "Name": "Client.Price",
+             "Line": 21
+            },
+            "Via": "",
+            "Method": ""
+           },
+           {
+            "Node": {
+             "Project": "golang/pricing",
+             "File": "internal/server/server.go",
+             "Name": "Server.Quote",
+             "Line": 43
+            },
+            "Via": "grpc",
+            "Method": "/pricing.v1.PricingService/Quote"
+           }
+          ],
+          "Sure": 0,
+          "Iface": 0
+         }
         },
         {
          "kind": "return",
-         "loc": "pricing:internal/server/server.go:60",
+         "loc": "golang/pricing:internal/server/server.go:60",
          "code": "buyer := quote.Customer{Tier: tier, Region: req.GetRegion(), PriorOrders: s.loyalty.Orders(req.GetCustomerId())}",
          "before": "}",
          "after": "q, err := quote.Calculate(lines, buyer, ship)",
          "type": "string",
-         "fn": "Server.Quote"
+         "fn": "Server.Quote",
+         "call": {
+          "Steps": [
+           {
+            "Node": {
+             "Project": "golang/orders",
+             "File": "internal/pricer/pricer.go",
+             "Name": "Client.Price",
+             "Line": 21
+            },
+            "Via": "",
+            "Method": ""
+           },
+           {
+            "Node": {
+             "Project": "golang/pricing",
+             "File": "internal/server/server.go",
+             "Name": "Server.Quote",
+             "Line": 43
+            },
+            "Via": "grpc",
+            "Method": "/pricing.v1.PricingService/Quote"
+           }
+          ],
+          "Sure": 0,
+          "Iface": 0
+         }
         }
-       ]
+       ],
+       "call": {
+        "Steps": [
+         {
+          "Node": {
+           "Project": "golang/orders",
+           "File": "internal/pricer/pricer.go",
+           "Name": "Client.Price",
+           "Line": 21
+          },
+          "Via": "",
+          "Method": ""
+         },
+         {
+          "Node": {
+           "Project": "golang/pricing",
+           "File": "internal/server/server.go",
+           "Name": "Server.Quote",
+           "Line": 43
+          },
+          "Via": "grpc",
+          "Method": "/pricing.v1.PricingService/Quote"
+         },
+         {
+          "Node": {
+           "Project": "golang/pricing",
+           "File": "api/pricing/v1/pricing.pb.go",
+           "Name": "QuoteRequest.GetCustomerId",
+           "Line": 123
+          },
+          "Via": "call",
+          "Method": ""
+         }
+        ],
+        "Sure": 0,
+        "Iface": 0
+       }
       }
      ]
+    }
+   ],
+   "hops": [
+    {
+     "kind": "grpc",
+     "method": "/pricing.v1.PricingService/Quote",
+     "project": "golang/pricing",
+     "fn": "Server.Quote",
+     "addr": "golang/pricing:internal/server/server.go:43"
     }
    ]
   }

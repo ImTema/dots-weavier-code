@@ -3,6 +3,7 @@ package domain
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,11 +15,23 @@ import (
 
 var update = flag.Bool("update", false, "rewrite golden files under testdata/")
 
-// TestTraceFieldGolden pins both trees of Go, Java and Kotlin field traces, so
-// refactors of field*.go and jvm_field.go can be checked byte for byte. Call paths
-// and hops come from the user's index and are left out. Run with -update after an
-// intended change.
+// TestTraceFieldGolden pins field trace runs of Go, Java and Kotlin, so refactors
+// of field*.go and jvm_field.go can be checked byte for byte: both trees, and for
+// the samples, which are indexed first, the call paths, the hops and, with
+// follow, the traces grafted behind them. Run with -update after an intended
+// change.
 func TestTraceFieldGolden(t *testing.T) {
+	isolate(t)
+	_, err := InitWorkspace("../../samples", "")
+	require.NoError(t, err)
+	require.NoError(t, Index(t.Context(), IndexOptions{Progress: func(r IndexResult) {
+		assert.NoError(t, r.Err, "index %s", r.Project)
+	}}))
+	type fieldCase struct {
+		ws, addr string
+		follow   int
+	}
+	var cases []fieldCase
 	for _, c := range []struct{ ws, addr string }{
 		{"../../cmd/dotweavier/testdata", "fieldproj:main.go:16"},
 		{"../../cmd/dotweavier/testdata", "fieldproj:main.go:30"},
@@ -52,13 +65,26 @@ func TestTraceFieldGolden(t *testing.T) {
 		{"testdata", "jvmcases/kotlin:src/main/kotlin/cases/Cases.kt:33"},
 		{"testdata", "jvmcases/kotlin:src/main/kotlin/cases/Cases.kt:42"},
 	} {
+		cases = append(cases, fieldCase{c.ws, c.addr, 0})
+	}
+	// Hops followed: gRPC Go to Go, gRPC Go to Java, Pub/Sub Go to Go.
+	cases = append(cases,
+		fieldCase{"../../samples/golang", "orders:internal/pricer/pricer.go:23", 2},
+		fieldCase{"../../samples", "golang/orders:internal/inventory/client.go:26", 1},
+		fieldCase{"../../samples", "golang/orders:internal/events/publisher.go:44", 1},
+	)
+	for _, c := range cases {
 		name := strings.NewReplacer("/", "_", ":", "_").Replace(c.addr)
+		if c.follow > 0 {
+			name += fmt.Sprintf("_follow%d", c.follow)
+		}
 		t.Run(name, func(t *testing.T) {
-			r, err := TraceField(t.Context(), FieldQuery{Dir: c.ws}, c.addr)
+			r, err := TraceField(t.Context(), FieldQuery{Dir: c.ws, Follow: c.follow}, c.addr)
 			require.NoError(t, err)
-			strip(r.Origin)
-			strip(r.Uses)
-			r.Warnings = nil // timings and absolute paths; pinned by the warning tests instead
+			for _, w := range r.Warnings {
+				assert.NotContains(t, w, "hop not followed", "follow must succeed")
+			}
+			r.Warnings, r.Dir, r.Addr = nil, "", "" // timings and absolute paths; pinned by the warning tests instead
 			got, err := json.MarshalIndent(r, "", " ")
 			require.NoError(t, err)
 			file := filepath.Join("testdata", "field_golden", name+".json")
@@ -73,12 +99,5 @@ func TestTraceFieldGolden(t *testing.T) {
 				_ = os.WriteFile(file+".got", got, 0o644)
 			}
 		})
-	}
-}
-
-func strip(ss []*FieldStep) {
-	for _, s := range ss {
-		s.Call, s.Hops = nil, nil
-		strip(s.Kids)
 	}
 }

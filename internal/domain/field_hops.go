@@ -22,13 +22,14 @@ type Hop struct {
 	Followed bool   `json:"followed,omitempty"` // its trace is grafted under the step
 }
 
-// hopsOf lists the cross-project hops out of node n. Handlers without a file
-// (stale or external nodes) cannot be traced and are left out.
+// hopsOf lists the cross-project hops out of node n. A library call is no hop:
+// it carries no request into a handler. Handlers without a file (stale or
+// external nodes) cannot be traced and are left out.
 func hopsOf(g *graph, n int32) []Hop {
 	var hs []Hop
 	from := g.Nodes[n]
 	for _, e := range g.Out[n] {
-		if e.Kind < grpcHop {
+		if !e.Kind.link() || e.Kind == libHop {
 			continue
 		}
 		to := g.Nodes[e.To]
@@ -41,13 +42,13 @@ func hopsOf(g *graph, n int32) []Hop {
 	return hs
 }
 
-// TraceHop traces the request a handler receives: addr is the handler's
+// traceHop traces the request a handler receives: addr is the handler's
 // declaration, as in Hop.Addr. In Go the seeds are the handler's parameters
 // except the receiver, a context.Context and an http.ResponseWriter. A JVM
 // declaration may start with annotations, so the first line from addr on that
 // yields a trace is the signature. Every location in the result carries its
 // project, so the trees can be grafted into another project's trace.
-func TraceHop(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, error) {
+func (run *fieldRun) traceHop(ctx context.Context, addr string) (*FieldTrace, error) {
 	i := strings.LastIndex(addr, ":")
 	line, err := strconv.Atoi(addr[i+1:])
 	if i < 0 || err != nil {
@@ -56,10 +57,10 @@ func TraceHop(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, erro
 	proj, _, _ := strings.Cut(addr, ":")
 	var r *FieldTrace
 	if strings.HasSuffix(addr[:i], ".go") {
-		r, err = traceGoHandler(ctx, q, addr[:i], line)
+		r, err = run.trace(ctx, addr, requestParam)
 	} else {
 		for l := line; l < line+12; l++ { // annotations, then the signature
-			if r, err = TraceField(ctx, q, addr[:i]+":"+strconv.Itoa(l)); err == nil {
+			if r, err = run.trace(ctx, addr[:i]+":"+strconv.Itoa(l), nil); err == nil {
 				break
 			}
 		}
@@ -70,22 +71,6 @@ func TraceHop(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, erro
 	qualifyLocs(r.Origin, proj)
 	qualifyLocs(r.Uses, proj)
 	return r, nil
-}
-
-func traceGoHandler(ctx context.Context, q FieldQuery, loc string, line int) (*FieldTrace, error) {
-	gos, err := langProjects(q.Dir, "go")
-	if err != nil {
-		return nil, err
-	}
-	seedProject, file, err := resolveFile(gos, loc)
-	if err != nil {
-		return nil, err
-	}
-	t, err := traceField(ctx, gos, seedProject, file, line, q.IncludeTests, q.maxProjects(), requestParam, q.Progress)
-	if err != nil {
-		return nil, err
-	}
-	return fieldTrace(q.Dir, t, seedProject, gos, file, line), nil
 }
 
 // requestParam accepts the parameters that carry a request into a handler.
@@ -117,9 +102,30 @@ func qualifyLocs(ss []*FieldStep, project string) {
 	}
 }
 
-// FollowHop grafts the trace of hop k of the lifecycle step at path (indexes from
-// r.Uses down through Kids) under that step, behind a step of the hop's kind.
-func FollowHop(ctx context.Context, q FieldQuery, r *FieldTrace, path []int, k int) error {
+// FollowHop continues run r: it grafts the trace of hop k of the lifecycle step
+// at path (indexes from r.Uses down through Kids) under that step, behind a step
+// of the hop's kind. progress, if set, is told each phase as it starts.
+func FollowHop(ctx context.Context, r *FieldTrace, path []int, k int, progress func(string)) error {
+	run, err := continueRun(r, progress)
+	if err != nil {
+		return err
+	}
+	return run.followHop(ctx, path, k)
+}
+
+// FollowHops continues run r: it follows every hop on the lifecycle side, then
+// the hops in what it grafted, depth services deep, at most 10 hops in all.
+// It returns how many it followed and why the others failed.
+func FollowHops(ctx context.Context, r *FieldTrace, depth int, progress func(string)) (followed int, errs []error) {
+	run, err := continueRun(r, progress)
+	if err != nil {
+		return 0, []error{err}
+	}
+	return run.followHops(ctx, depth)
+}
+
+func (run *fieldRun) followHop(ctx context.Context, path []int, k int) error {
+	r := run.r
 	s, err := stepAt(r.Uses, path)
 	if err != nil {
 		return err
@@ -131,7 +137,7 @@ func FollowHop(ctx context.Context, q FieldQuery, r *FieldTrace, path []int, k i
 	if h.Followed {
 		return nil
 	}
-	sub, err := TraceHop(ctx, q, h.Addr)
+	sub, err := run.traceHop(ctx, h.Addr)
 	if err != nil {
 		return err
 	}
@@ -147,10 +153,10 @@ func hopStep(h *Hop, kids []*FieldStep) *FieldStep {
 	return &FieldStep{Kind: h.Kind, Name: h.Method, Loc: h.Addr, Code: h.Method, Fn: h.Fn, Kids: kids}
 }
 
-// FollowHops follows every hop on the lifecycle side, then the hops in what it
-// grafted, depth services deep, at most budget hops in all.
+// followHops is FollowHops, breadth-first, with maxFollow hops for budget.
 // ponytail: breadth-first with a flat budget; per-service limits if traces fan out.
-func FollowHops(ctx context.Context, fq FieldQuery, r *FieldTrace, depth, budget int) (followed int, errs []error) {
+func (run *fieldRun) followHops(ctx context.Context, depth int) (followed int, errs []error) {
+	r := run.r
 	type at struct {
 		path  []int
 		level int // services from the seed: 1 for hops in the seed's own trace
@@ -168,7 +174,7 @@ func FollowHops(ctx context.Context, fq FieldQuery, r *FieldTrace, depth, budget
 		}
 	}
 	scan(r.Uses, nil, 1)
-	for len(queue) > 0 && followed < budget {
+	for len(queue) > 0 && followed < maxFollow {
 		if err := ctx.Err(); err != nil {
 			return followed, append(errs, err)
 		}
@@ -183,7 +189,7 @@ func FollowHops(ctx context.Context, fq FieldQuery, r *FieldTrace, depth, budget
 		}
 		for k := range s.Hops {
 			h := &s.Hops[k]
-			if h.Followed || followed >= budget {
+			if h.Followed || followed >= maxFollow {
 				continue
 			}
 			if seen[h.Addr] { // already traced at another step of this trace: do not repeat it
@@ -193,8 +199,8 @@ func FollowHops(ctx context.Context, fq FieldQuery, r *FieldTrace, depth, budget
 				continue
 			}
 			seen[h.Addr] = true
-			report(fq.Progress, fmt.Sprintf("hop %d: %s %s", followed+1, h.Kind, h.Method))
-			if err := FollowHop(ctx, fq, r, q.path, k); err != nil {
+			report(run.q.Progress, fmt.Sprintf("hop %d: %s %s", followed+1, h.Kind, h.Method))
+			if err := run.followHop(ctx, q.path, k); err != nil {
 				errs = append(errs, fmt.Errorf("%s %s: %w", s.Hops[k].Kind, s.Hops[k].Method, err))
 				continue
 			}

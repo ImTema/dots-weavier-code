@@ -66,3 +66,22 @@ func TestTraceFieldPrintsWarnings(t *testing.T) {
 		assert.Contains(t, out, "\n"+want, "missing line")
 	}
 }
+
+// A saved run reads back whole, so following from the page continues it with
+// the options it ran with; an export leaves out the local folder.
+func TestSavedFieldRunRoundTrips(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	r := &domain.FieldTrace{Addr: "golang/orders:a.go:3", Dir: "/work/samples", IncludeTests: true, MaxProjects: 3,
+		Warnings: []string{"loaded golang/orders"},
+		Uses:     []*domain.FieldStep{{Kind: "seed", Loc: "a.go:3", Hops: []domain.Hop{{Kind: "grpc", Addr: "golang/pricing:s.go:9"}}}}}
+	name, err := saveFieldRun(r, 4)
+	require.NoError(t, err)
+	got, open, err := loadFieldRun(name)
+	require.NoError(t, err)
+	assert.Equal(t, r, got)
+	assert.Equal(t, 4, open)
+	page, err := exportField(r, 4)
+	require.NoError(t, err)
+	assert.NotContains(t, string(page), r.Dir)
+	assert.Contains(t, string(page), r.Addr)
+}

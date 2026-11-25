@@ -117,8 +117,8 @@ func mergedGraph(folders []string) (*graph, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	g.dropTests()
 	g.join()
+	g.dropTests() // after join, which links handlers in test code too
 	return g, warns, nil
 }
 

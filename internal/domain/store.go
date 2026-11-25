@@ -4,8 +4,10 @@ package domain
 import (
 	"database/sql"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -424,10 +426,10 @@ func loadIndexes(folders []string, progress func(string)) (*graph, map[string]bo
 	var warnings []string
 	g := &graph{ids: map[string]int32{}, Impls: map[string][]int32{}}
 	loaded := map[string]bool{}
-	i := 0
-	for f, name := range files {
-		i++
-		report(progress, fmt.Sprintf("loading index %s (%d/%d)", name, i, len(files)))
+	// In file order, so node numbers, and the paths that tie, do not change between loads.
+	for i, f := range slices.Sorted(maps.Keys(files)) {
+		name := files[f]
+		report(progress, fmt.Sprintf("loading index %s (%d/%d)", name, i+1, len(files)))
 		s, err := load(f)
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("skip index %s: %v", f, err))

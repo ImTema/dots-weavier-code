@@ -85,7 +85,33 @@
            "name": "RateQuote.cents",
            "type": "Long"
           }
-         ]
+         ],
+         "call": {
+          "Steps": [
+           {
+            "Node": {
+             "Project": "kotlin/shipping",
+             "File": "src/main/kotlin/com/example/shipping/rates/ShippingRates.kt",
+             "Name": "ShippingRates.quote",
+             "Line": 9
+            },
+            "Via": "",
+            "Method": ""
+           },
+           {
+            "Node": {
+             "Project": "kotlin/shipping",
+             "File": "src/main/kotlin/com/example/shipping/rates/RateCalculator.kt",
+             "Name": "RateCalculator.cents",
+             "Line": 11
+            },
+            "Via": "call",
+            "Method": ""
+           }
+          ],
+          "Sure": 0,
+          "Iface": 0
+         }
         },
         {
          "kind": "return",
@@ -93,7 +119,33 @@
          "code": "RateQuote(customer.region, RateCalculator.cents(customer.region, customer.tier, units))",
          "before": "} else {",
          "after": "}",
-         "fn": "ShippingRates.quote"
+         "fn": "ShippingRates.quote",
+         "call": {
+          "Steps": [
+           {
+            "Node": {
+             "Project": "kotlin/shipping",
+             "File": "src/main/kotlin/com/example/shipping/rates/ShippingRates.kt",
+             "Name": "ShippingRates.quote",
+             "Line": 9
+            },
+            "Via": "",
+            "Method": ""
+           },
+           {
+            "Node": {
+             "Project": "kotlin/shipping",
+             "File": "src/main/kotlin/com/example/shipping/rates/RateCalculator.kt",
+             "Name": "RateCalculator.cents",
+             "Line": 11
+            },
+            "Via": "call",
+            "Method": ""
+           }
+          ],
+          "Sure": 0,
+          "Iface": 0
+         }
         }
        ]
       }

@@ -63,12 +63,6 @@ func (k fieldKey) pkg() string {
 	return s[:max(0, strings.LastIndex(s, "."))]
 }
 
-type hit struct {
-	from tkey
-	how  flow
-	pos  token.Pos // where the flow happened
-}
-
 // seeds returns the values first computed on file:line: value-producing instructions
 // whose operands come from elsewhere (so `x := a.Get(); x != ""` seeds the call only),
 // and parameters declared there. Addresses and constants are skipped.
@@ -83,7 +77,9 @@ func (t *tracker) seeds(prog *ssa.Program, file string, line int) []ssa.Value {
 	cand := map[ssa.Value]bool{}
 	var order []ssa.Value
 	for f := range ssautil.AllFunctions(prog) {
-		if !t.keep(f) || t.fset.Position(f.Pos()).Filename != file {
+		// A synthetic wrapper (h.getCustomer's getCustomer$bound) shares its
+		// method's position but is not declared on the line.
+		if !t.keep(f) || f.Synthetic != "" || t.fset.Position(f.Pos()).Filename != file {
 			continue
 		}
 		for _, p := range f.Params {
@@ -220,13 +216,11 @@ func traceField(ctx context.Context, projects []project, seedProject project, fi
 		return nil, fmt.Errorf("no value computed at %s:%d in project %s", file, line, seedProject.Name)
 	}
 	for _, s := range seeds {
-		t.fwd.taint(s, nil, fSeed, s.Pos())
-		t.back.taint(s, nil, fSeed, s.Pos())
-		// A seed read from a field (req.GetResultId(), x.F) is that field's value:
-		// every other read of the field belongs to the lifecycle too.
+		var read tkey
 		if k, ok := t.readOf(s); ok {
-			t.fwd.taint(k, s, fRead, s.Pos())
+			read = k
 		}
+		t.seed(s, s, read, s.Pos(), s.Pos())
 	}
 
 	// Fields of packages shared with other projects (protobuf messages, SDKs) are
@@ -235,10 +229,11 @@ func traceField(ctx context.Context, projects []project, seedProject project, fi
 	asked := map[string]bool{}
 	for {
 		report(progress, fmt.Sprintf("walking %d projects", len(loaded)))
-		t.back.run()
-		t.fwd.run()
+		if err := t.run(ctx); err != nil {
+			return nil, err
+		}
 		var next []project
-		for _, w := range []*walk{t.back, t.fwd} {
+		for _, w := range []*fwalk{t.back, t.fwd} {
 			for _, k := range w.order {
 				f, ok := k.(fieldKey)
 				if !ok || asked[f.pkg()] {
@@ -277,7 +272,7 @@ func traceField(ctx context.Context, projects []project, seedProject project, fi
 		if !slices.ContainsFunc(progs, func(p *ssa.Program) bool { return p != nil }) {
 			return t, nil
 		}
-		t.back.requeueFields()
-		t.fwd.requeueFields()
+		requeueFields(t.back)
+		requeueFields(t.fwd)
 	}
 }

@@ -96,15 +96,21 @@ func TestLifecycleOnlyAndDepth(t *testing.T) {
 	}
 }
 
-// A saved run keeps the options it was traced with.
-func TestFieldRunKeepsOptions(t *testing.T) {
+// A saved run reads back whole, so following from the page continues it with
+// the options it ran with; an export leaves out the local folder.
+func TestSavedFieldRunRoundTrips(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	o := fieldOpts{Addr: "p:a.go:3", Open: 2, Only: "uses", MaxProjects: 1, IncludeTests: true, Follow: 2}
-	data, err := fieldData(&domain.FieldTrace{}, o)
+	r := &domain.FieldTrace{Addr: "golang/orders:a.go:3", Dir: "/work/samples", IncludeTests: true, MaxProjects: 3,
+		Warnings: []string{"loaded golang/orders"},
+		Uses:     []*domain.FieldStep{{Kind: "seed", Loc: "a.go:3", Hops: []domain.Hop{{Kind: "grpc", Addr: "golang/pricing:s.go:9"}}}}}
+	name, err := saveFieldRun(r, 4)
 	require.NoError(t, err)
-	name, err := saveFieldRun(data, o.Addr)
+	got, open, err := loadFieldRun(name)
 	require.NoError(t, err)
-	run, err := loadFieldRun(name)
+	assert.Equal(t, r, got)
+	assert.Equal(t, 4, open)
+	page, err := exportField(r, 4)
 	require.NoError(t, err)
-	assert.Equal(t, o, run.fieldOpts)
+	assert.NotContains(t, string(page), r.Dir)
+	assert.Contains(t, string(page), r.Addr)
 }

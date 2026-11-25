@@ -72,6 +72,13 @@ func TestCancelledFieldTraceStops(t *testing.T) {
 	assert.ErrorIs(t, err, context.Canceled)
 }
 
+func TestCancelledJVMFieldTraceStops(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err := TraceField(ctx, FieldQuery{Dir: "testdata"}, "jvmcases/java:src/main/java/cases/Cases.java:9")
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
 func TestCancelledIndexWritesNoIndex(t *testing.T) {
 	isolate(t)
 	dir := goProject(t, t.TempDir(), "a")

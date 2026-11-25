@@ -394,6 +394,9 @@ func loadSSA(ctx context.Context, p project, tests bool, st *loadStats, fset *to
 		if pk.Types == nil {
 			return
 		}
+		if strings.HasSuffix(pk.ID, ".test") {
+			return // the generated test main: its file lives in the build cache, outside the project
+		}
 		if !root[pk] {
 			prog.CreatePackage(pk.Types, nil, nil, true)
 			return

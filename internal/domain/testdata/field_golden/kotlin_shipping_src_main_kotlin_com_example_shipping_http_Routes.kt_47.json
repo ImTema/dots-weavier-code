@@ -60,7 +60,52 @@
              "code": "client.get(\"${baseUrl.trimEnd('/')}/customers/${customerId.encodeURLPathPart()}\")",
              "before": "val resp = try {",
              "after": "} catch (e: Exception) {",
-             "fn": "OrdersCustomerDirectory.find"
+             "fn": "OrdersCustomerDirectory.find",
+             "call": {
+              "Steps": [
+               {
+                "Node": {
+                 "Project": "kotlin/shipping",
+                 "File": "src/main/kotlin/com/example/shipping/http/Routes.kt",
+                 "Name": "Application.shippingModule",
+                 "Line": 31
+                },
+                "Via": "",
+                "Method": ""
+               },
+               {
+                "Node": {
+                 "Project": "kotlin/shipping",
+                 "File": "src/main/kotlin/com/example/shipping/rates/ShippingRates.kt",
+                 "Name": "ShippingRates.quote",
+                 "Line": 9
+                },
+                "Via": "call",
+                "Method": ""
+               },
+               {
+                "Node": {
+                 "Project": "kotlin/shipping",
+                 "File": "src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt",
+                 "Name": "OrdersCustomerDirectory.find",
+                 "Line": 26
+                },
+                "Via": "iface:guess",
+                "Method": ""
+               }
+              ],
+              "Sure": 0,
+              "Iface": 1
+             },
+             "hops": [
+              {
+               "kind": "http",
+               "method": "GET /customers/{}",
+               "project": "golang/orders",
+               "fn": "Handler.getCustomer",
+               "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+              }
+             ]
             },
             {
              "kind": "assign",
@@ -68,13 +113,155 @@
              "code": "throw CustomerLookupException(\"get customer $customerId\", e)",
              "before": "} catch (e: Exception) {",
              "after": "}",
-             "fn": "OrdersCustomerDirectory.find"
+             "fn": "OrdersCustomerDirectory.find",
+             "call": {
+              "Steps": [
+               {
+                "Node": {
+                 "Project": "kotlin/shipping",
+                 "File": "src/main/kotlin/com/example/shipping/http/Routes.kt",
+                 "Name": "Application.shippingModule",
+                 "Line": 31
+                },
+                "Via": "",
+                "Method": ""
+               },
+               {
+                "Node": {
+                 "Project": "kotlin/shipping",
+                 "File": "src/main/kotlin/com/example/shipping/rates/ShippingRates.kt",
+                 "Name": "ShippingRates.quote",
+                 "Line": 9
+                },
+                "Via": "call",
+                "Method": ""
+               },
+               {
+                "Node": {
+                 "Project": "kotlin/shipping",
+                 "File": "src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt",
+                 "Name": "OrdersCustomerDirectory.find",
+                 "Line": 26
+                },
+                "Via": "iface:guess",
+                "Method": ""
+               }
+              ],
+              "Sure": 0,
+              "Iface": 1
+             },
+             "hops": [
+              {
+               "kind": "http",
+               "method": "GET /customers/{}",
+               "project": "golang/orders",
+               "fn": "Handler.getCustomer",
+               "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+              }
+             ]
+            }
+           ],
+           "call": {
+            "Steps": [
+             {
+              "Node": {
+               "Project": "kotlin/shipping",
+               "File": "src/main/kotlin/com/example/shipping/http/Routes.kt",
+               "Name": "Application.shippingModule",
+               "Line": 31
+              },
+              "Via": "",
+              "Method": ""
+             },
+             {
+              "Node": {
+               "Project": "kotlin/shipping",
+               "File": "src/main/kotlin/com/example/shipping/rates/ShippingRates.kt",
+               "Name": "ShippingRates.quote",
+               "Line": 9
+              },
+              "Via": "call",
+              "Method": ""
+             },
+             {
+              "Node": {
+               "Project": "kotlin/shipping",
+               "File": "src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt",
+               "Name": "OrdersCustomerDirectory.find",
+               "Line": 26
+              },
+              "Via": "iface:guess",
+              "Method": ""
+             }
+            ],
+            "Sure": 0,
+            "Iface": 1
+           },
+           "hops": [
+            {
+             "kind": "http",
+             "method": "GET /customers/{}",
+             "project": "golang/orders",
+             "fn": "Handler.getCustomer",
+             "addr": "golang/orders:internal/httpapi/httpapi.go:61"
             }
            ]
           }
-         ]
+         ],
+         "call": {
+          "Steps": [
+           {
+            "Node": {
+             "Project": "kotlin/shipping",
+             "File": "src/main/kotlin/com/example/shipping/http/Routes.kt",
+             "Name": "Application.shippingModule",
+             "Line": 31
+            },
+            "Via": "",
+            "Method": ""
+           },
+           {
+            "Node": {
+             "Project": "kotlin/shipping",
+             "File": "src/main/kotlin/com/example/shipping/rates/ShippingRates.kt",
+             "Name": "ShippingRates.quote",
+             "Line": 9
+            },
+            "Via": "call",
+            "Method": ""
+           }
+          ],
+          "Sure": 0,
+          "Iface": 0
+         }
         }
-       ]
+       ],
+       "call": {
+        "Steps": [
+         {
+          "Node": {
+           "Project": "kotlin/shipping",
+           "File": "src/main/kotlin/com/example/shipping/http/Routes.kt",
+           "Name": "Application.shippingModule",
+           "Line": 31
+          },
+          "Via": "",
+          "Method": ""
+         },
+         {
+          "Node": {
+           "Project": "kotlin/shipping",
+           "File": "src/main/kotlin/com/example/shipping/rates/ShippingRates.kt",
+           "Name": "ShippingRates.quote",
+           "Line": 9
+          },
+          "Via": "call",
+          "Method": ""
+         }
+        ],
+        "Sure": 0,
+        "Iface": 0
+       }
       }
      ]
     },

@@ -35,7 +35,7 @@ func usage() {
   dotweavier init [DIR] [--workspace NAME]    add DIR (default: current folder) to workspace NAME (default: default); its projects are detected, not indexed
   dotweavier index [DIR] [--workspace NAME]   index the project in DIR (default: current folder) and its modules into workspace NAME (default: default)
   dotweavier trace path -A <addr> -B <addr> [--workspace NAME] [--max-paths N] [--include-tests] [--format text|ui|html] [--verbose]
-  dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--project DIR] [--only origin|uses] [--depth N] [--include-tests] [--max-projects N] [--follow N] [--export FILE] [--format text|ui|html] [--verbose]`)
+  dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--project DIR] [--only origin|uses] [--depth N] [--include-tests] [--max-projects N] [--follow N] [--format text|ui|html] [--verbose]`)
 	os.Exit(2)
 }
 
@@ -187,13 +187,12 @@ func runTrace(args []string) {
 
 func runTraceField(ctx context.Context, args []string) {
 	fl := flag.NewFlagSet("trace field", flag.ExitOnError)
-	ws := fl.String("project", defaultProjectDir(), "project folder; projects (and modules) under it are found by their manifest")
+	ws := fl.String("project", defaultProjectDir(), "folder the address is looked up in, before the registered workspace folders; the trace runs over the registered folder holding its project")
 	only := fl.String("only", "", "origin or uses: show that tree alone (both walks still run, each feeds the other)")
 	depth := fl.Int("depth", 0, "text: print at most N levels of each tree (0: all); ui: levels open at first (0: 6)")
 	tests := fl.Bool("include-tests", false, "include test code (_test.go, mock/fake packages)")
 	maxProjects := fl.Int("max-projects", 10, "load at most N projects when following fields shared across projects")
 	format := fl.String("format", "text", "text (two trees), ui (serve the overview and open the run in it) or html (one self-contained file in ~/.dotweavier/ui, opened)")
-	export := fl.String("export", "", "also write the result as one self-contained HTML file, e.g. trace.html")
 	follow := fl.Int("follow", 0, "follow gRPC/HTTP/Pub/Sub hops into other projects, N services deep (at most 10 hops)")
 	verbose := fl.Bool("verbose", false, "text: also print progress and stats to stderr (always on for ui and html)")
 	// Accept the address before or after the flags.
@@ -209,66 +208,40 @@ func runTraceField(ctx context.Context, args []string) {
 	if len(pos) != 1 {
 		usage()
 	}
-	explicit := false
-	fl.Visit(func(f *flag.Flag) { explicit = explicit || f.Name == "project" })
-	if !explicit { // the current folder, else the registered workspace folder that has the file
-		dir, err := domain.FieldDir(*ws, pos[0])
-		must(err)
-		*ws = dir
-	}
 	if *only != "" && *only != "origin" && *only != "uses" {
 		must(fmt.Errorf("--only %q, want origin or uses", *only))
 	}
 	v := *verbose || *format != "text"
 	phase, done := status("trace field "+pos[0], v)
-	q := domain.FieldQuery{Dir: *ws, IncludeTests: *tests, MaxProjects: *maxProjects, Progress: phase}
-	r, err := domain.TraceField(ctx, q, pos[0])
+	r, err := domain.TraceField(ctx, domain.FieldQuery{Dir: *ws, IncludeTests: *tests, MaxProjects: *maxProjects, Follow: *follow, Progress: phase}, pos[0])
 	if err != nil {
 		done("err=%v", err)
 	}
 	must(err)
+	done("origin=%d uses=%d", len(r.Origin), len(r.Uses))
+	warn(r.Warnings)
 	// Both walks always run: each feeds the other (the uses walk loads projects the
 	// origin walk continues in, overwrites need the origin), so --only drops a tree
-	// afterwards rather than skipping its walk.
+	// afterwards rather than skipping its walk. A saved run without one tree shows
+	// as --only on the field page.
 	switch *only {
 	case "origin":
 		r.Uses = nil
 	case "uses":
 		r.Origin = nil
 	}
-	done("origin=%d uses=%d", len(r.Origin), len(r.Uses))
-	warn(r.Warnings)
-	if *follow > 0 {
-		seen := len(r.Warnings)
-		phase, done := status("follow hops", v)
-		q.Progress = phase
-		n, errs := domain.FollowHops(ctx, q, r, *follow, maxFollow)
-		done("followed %d hops", n)
-		warn(r.Warnings[seen:])
-		for _, e := range errs {
-			fmt.Fprintln(os.Stderr, "hop not followed:", e)
-		}
-	}
-	opts := fieldOpts{Addr: pos[0], Open: *depth, Only: *only, MaxProjects: *maxProjects, IncludeTests: *tests, Follow: *follow}
-	if *export != "" {
-		data, err := fieldData(r, opts)
-		must(err)
-		must(os.WriteFile(*export, exportField(data), 0o644))
-		fmt.Fprintf(os.Stderr, "exported %s\n", *export)
-	}
 	switch *format {
 	case "ui":
-		data, err := fieldData(r, opts)
+		name, err := saveFieldRun(r, *depth)
 		must(err)
-		name, err := saveFieldRun(data, pos[0])
-		must(err)
-		wsName, err := domain.WorkspaceOf(*ws)
+		fmt.Fprintf(os.Stderr, "saved %s\n", filepath.Join(historyDir(), name+".js"))
+		wsName, err := domain.WorkspaceOf(r.Dir)
 		must(err)
 		serveOverview(overviewAddr, wsName, overviewMaxNodes, "/ui/trace-field.html?t="+url.QueryEscape(name))
 	case "html":
-		data, err := fieldData(r, opts)
+		html, err := exportField(r, *depth)
 		must(err)
-		page := writeUI("trace-field_"+traceName(pos[0])+".html", exportField(data))
+		page := writeUI("trace-field_"+traceName(r.Addr)+".html", html)
 		fmt.Printf("lifecycle of %s -> file://%s\n", pos[0], page)
 		openPage(page)
 	default:
@@ -444,27 +417,39 @@ func pathUI(paths []domain.Path, a, b string) ([]byte, error) {
 	return fill(pathUITemplate, data)
 }
 
-// fieldData is one trace for the static field page: a script that sets window.TRACE.
-// Both trees: origin grows left of the seed, uses right.
-func fieldData(r *domain.FieldTrace, o fieldOpts) ([]byte, error) {
-	js, err := json.Marshal(fieldRun{o, r.Origin, r.Uses}) // escapes <, > and &, so it is safe inside a script
+// fieldData is one run for the static field page: a script that sets window.TRACE.
+// Both trees: origin grows left of the seed, uses right. open is how many levels
+// the page opens at first.
+func fieldData(r *domain.FieldTrace, open int) ([]byte, error) {
+	js, err := json.Marshal(fieldRun{r.Addr, open, r.Origin, r.Uses, r.Warnings, r.Dir, r.IncludeTests, r.MaxProjects}) // escapes <, > and &, so it is safe inside a script
 	if err != nil {
 		return nil, err
 	}
-	return append(append([]byte("window.TRACE = "), js...), ";\n"...), nil
+	return append(append([]byte(tracePrefix), js...), ";\n"...), nil
+}
+
+const tracePrefix = "window.TRACE = "
+
+// traceJSON is the JSON of a run file, as fieldData writes it.
+func traceJSON(b []byte) []byte {
+	return bytes.TrimSuffix(bytes.TrimSpace(bytes.TrimPrefix(b, []byte(tracePrefix))), []byte(";"))
 }
 
 // saveFieldRun keeps every field trace run in ~/.dotweavier/trace-field-history as
 // <time>_<address>.js, plus latest.js, and rewrites index.js (window.HISTORY, newest
 // first) so the page can list past runs. It returns the run's name for ?t=.
 // ponytail: history is never pruned; add a cap when the folder grows large.
-func saveFieldRun(data []byte, addr string) (string, error) {
+func saveFieldRun(r *domain.FieldTrace, open int) (string, error) {
+	data, err := fieldData(r, open)
+	if err != nil {
+		return "", err
+	}
 	dir := historyDir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
 	// Milliseconds keep runs apart: a follow often saves within the second of its trace.
-	name := time.Now().Format("20060102-150405.000") + "_" + traceName(addr)
+	name := time.Now().Format("20060102-150405.000") + "_" + traceName(r.Addr)
 	for _, f := range []string{name + ".js", "latest.js"} {
 		if err := os.WriteFile(filepath.Join(dir, f), data, 0o644); err != nil {
 			return "", err
@@ -490,7 +475,7 @@ func saveFieldRun(data []byte, addr string) (string, error) {
 		}
 		var head struct{ Addr string } // the real address; the file name is a mangled copy
 		if b, err := os.ReadFile(files[i]); err == nil {
-			_ = json.Unmarshal(bytes.TrimSuffix(bytes.TrimSpace(bytes.TrimPrefix(b, []byte("window.TRACE = "))), []byte(";")), &head)
+			_ = json.Unmarshal(traceJSON(b), &head)
 		}
 		runs = append(runs, run{n, head.Addr, t.Format("2006-01-02 15:04:05")})
 	}
@@ -511,48 +496,51 @@ func dotDir(name string) string {
 	return filepath.Join(home, ".dotweavier", name)
 }
 
-// fieldRun is one saved run of the field page, as fieldData writes it.
+// fieldRun is one saved run of the field page, as fieldData writes it: the
+// domain's run, whole so it can be continued, and the levels the page opens.
 type fieldRun struct {
-	fieldOpts
-	Origin []*domain.FieldStep `json:"origin"`
-	Uses   []*domain.FieldStep `json:"uses"`
+	Addr         string              `json:"addr"`
+	Open         int                 `json:"open,omitempty"`
+	Origin       []*domain.FieldStep `json:"origin"`
+	Uses         []*domain.FieldStep `json:"uses"`
+	Warnings     []string            `json:"warnings,omitempty"`
+	Dir          string              `json:"dir,omitempty"` // empty in runs saved before runs kept their folder
+	IncludeTests bool                `json:"includeTests,omitempty"`
+	MaxProjects  int                 `json:"maxProjects,omitempty"`
 }
 
-// fieldOpts is how a run was traced, shown in the field page's header. Runs
-// saved before the options were recorded have only Addr and Open.
-type fieldOpts struct {
-	Addr         string `json:"addr"`
-	Open         int    `json:"open,omitempty"` // --depth
-	Only         string `json:"only,omitempty"`
-	MaxProjects  int    `json:"maxProjects,omitempty"`
-	IncludeTests bool   `json:"includeTests,omitempty"`
-	Follow       int    `json:"follow,omitempty"`
-}
-
-// loadFieldRun reads a run back from the history folder; name is a bare run name.
-func loadFieldRun(name string) (*fieldRun, error) {
+// loadFieldRun reads a run back from the history folder, with the levels its
+// page opens; name is a bare run name.
+func loadFieldRun(name string) (*domain.FieldTrace, int, error) {
 	if name == "" || filepath.Base(name) != name || strings.ContainsAny(name, `/\`) {
-		return nil, fmt.Errorf("bad run %q", name)
+		return nil, 0, fmt.Errorf("bad run %q", name)
 	}
 	b, err := os.ReadFile(filepath.Join(historyDir(), name+".js"))
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	b = bytes.TrimSuffix(bytes.TrimSpace(bytes.TrimPrefix(b, []byte("window.TRACE = "))), []byte(";"))
-	r := &fieldRun{}
-	return r, json.Unmarshal(b, r)
+	var f fieldRun
+	if err := json.Unmarshal(traceJSON(b), &f); err != nil {
+		return nil, 0, err
+	}
+	return &domain.FieldTrace{Addr: f.Addr, Origin: f.Origin, Uses: f.Uses, Warnings: f.Warnings, Dir: f.Dir,
+		IncludeTests: f.IncludeTests, MaxProjects: f.MaxProjects}, f.Open, nil
 }
 
 // exportField is the field page with one run inlined: a single file that opens
-// anywhere, without the history folder or a server. data is what fieldData returns.
-func exportField(data []byte) []byte {
+// anywhere, without the history folder or a server. It cannot be continued, so
+// it leaves out the run's local folder and warnings.
+func exportField(r *domain.FieldTrace, open int) ([]byte, error) {
+	view := *r
+	view.Dir, view.Warnings = "", nil
+	data, err := fieldData(&view, open)
+	if err != nil {
+		return nil, err
+	}
 	page := fieldUITemplate
 	i := strings.Index(page, "<script>")
-	return []byte(page[:i] + "<script>" + string(data) + "window.EXPORTED = true;</script>\n" + page[i:])
+	return []byte(page[:i] + "<script>" + string(data) + "window.EXPORTED = true;</script>\n" + page[i:]), nil
 }
-
-// maxFollow caps the hops one trace follows, from the CLI or the page.
-const maxFollow = 10
 
 // traceName turns an address into a file name: golang/orders:a/b.go:45 -> golang_orders_a_b.go_45.
 func traceName(addr string) string {

@@ -297,20 +297,19 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 	// saved as a new run, whose name it returns.
 	// GET /trace-field/export?run=RUN: the run as one self-contained HTML file, for download.
 	mux.HandleFunc("GET /trace-field/export", func(w http.ResponseWriter, r *http.Request) {
-		name := r.URL.Query().Get("run")
-		run, err := loadFieldRun(name)
+		tr, open, err := loadFieldRun(r.URL.Query().Get("run"))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 			return
 		}
-		data, err := fieldData(&domain.FieldTrace{Origin: run.Origin, Uses: run.Uses}, run.fieldOpts)
+		page, err := exportField(tr, open)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Content-Disposition", `attachment; filename="trace-field_`+traceName(run.Addr)+`.html"`)
-		w.Write(exportField(data))
+		w.Header().Set("Content-Disposition", `attachment; filename="trace-field_`+traceName(tr.Addr)+`.html"`)
+		w.Write(page)
 	})
 	mux.HandleFunc("POST /trace-field/follow", func(w http.ResponseWriter, r *http.Request) {
 		reply := func(code int, v map[string]any) {
@@ -327,22 +326,19 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 			return
 		}
 		q := r.URL.Query()
-		run, err := loadFieldRun(q.Get("run"))
+		tr, open, err := loadFieldRun(q.Get("run"))
+		if err == nil && tr.Dir == "" { // saved before runs kept their folder
+			tr.Dir, err = src.FolderOf(tr.Addr)
+		}
 		if err != nil {
 			reply(http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
 			return
 		}
-		tr := &domain.FieldTrace{Origin: run.Origin, Uses: run.Uses}
 		phase, done := status("follow "+q.Get("run"), true)
-		dir, err := src.FolderOf(run.Addr)
-		if err != nil {
-			done("err=%v", err)
-			reply(http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
-			return
-		}
+		seen := len(tr.Warnings)
 		if q.Get("path") == "" {
 			depth, _ := strconv.Atoi(q.Get("depth"))
-			n, errs := domain.FollowHops(r.Context(), domain.FieldQuery{Dir: dir, Progress: phase}, tr, max(depth, 1), maxFollow)
+			n, errs := domain.FollowHops(r.Context(), tr, max(depth, 1), phase)
 			if n == 0 && len(errs) > 0 {
 				err = errs[0]
 			}
@@ -358,16 +354,13 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 			}
 			if err == nil {
 				k, _ := strconv.Atoi(q.Get("hop"))
-				err = domain.FollowHop(r.Context(), domain.FieldQuery{Dir: dir, Progress: phase}, tr, path, k)
+				err = domain.FollowHop(r.Context(), tr, path, k, phase)
 			}
 		}
-		warn(tr.Warnings)
+		warn(tr.Warnings[seen:])
 		var name string
 		if err == nil {
-			var data []byte
-			if data, err = fieldData(tr, run.fieldOpts); err == nil {
-				name, err = saveFieldRun(data, run.Addr)
-			}
+			name, err = saveFieldRun(tr, open)
 		}
 		done("path=%s hop=%s: run=%s err=%v", q.Get("path"), q.Get("hop"), name, err)
 		if err != nil {
@@ -394,26 +387,16 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		}
 		var tr *domain.FieldTrace
 		dir, err := src.FolderOf(a)
-		fq := domain.FieldQuery{Dir: dir, Progress: phase}
 		if err == nil {
-			tr, err = domain.TraceField(r.Context(), fq, a)
-		}
-		if n, _ := strconv.Atoi(r.URL.Query().Get("follow")); err == nil && n > 0 {
-			domain.FollowHops(r.Context(), fq, tr, n, maxFollow) // a hop that fails stays unfollowed
-		}
-		if tr != nil {
-			warn(tr.Warnings)
+			follow, _ := strconv.Atoi(r.URL.Query().Get("follow")) // a hop that fails stays unfollowed
+			tr, err = domain.TraceField(r.Context(), domain.FieldQuery{Dir: dir, Follow: follow, Progress: phase}, a)
 		}
 		var name string
-		if err == nil {
-			var data []byte
-			if data, err = fieldData(tr, fieldOpts{Addr: a}); err == nil {
-				name, err = saveFieldRun(data, a)
-			}
-		}
 		var origin, uses int
-		if tr != nil {
+		if err == nil {
+			warn(tr.Warnings)
 			origin, uses = len(tr.Origin), len(tr.Uses)
+			name, err = saveFieldRun(tr, 0)
 		}
 		done("origin=%d uses=%d run=%s err=%v", origin, uses, name, err)
 		if err != nil {

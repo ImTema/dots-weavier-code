@@ -1,0 +1,391 @@
+{
+ "Origin": [
+  {
+   "kind": "seed",
+   "loc": "internal/events/publisher.go:44",
+   "code": "func (p *Publisher) OrderPlaced(ctx context.Context, o order.Order) error {",
+   "before": "// the server to accept the message.",
+   "after": "if o.ID == \"\" {",
+   "type": "*events.Publisher",
+   "fn": "Publisher.OrderPlaced",
+   "kids": [
+    {
+     "kind": "arg",
+     "loc": "internal/order/order.go:111",
+     "code": "if err := s.events.OrderPlaced(ctx, o); err != nil {",
+     "before": "// ponytail: publish after commit can lose an event on crash; a transactional outbox fixes that.",
+     "after": "slog.ErrorContext(ctx, \"publish OrderPlaced\", \"order\", o.ID, \"err\", err)",
+     "type": "order.EventPublisher",
+     "fn": "Service.Place",
+     "kids": [
+      {
+       "kind": "field",
+       "name": "order.Service.events",
+       "type": "order.EventPublisher",
+       "kids": [
+        {
+         "kind": "store",
+         "loc": "internal/order/order.go:74",
+         "code": "func NewService(customers *customer.Store, reserver Reserver, pricer Pricer, events EventPublisher, scheduler Scheduler) *Service {",
+         "before": "// event publisher and shipment scheduler.",
+         "after": "return \u0026Service{customers: customers, reserver: reserver, pricer: pricer, events: events, scheduler: scheduler, now: time.Now}",
+         "type": "order.EventPublisher",
+         "fn": "NewService",
+         "via": "internal/order/order.go:75",
+         "kids": [
+          {
+           "kind": "arg",
+           "loc": "cmd/orders/main.go:89",
+           "code": "svc := order.NewService(store,",
+           "before": "store := customer.NewStore(customer.Seed())",
+           "after": "inventory.New(inventoryv1.NewInventoryServiceClient(inventoryConn)),",
+           "type": "order.EventPublisher",
+           "fn": "run",
+           "kids": [
+            {
+             "kind": "convert",
+             "loc": "cmd/orders/main.go:78",
+             "code": "publisher := events.NewPublisher(ps)",
+             "before": "}",
+             "after": "defer publisher.Stop()",
+             "type": "*events.Publisher",
+             "fn": "run",
+             "kids": [
+              {
+               "kind": "return",
+               "loc": "internal/events/publisher.go:27",
+               "code": "return \u0026Publisher{topic: client.Publisher(eventsv1.TopicOrderPlaced)}",
+               "before": "func NewPublisher(client *pubsub.Client) *Publisher {",
+               "after": "}",
+               "type": "events.Publisher",
+               "fn": "NewPublisher"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "assign",
+       "loc": "internal/order/order.go:102",
+       "code": "o := Order{",
+       "after": "ID:            fmt.Sprintf(\"o-%d\", s.seq.Add(1)),",
+       "type": "order.Order",
+       "fn": "Service.Place",
+       "call": {
+        "Steps": [
+         {
+          "Node": {
+           "Project": "golang/orders",
+           "File": "internal/order/order.go",
+           "Name": "Service.Place",
+           "Line": 82
+          },
+          "Via": "",
+          "Method": ""
+         },
+         {
+          "Node": {
+           "Project": "golang/orders",
+           "File": "internal/events/publisher.go",
+           "Name": "Publisher.OrderPlaced",
+           "Line": 44
+          },
+          "Via": "iface:sure",
+          "Method": ""
+         }
+        ],
+        "Sure": 1,
+        "Iface": 1
+       }
+      }
+     ],
+     "call": {
+      "Steps": [
+       {
+        "Node": {
+         "Project": "golang/orders",
+         "File": "internal/order/order.go",
+         "Name": "Service.Place",
+         "Line": 82
+        },
+        "Via": "",
+        "Method": ""
+       },
+       {
+        "Node": {
+         "Project": "golang/orders",
+         "File": "internal/events/publisher.go",
+         "Name": "Publisher.OrderPlaced",
+         "Line": 44
+        },
+        "Via": "iface:sure",
+        "Method": ""
+       }
+      ],
+      "Sure": 1,
+      "Iface": 1
+     }
+    }
+   ]
+  }
+ ],
+ "Uses": [
+  {
+   "kind": "seed",
+   "loc": "internal/events/publisher.go:44",
+   "code": "func (p *Publisher) OrderPlaced(ctx context.Context, o order.Order) error {",
+   "before": "// the server to accept the message.",
+   "after": "if o.ID == \"\" {",
+   "type": "*events.Publisher",
+   "fn": "Publisher.OrderPlaced",
+   "kids": [
+    {
+     "kind": "pubsub",
+     "name": "topic order-placed",
+     "loc": "golang/fulfillment:internal/events/subscriber.go:56",
+     "code": "topic order-placed",
+     "fn": "Subscriber.Run$1",
+     "kids": [
+      {
+       "kind": "seed",
+       "loc": "golang/fulfillment:internal/events/subscriber.go:56",
+       "code": "err := s.sub.Receive(ctx, func(ctx context.Context, m *pubsub.Message) {",
+       "before": "func (s *Subscriber) Run(ctx context.Context) error {",
+       "after": "retry, err := s.Handle(ctx, m.Data)",
+       "type": "*pubsub.Message",
+       "fn": "Subscriber.Run$1",
+       "kids": [
+        {
+         "kind": "container",
+         "loc": "golang/fulfillment:internal/events/subscriber.go:57",
+         "code": "retry, err := s.Handle(ctx, m.Data)",
+         "before": "err := s.sub.Receive(ctx, func(ctx context.Context, m *pubsub.Message) {",
+         "after": "if err != nil {",
+         "type": "*[]byte",
+         "fn": "Subscriber.Run$1",
+         "kids": [
+          {
+           "kind": "arg",
+           "loc": "golang/fulfillment:internal/events/subscriber.go:75",
+           "code": "func (s *Subscriber) Handle(ctx context.Context, data []byte) (retry bool, err error) {",
+           "before": "// retry reports whether redelivery may succeed.",
+           "after": "var e eventsv1.OrderPlaced",
+           "type": "[]byte",
+           "fn": "Subscriber.Handle",
+           "via": "golang/fulfillment:internal/events/subscriber.go:57",
+           "call": {
+            "Steps": [
+             {
+              "Node": {
+               "Project": "golang/fulfillment",
+               "File": "internal/events/subscriber.go",
+               "Name": "Subscriber.Run",
+               "Line": 55
+              },
+              "Via": "",
+              "Method": ""
+             },
+             {
+              "Node": {
+               "Project": "golang/fulfillment",
+               "File": "internal/events/subscriber.go",
+               "Name": "Subscriber.Run$1",
+               "Line": 56
+              },
+              "Via": "iface:guess",
+              "Method": ""
+             },
+             {
+              "Node": {
+               "Project": "golang/fulfillment",
+               "File": "internal/events/subscriber.go",
+               "Name": "Subscriber.Handle",
+               "Line": 75
+              },
+              "Via": "call",
+              "Method": ""
+             }
+            ],
+            "Sure": 0,
+            "Iface": 1
+           }
+          }
+         ]
+        },
+        {
+         "kind": "container",
+         "loc": "golang/fulfillment:internal/events/subscriber.go:59",
+         "code": "slog.ErrorContext(ctx, \"schedule from OrderPlaced\", \"message\", m.ID, \"retry\", retry, \"err\", err)",
+         "before": "if err != nil {",
+         "after": "}",
+         "type": "*string",
+         "fn": "Subscriber.Run$1"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "pubsub",
+     "name": "topic order-placed",
+     "loc": "golang/pricing:internal/events/subscriber.go:51",
+     "code": "topic order-placed",
+     "fn": "Subscriber.Run$1",
+     "kids": [
+      {
+       "kind": "seed",
+       "loc": "golang/pricing:internal/events/subscriber.go:51",
+       "code": "err := s.sub.Receive(ctx, func(ctx context.Context, m *pubsub.Message) {",
+       "before": "func (s *Subscriber) Run(ctx context.Context) error {",
+       "after": "if err := s.Handle(ctx, m.Data); err != nil {",
+       "type": "*pubsub.Message",
+       "fn": "Subscriber.Run$1",
+       "kids": [
+        {
+         "kind": "container",
+         "loc": "golang/pricing:internal/events/subscriber.go:52",
+         "code": "if err := s.Handle(ctx, m.Data); err != nil {",
+         "before": "err := s.sub.Receive(ctx, func(ctx context.Context, m *pubsub.Message) {",
+         "after": "// A payload that does not decode will never decode: ack it so it is not redelivered forever.",
+         "type": "*[]byte",
+         "fn": "Subscriber.Run$1",
+         "kids": [
+          {
+           "kind": "arg",
+           "loc": "golang/pricing:internal/events/subscriber.go:65",
+           "code": "func (s *Subscriber) Handle(ctx context.Context, data []byte) error {",
+           "before": "// Handle is the subscriber end of the pubsub hop from topic \"order-placed\".",
+           "after": "var e eventsv1.OrderPlaced",
+           "type": "[]byte",
+           "fn": "Subscriber.Handle",
+           "via": "golang/pricing:internal/events/subscriber.go:52",
+           "call": {
+            "Steps": [
+             {
+              "Node": {
+               "Project": "golang/pricing",
+               "File": "internal/events/subscriber.go",
+               "Name": "Subscriber.Run",
+               "Line": 50
+              },
+              "Via": "",
+              "Method": ""
+             },
+             {
+              "Node": {
+               "Project": "golang/pricing",
+               "File": "internal/events/subscriber.go",
+               "Name": "Subscriber.Run$1",
+               "Line": 51
+              },
+              "Via": "iface:guess",
+              "Method": ""
+             },
+             {
+              "Node": {
+               "Project": "golang/pricing",
+               "File": "internal/events/subscriber.go",
+               "Name": "Subscriber.Handle",
+               "Line": 65
+              },
+              "Via": "call",
+              "Method": ""
+             }
+            ],
+            "Sure": 0,
+            "Iface": 1
+           }
+          }
+         ]
+        },
+        {
+         "kind": "container",
+         "loc": "golang/pricing:internal/events/subscriber.go:54",
+         "code": "slog.ErrorContext(ctx, \"drop OrderPlaced\", \"message\", m.ID, \"err\", err)",
+         "before": "// A payload that does not decode will never decode: ack it so it is not redelivered forever.",
+         "after": "}",
+         "type": "*string",
+         "fn": "Subscriber.Run$1"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "kind": "pubsub:guess",
+     "name": "type example.com/samples/orders/api/events/v1.OrderPlaced",
+     "loc": "golang/fulfillment:internal/events/subscriber.go:75",
+     "code": "type example.com/samples/orders/api/events/v1.OrderPlaced",
+     "fn": "Subscriber.Handle",
+     "kids": [
+      {
+       "kind": "seed",
+       "loc": "golang/fulfillment:internal/events/subscriber.go:75",
+       "code": "func (s *Subscriber) Handle(ctx context.Context, data []byte) (retry bool, err error) {",
+       "before": "// retry reports whether redelivery may succeed.",
+       "after": "var e eventsv1.OrderPlaced",
+       "type": "[]byte",
+       "fn": "Subscriber.Handle"
+      }
+     ]
+    },
+    {
+     "kind": "pubsub:guess",
+     "name": "type example.com/samples/orders/api/events/v1.OrderPlaced",
+     "loc": "golang/pricing:internal/events/subscriber.go:65",
+     "code": "type example.com/samples/orders/api/events/v1.OrderPlaced",
+     "fn": "Subscriber.Handle",
+     "kids": [
+      {
+       "kind": "seed",
+       "loc": "golang/pricing:internal/events/subscriber.go:65",
+       "code": "func (s *Subscriber) Handle(ctx context.Context, data []byte) error {",
+       "before": "// Handle is the subscriber end of the pubsub hop from topic \"order-placed\".",
+       "after": "var e eventsv1.OrderPlaced",
+       "type": "[]byte",
+       "fn": "Subscriber.Handle"
+      }
+     ]
+    }
+   ],
+   "hops": [
+    {
+     "kind": "pubsub",
+     "method": "topic order-placed",
+     "project": "golang/fulfillment",
+     "fn": "Subscriber.Run$1",
+     "addr": "golang/fulfillment:internal/events/subscriber.go:56",
+     "followed": true
+    },
+    {
+     "kind": "pubsub",
+     "method": "topic order-placed",
+     "project": "golang/pricing",
+     "fn": "Subscriber.Run$1",
+     "addr": "golang/pricing:internal/events/subscriber.go:51",
+     "followed": true
+    },
+    {
+     "kind": "pubsub:guess",
+     "method": "type example.com/samples/orders/api/events/v1.OrderPlaced",
+     "project": "golang/fulfillment",
+     "fn": "Subscriber.Handle",
+     "addr": "golang/fulfillment:internal/events/subscriber.go:75",
+     "followed": true
+    },
+    {
+     "kind": "pubsub:guess",
+     "method": "type example.com/samples/orders/api/events/v1.OrderPlaced",
+     "project": "golang/pricing",
+     "fn": "Subscriber.Handle",
+     "addr": "golang/pricing:internal/events/subscriber.go:65",
+     "followed": true
+    }
+   ]
+  }
+ ]
+}

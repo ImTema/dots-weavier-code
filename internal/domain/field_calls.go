@@ -6,31 +6,26 @@ import (
 	"strings"
 )
 
-// attachCalls gives every field step the best call path, over the indexed graph,
+// attach gives every field step of r the best call path, over the run's graph,
 // between the seed's function and the step's function: the path trace that
 // reflects how the value got there. The value can flow either way along calls
 // (an argument goes down, a return comes up), so it tries seed -> step first and
 // then step -> seed. Steps in the seed's function, struct fields and steps in
-// unindexed projects get no path.
+// unindexed projects get no path. Lifecycle steps also get their hops; origin
+// steps do not, as only lifecycle hops are followed.
 // ponytail: one trace per distinct function, each rebuilding the reverse graph;
 // share one reverse graph if large trees get slow.
-func attachCalls(r *FieldTrace, ws, seedProject, seedFile string, seedLine int) {
-	// Project names in the trace are relative to ws, and so are the indexes' names when loaded for ws.
+func (run *fieldRun) attach(r *FieldTrace, seedAt address) {
+	// Project names in the trace are relative to the run's folder, and so are the indexes' names.
 	warn := func(format string, args ...any) { r.Warnings = append(r.Warnings, fmt.Sprintf(format, args...)) }
-	abs, err := filepath.Abs(ws)
+	g, err := run.graph(r)
 	if err != nil {
 		warn("call paths skipped: %v", err)
 		return
 	}
-	g, warns, err := mergedGraph([]string{abs})
-	r.Warnings = append(r.Warnings, warns...)
+	seed, err := g.resolve(seedAt, false)
 	if err != nil {
-		warn("call paths skipped: %v", err)
-		return
-	}
-	seed, err := g.resolve(address{Project: seedProject, File: seedFile, Line: seedLine}, false)
-	if err != nil {
-		warn("call paths skipped: seed is not in the index (run: dotweavier index %s): %v", filepath.Join(abs, seedProject), err)
+		warn("call paths skipped: seed is not in the index (run: dotweavier index %s): %v", filepath.Join(run.q.Dir, seedAt.Project), err)
 		return
 	}
 	cache := map[int32]*Path{}
@@ -49,22 +44,24 @@ func attachCalls(r *FieldTrace, ws, seedProject, seedFile string, seedLine int) 
 		cache[n] = p
 		return p
 	}
-	var walk func(ss []*FieldStep)
-	walk = func(ss []*FieldStep) {
+	var walk func(ss []*FieldStep, hops bool)
+	walk = func(ss []*FieldStep, hops bool) {
 		for _, s := range ss {
-			if a, ok := stepAddr(s.Loc, seedProject); ok {
+			if a, ok := stepAddr(s.Loc, seedAt.Project); ok {
 				if n, err := g.resolve(a, false); err == nil {
-					s.Hops = hopsOf(g, n)
+					if hops {
+						s.Hops = hopsOf(g, n)
+					}
 					if n != seed {
 						s.Call = best(n)
 					}
 				}
 			}
-			walk(s.Kids)
+			walk(s.Kids, hops)
 		}
 	}
-	walk(r.Origin)
-	walk(r.Uses)
+	walk(r.Origin, false)
+	walk(r.Uses, true)
 }
 
 // stepAddr turns a step location, [project:]rel/path.go:LINE, into a graph address.

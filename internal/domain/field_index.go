@@ -25,9 +25,9 @@ type tracker struct {
 	closures   map[*ssa.Function][]*ssa.MakeClosure
 	callees    map[ssa.CallInstruction][]*ssa.Function
 	callers    map[*ssa.Function][]ssa.CallInstruction
-	fwd, back  *walk
+	walks      map[*fwalk]*walk     // the Go state of each of the engine's walks
 	seedOK     func(ssa.Value) bool // nil: every value on the line is a seed
-	warnings   []string             // projects skipped or not loaded, load stats
+	ftrace                          // warnings: projects skipped or not loaded, load stats
 }
 
 func newTracker(fset *token.FileSet, tests bool, modules []string) *tracker {
@@ -37,7 +37,8 @@ func newTracker(fset *token.FileSet, tests bool, modules []string) *tracker {
 		globalUses: map[*ssa.Global][]ssa.Instruction{}, closures: map[*ssa.Function][]*ssa.MakeClosure{},
 		callees: map[ssa.CallInstruction][]*ssa.Function{}, callers: map[*ssa.Function][]ssa.CallInstruction{},
 	}
-	t.fwd, t.back = t.newWalk(false), t.newWalk(true)
+	t.ftrace = newFtrace(t)
+	t.walks = map[*fwalk]*walk{t.fwd: t.newWalk(t.fwd), t.back: t.newWalk(t.back)}
 	return t
 }
 

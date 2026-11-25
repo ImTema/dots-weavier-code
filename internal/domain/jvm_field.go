@@ -16,6 +16,7 @@ package domain
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -36,12 +37,11 @@ type jexpr struct {
 
 type jfield string // pkg.Type.field; a type outside the project is its simple name
 
-type jhit struct {
-	from any
-	how  flow
-	fn   *jvmFunc
-	at   *sitter.Node // where the flow happened
-	via  string       // call site, for parameters
+// jat is where a flow happened, the at of a JVM hit.
+type jat struct {
+	fn  *jvmFunc
+	n   *sitter.Node
+	via jref // call site, for parameters
 }
 
 type jref struct {
@@ -57,23 +57,21 @@ type jdef struct {
 }
 
 type jtrace struct {
-	jp        *jvmProject
-	tests     bool
-	uses      map[*jvmFunc]map[string][]*sitter.Node
-	defs      map[*jvmFunc]map[string][]jdef
-	rets      map[*jvmFunc][]*sitter.Node
-	reads     map[jfield][]jref
-	stores    map[jfield][]jref
-	ftype     map[jfield]string
-	fwd, back *jwalk
+	jp     *jvmProject
+	tests  bool
+	uses   map[*jvmFunc]map[string][]*sitter.Node
+	defs   map[*jvmFunc]map[string][]jdef
+	rets   map[*jvmFunc][]*sitter.Node
+	reads  map[jfield][]jref
+	stores map[jfield][]jref
+	ftype  map[jfield]string
+	ftrace
 }
 
+// jwalk is one of the engine's walks, read as Java or Kotlin.
 type jwalk struct {
-	t     *jtrace
-	back  bool
-	hits  map[any]jhit
-	order []any
-	queue []any
+	*fwalk
+	t *jtrace
 }
 
 var (
@@ -121,11 +119,11 @@ func (t *jtrace) jseeds(fn *jvmFunc, ln int) {
 	// defs and stores are maps: order by position so runs are reproducible.
 	slices.SortStableFunc(ss, func(a, b seed) int { return cmp.Compare(a.fnode.StartByte(), b.fnode.StartByte()) })
 	for _, s := range ss {
-		t.fwd.taint(s.fwd, nil, fSeed, fn, s.fnode, "")
-		t.back.taint(s.back, nil, fSeed, fn, s.bnode, "")
+		var read tkey
 		if s.read != "" {
-			t.fwd.taint(s.read, s.fwd, fRead, fn, s.bnode, "")
+			read = s.read
 		}
+		t.seed(s.fwd, s.back, read, jat{fn: fn, n: s.fnode}, jat{fn: fn, n: s.bnode})
 	}
 }
 
@@ -161,8 +159,7 @@ func (t *jtrace) fieldSeeds(rel string, ln int) {
 				}
 				if name != nil && line(name) == ln {
 					if k, ok := t.key(ty, ty.file.text(name)); ok {
-						t.fwd.taint(k, nil, fSeed, nil, n, "")
-						t.back.taint(k, nil, fSeed, nil, n, "")
+						t.seed(k, k, nil, jat{n: n}, jat{n: n})
 					}
 					return
 				}
@@ -177,46 +174,51 @@ func (t *jtrace) fieldSeeds(rel string, ln int) {
 	}
 }
 
-// traceJVMField traces the value computed at rel:line in a Java or Kotlin project.
-func traceJVMField(seedProject project, file string, ln int, tests bool) (*FieldTrace, string, error) {
+// traceJVMField traces the value computed at rel:line in a Java or Kotlin
+// project. It parses the project once and seeds at the first of lines lines
+// from ln on that computes a value (a declaration's annotations, then its
+// signature), and returns that line. Cancelling ctx stops it after the project
+// is parsed.
+func traceJVMField(ctx context.Context, seedProject project, file string, ln, lines int, tests bool) (*FieldTrace, int, error) {
 	rel, err := filepath.Rel(seedProject.dir, file)
 	if err != nil {
-		return nil, "", err
+		return nil, 0, err
 	}
 	rel = filepath.ToSlash(rel)
 	g := &graph{ids: map[string]int32{}, Impls: map[string][]int32{}}
-	jp, _, err := loadJVM(g, seedProject)
+	jp, st, err := loadJVM(g, seedProject)
 	if err != nil {
-		return nil, "", err
+		return nil, 0, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
 	}
 	t := &jtrace{jp: jp, tests: tests, uses: map[*jvmFunc]map[string][]*sitter.Node{}, defs: map[*jvmFunc]map[string][]jdef{},
 		rets: map[*jvmFunc][]*sitter.Node{}, reads: map[jfield][]jref{}, stores: map[jfield][]jref{}, ftype: map[jfield]string{}}
-	t.fwd, t.back = t.newWalk(false), t.newWalk(true)
+	t.ftrace = newFtrace(t)
+	t.warnings = st.warnings
 	t.index()
-	var in *jvmFunc
-	for _, fn := range jp.funcs {
-		n := g.Nodes[fn.id]
-		if fn.file.rel == rel && n.Line <= ln && ln <= n.End && (in == nil || n.End-n.Line < g.Nodes[in.id].End-g.Nodes[in.id].Line) {
-			in = fn
+	at := ln
+	for ; at < ln+max(lines, 1) && len(t.fwd.order) == 0; at++ { // seeding a line with no value changes nothing
+		var in *jvmFunc
+		for _, fn := range jp.funcs {
+			n := g.Nodes[fn.id]
+			if fn.file.rel == rel && n.Line <= at && at <= n.End && (in == nil || n.End-n.Line < g.Nodes[in.id].End-g.Nodes[in.id].Line) {
+				in = fn
+			}
+		}
+		if in != nil {
+			t.jseeds(in, at)
+		}
+		if len(t.fwd.order) == 0 {
+			t.fieldSeeds(rel, at)
 		}
 	}
-	if in != nil {
-		t.jseeds(in, ln)
-	}
 	if len(t.fwd.order) == 0 {
-		t.fieldSeeds(rel, ln)
+		return nil, 0, fmt.Errorf("no value computed at %s:%d in project %s", rel, ln, seedProject.Name)
 	}
-	if len(t.fwd.order) == 0 {
-		return nil, "", fmt.Errorf("no value computed at %s:%d in project %s", rel, ln, seedProject.Name)
+	if err := t.run(ctx); err != nil {
+		return nil, 0, err
 	}
-	t.back.run()
-	t.fwd.run()
-	r := &FieldTrace{}
-	for _, n := range t.back.tree() {
-		r.Origin = append(r.Origin, t.step(n))
-	}
-	for _, n := range t.fwd.tree() {
-		r.Uses = append(r.Uses, t.step(n))
-	}
-	return r, rel, nil
+	return t.result(newPrinter(seedProject, nil)), at - 1, nil
 }

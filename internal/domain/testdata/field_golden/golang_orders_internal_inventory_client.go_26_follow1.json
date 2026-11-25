@@ -1,0 +1,222 @@
+{
+ "Origin": [
+  {
+   "kind": "seed",
+   "loc": "internal/inventory/client.go:26",
+   "code": "func (c *Client) Reserve(ctx context.Context, customerID string, items []api.Item) (string, error) {",
+   "before": "// Rejections the caller can act on are wrapped in order.ErrUnavailable.",
+   "after": "req := \u0026inventoryv1.ReserveRequest{",
+   "type": "*inventory.Client",
+   "fn": "Client.Reserve",
+   "kids": [
+    {
+     "kind": "arg",
+     "loc": "internal/order/order.go:90",
+     "code": "resID, err := s.reserver.Reserve(ctx, c.ID, req.Items)",
+     "before": "}",
+     "after": "if err != nil {",
+     "type": "order.Reserver",
+     "fn": "Service.Place",
+     "kids": [
+      {
+       "kind": "field",
+       "name": "order.Service.reserver",
+       "type": "order.Reserver",
+       "kids": [
+        {
+         "kind": "store",
+         "loc": "internal/order/order.go:74",
+         "code": "func NewService(customers *customer.Store, reserver Reserver, pricer Pricer, events EventPublisher, scheduler Scheduler) *Service {",
+         "before": "// event publisher and shipment scheduler.",
+         "after": "return \u0026Service{customers: customers, reserver: reserver, pricer: pricer, events: events, scheduler: scheduler, now: time.Now}",
+         "type": "order.Reserver",
+         "fn": "NewService",
+         "via": "internal/order/order.go:75",
+         "kids": [
+          {
+           "kind": "arg",
+           "loc": "cmd/orders/main.go:89",
+           "code": "svc := order.NewService(store,",
+           "before": "store := customer.NewStore(customer.Seed())",
+           "after": "inventory.New(inventoryv1.NewInventoryServiceClient(inventoryConn)),",
+           "type": "order.Reserver",
+           "fn": "run",
+           "kids": [
+            {
+             "kind": "convert",
+             "loc": "cmd/orders/main.go:90",
+             "code": "inventory.New(inventoryv1.NewInventoryServiceClient(inventoryConn)),",
+             "before": "svc := order.NewService(store,",
+             "after": "pricer.New(pricingv1.NewPricingServiceClient(pricingConn)),",
+             "type": "*inventory.Client",
+             "fn": "run",
+             "kids": [
+              {
+               "kind": "return",
+               "loc": "internal/inventory/client.go:22",
+               "code": "func New(rpc inventoryv1.InventoryServiceClient) *Client { return \u0026Client{rpc: rpc} }",
+               "before": "// New returns a Client using rpc.",
+               "type": "inventory.Client",
+               "fn": "New"
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "field",
+       "name": "api.Customer.ID",
+       "type": "string",
+       "kids": [
+        {
+         "kind": "store",
+         "loc": "internal/customer/store.go:33",
+         "code": "{ID: \"c1\", Tier: api.TierGold, Region: \"EU\"},",
+         "before": "return []api.Customer{",
+         "after": "{ID: \"c2\", Tier: api.TierSilver, Region: \"US\", Phone: \"+15550100\"},",
+         "type": "string"
+        },
+        {
+         "kind": "store",
+         "loc": "internal/customer/store.go:34",
+         "code": "{ID: \"c2\", Tier: api.TierSilver, Region: \"US\", Phone: \"+15550100\"},",
+         "before": "{ID: \"c1\", Tier: api.TierGold, Region: \"EU\"},",
+         "after": "{ID: \"c3\", Region: \"UK\"},",
+         "type": "string"
+        },
+        {
+         "kind": "store",
+         "loc": "internal/customer/store.go:35",
+         "code": "{ID: \"c3\", Region: \"UK\"},",
+         "before": "{ID: \"c2\", Tier: api.TierSilver, Region: \"US\", Phone: \"+15550100\"},",
+         "after": "}",
+         "type": "string"
+        }
+       ]
+      },
+      {
+       "kind": "field",
+       "name": "api.PlaceOrderRequest.Items",
+       "type": "[]api.Item"
+      }
+     ],
+     "call": {
+      "Steps": [
+       {
+        "Node": {
+         "Project": "golang/orders",
+         "File": "internal/order/order.go",
+         "Name": "Service.Place",
+         "Line": 82
+        },
+        "Via": "",
+        "Method": ""
+       },
+       {
+        "Node": {
+         "Project": "golang/orders",
+         "File": "internal/inventory/client.go",
+         "Name": "Client.Reserve",
+         "Line": 26
+        },
+        "Via": "iface:sure",
+        "Method": ""
+       }
+      ],
+      "Sure": 1,
+      "Iface": 1
+     }
+    }
+   ]
+  }
+ ],
+ "Uses": [
+  {
+   "kind": "seed",
+   "loc": "internal/inventory/client.go:26",
+   "code": "func (c *Client) Reserve(ctx context.Context, customerID string, items []api.Item) (string, error) {",
+   "before": "// Rejections the caller can act on are wrapped in order.ErrUnavailable.",
+   "after": "req := \u0026inventoryv1.ReserveRequest{",
+   "type": "*inventory.Client",
+   "fn": "Client.Reserve",
+   "kids": [
+    {
+     "kind": "field",
+     "name": "inventoryv1.ReserveRequest.CustomerId",
+     "type": "string",
+     "kids": [
+      {
+       "kind": "read",
+       "loc": "internal/inventorypb/inventory/v1/inventory.pb.go:116",
+       "code": "return x.CustomerId",
+       "before": "if x != nil {",
+       "after": "}",
+       "type": "string",
+       "fn": "ReserveRequest.GetCustomerId"
+      }
+     ]
+    },
+    {
+     "kind": "container",
+     "loc": "internal/inventory/client.go:31",
+     "code": "for _, it := range items {",
+     "before": "}",
+     "after": "req.Items = append(req.Items, \u0026inventoryv1.Item{Sku: it.SKU, Qty: it.Qty})",
+     "type": "*api.Item",
+     "fn": "Client.Reserve",
+     "kids": [
+      {
+       "kind": "grpc",
+       "name": "/inventory.v1.InventoryService/Reserve",
+       "loc": "java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:31",
+       "code": "/inventory.v1.InventoryService/Reserve  (traced at another step)",
+       "fn": "InventoryGrpcService.reserve"
+      }
+     ],
+     "hops": [
+      {
+       "kind": "grpc",
+       "method": "/inventory.v1.InventoryService/Reserve",
+       "project": "java/inventory",
+       "fn": "InventoryGrpcService.reserve",
+       "addr": "java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:31",
+       "followed": true
+      }
+     ]
+    },
+    {
+     "kind": "grpc",
+     "name": "/inventory.v1.InventoryService/Reserve",
+     "loc": "java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:31",
+     "code": "/inventory.v1.InventoryService/Reserve",
+     "fn": "InventoryGrpcService.reserve",
+     "kids": [
+      {
+       "kind": "seed",
+       "loc": "java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:33",
+       "code": "public Uni\u003cReserveResponse\u003e reserve(ReserveRequest req) {",
+       "before": "@Blocking",
+       "after": "var lines = req.getItemsList().stream()",
+       "type": "ReserveRequest",
+       "fn": "InventoryGrpcService.reserve"
+      }
+     ]
+    }
+   ],
+   "hops": [
+    {
+     "kind": "grpc",
+     "method": "/inventory.v1.InventoryService/Reserve",
+     "project": "java/inventory",
+     "fn": "InventoryGrpcService.reserve",
+     "addr": "java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:31",
+     "followed": true
+    }
+   ]
+  }
+ ]
+}

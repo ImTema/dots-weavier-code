@@ -6,8 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go/token"
-	"go/types"
 	"os"
 	"path/filepath"
 	"slices"
@@ -307,17 +305,27 @@ type FieldStep struct {
 	Hops   []Hop        `json:"hops,omitempty"` // calls from this step's function into other projects
 }
 
+// FieldTrace is a field trace run: the two trees, and what it ran with, so
+// FollowHop and FollowHops can continue it later, also from a saved copy.
 type FieldTrace struct {
-	Origin   []*FieldStep // where the value comes from; each step flows into its parent
-	Uses     []*FieldStep // where it goes; each step flows into its kids
-	Warnings []string     `json:",omitempty"` // one line each: projects loaded, skipped or not loaded, call paths skipped
+	Origin       []*FieldStep // where the value comes from; each step flows into its parent
+	Uses         []*FieldStep // where it goes; each step flows into its kids
+	Warnings     []string     `json:",omitempty"` // one line each: projects loaded, skipped or not loaded, call paths skipped, hops not followed
+	Addr         string       `json:",omitempty"` // the seed, as project:rel/path:LINE in Dir
+	Dir          string       `json:",omitempty"` // absolute folder the run traces; hops are followed in it too
+	IncludeTests bool         `json:",omitempty"`
+	MaxProjects  int          `json:",omitempty"`
 }
 
-// FieldQuery holds the options shared by TraceField, TraceHop, FollowHop and FollowHops.
+// FieldQuery is what TraceField traces.
 type FieldQuery struct {
-	Dir          string // folder whose projects (and modules) are analysed
+	// Folder the address resolves in, else the registered workspace folder whose
+	// projects have it. The run traces the registered folder that holds the
+	// seed's project, where projects have the names their indexes have.
+	Dir          string
 	IncludeTests bool
 	MaxProjects  int          // load at most this many projects when following shared fields; 0: 10
+	Follow       int          // follow hops this many services deep, at most maxFollow hops; 0: none
 	Progress     func(string) // optional: told each phase as it starts
 }
 
@@ -357,29 +365,58 @@ func langProjects(dir, lang string) ([]project, error) {
 	return slices.DeleteFunc(ps, func(p project) bool { return p.lang != lang }), err
 }
 
-// FieldDir is the folder to trace addr in: dir if one of its projects has the file, else the registered folder whose projects do.
-func FieldDir(dir, addr string) (string, error) {
-	loc, lang, _, err := parseFieldAddr(addr)
+// runFolder resolves addr from folder dir: it returns the folder a run traces
+// and addr as named there. addr resolves in dir when one of its projects has the
+// file, else in the one registered folder whose projects have it, so an address
+// from an indexed project traces from any current folder. The run traces the
+// deepest registered folder holding the seed's project, whose projects are named
+// as their indexes name them; outside every registered folder, the folder addr
+// resolved in.
+func runFolder(dir, addr string) (string, string, error) {
+	loc, lang, line, err := parseFieldAddr(addr)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	ps, err := langProjects(dir, lang)
-	if err != nil {
-		return "", err
-	}
-	_, _, miss := resolveFile(ps, loc)
-	if miss == nil {
-		return dir, nil
+	if dir, err = filepath.Abs(dir); err != nil {
+		return "", "", err
 	}
 	fs, err := registryList(`SELECT DISTINCT dir FROM workspace_folders`)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	f, err := folderWithFile(fs, loc, lang)
-	if errors.Is(err, errNoProject) {
-		return "", miss
+	ps, err := langProjects(dir, lang)
+	if err != nil {
+		return "", "", err
 	}
-	return f, err
+	p, file, miss := resolveFile(ps, loc)
+	if miss != nil {
+		f, err := folderWithFile(fs, loc, lang)
+		if errors.Is(err, errNoProject) {
+			return "", "", miss
+		}
+		if err != nil {
+			return "", "", err
+		}
+		if ps, err = langProjects(f, lang); err != nil {
+			return "", "", err
+		}
+		if p, file, err = resolveFile(ps, loc); err != nil {
+			return "", "", err
+		}
+		dir = f
+	}
+	if top := deepest(fs, p.dir); top != "" {
+		dir = top
+	}
+	name, err := filepath.Rel(dir, p.dir)
+	if err != nil {
+		return "", "", err
+	}
+	rel, err := filepath.Rel(p.dir, file)
+	if err != nil {
+		return "", "", err
+	}
+	return dir, filepath.ToSlash(name) + ":" + filepath.ToSlash(rel) + ":" + strconv.Itoa(line), nil
 }
 
 // folderWithFile is the innermost of folders whose projects in lang have the file loc ([project:]rel/path) names.
@@ -432,131 +469,36 @@ func WorkspaceOf(dir string) (string, error) {
 	return "", nil
 }
 
-// TraceField traces the value at [project:]rel/path.go:LINE both ways over SSA, or over syntax for .java and .kt; ctx stops it between package loads.
+// TraceField runs a field trace: it traces the value computed at
+// [project:]rel/path.go:LINE in both directions, live over SSA of the projects
+// in the run's folder (see FieldQuery.Dir), gives every step its call path and
+// hops from the indexes, and follows q.Follow services deep. A .java or .kt
+// file is traced from its project's syntax instead (jvm_field.go). Hops that
+// cannot be followed come back as warnings. Cancelling ctx stops it between
+// package loads.
 func TraceField(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, error) {
-	ws, tests, maxProjects := q.Dir, q.IncludeTests, q.maxProjects()
-	loc, lang, line, err := parseFieldAddr(addr)
+	dir, addr, err := runFolder(q.Dir, addr)
 	if err != nil {
 		return nil, err
 	}
-	projects, err := langProjects(ws, lang)
+	q.Dir = dir
+	run := &fieldRun{q: q}
+	r, err := run.trace(ctx, addr, nil, 1)
 	if err != nil {
 		return nil, err
 	}
-	seedProject, file, err := resolveFile(projects, loc)
-	if err != nil {
-		return nil, err
-	}
-	if lang == "jvm" {
-		report(q.Progress, "tracing "+seedProject.Name)
-		r, rel, err := traceJVMField(seedProject, file, line, tests)
-		if err != nil {
-			return nil, err
-		}
-		attachCalls(r, ws, seedProject.Name, rel, line)
-		return r, nil
-	}
-	t, err := traceField(ctx, projects, seedProject, file, line, tests, maxProjects, nil, q.Progress)
-	if err != nil {
-		return nil, err
-	}
-	return fieldTrace(ws, t, seedProject, projects, file, line), nil
-}
-
-// fieldTrace turns a Go tracker's walks into the two trees, with call paths and hops.
-func fieldTrace(ws string, t *tracker, seedProject project, projects []project, file string, line int) *FieldTrace {
-	projects = slices.Clone(projects)
-	slices.SortFunc(projects, func(a, b project) int { return cmp.Compare(len(b.dir), len(a.dir)) })
-	p := &printer{t: t, seedProject: seedProject, projects: projects, src: map[string][]string{}}
-	r := &FieldTrace{Warnings: t.warnings}
-	for _, n := range t.back.tree() {
-		r.Origin = append(r.Origin, p.step(n))
-	}
-	for _, n := range t.fwd.tree() {
-		r.Uses = append(r.Uses, p.step(n))
-	}
-	attachCalls(r, ws, seedProject.Name, p.rel(file), line)
-	return r
-}
-
-// step converts a tnode; kids are ordered by location, overwrites come last.
-func (p *printer) step(n *tnode) *FieldStep {
-	s := &FieldStep{Kind: n.how.String()}
-	if n.field != "" {
-		s.Kind, s.Name = "field", p.fieldName(n.field)
-	} else {
-		s.Loc, s.Code = p.rel(n.file)+":"+strconv.Itoa(n.line), p.text(n.file, n.line)
-		s.Before, s.After = p.text(n.file, n.line-1), p.text(n.file, n.line+1) // one line of context each side
-		if n.fn != nil {
-			s.Fn = display(n.fn)
+	r.Addr, r.Dir, r.IncludeTests, r.MaxProjects = addr, dir, q.IncludeTests, q.MaxProjects
+	run.r = r
+	if q.Follow > 0 {
+		_, errs := run.followHops(ctx, q.Follow)
+		for _, e := range errs {
+			r.Warnings = append(r.Warnings, "hop not followed: "+e.Error())
 		}
 	}
-	if n.typ != nil {
-		s.Type = types.TypeString(n.typ, qual)
-	}
-	if n.via.IsValid() {
-		s.Via = p.where(n.via)
-	}
-	kids := slices.Clone(n.kids)
-	slices.SortStableFunc(kids, func(a, b *tnode) int {
-		return cmp.Or(cmp.Compare(p.rel(a.file), p.rel(b.file)), cmp.Compare(a.line, b.line))
-	})
-	for _, k := range kids {
-		s.Kids = append(s.Kids, p.step(k))
-	}
-	for _, o := range n.over {
-		ps := p.t.fset.Position(o)
-		s.Kids = append(s.Kids, &FieldStep{Kind: "overwritten", Loc: p.where(o), Code: p.text(ps.Filename, ps.Line)})
-	}
-	return s
+	return r, nil
 }
 
-// printer turns a finished trace into Steps, with project-relative paths and source lines read from disk.
-type printer struct {
-	t           *tracker
-	seedProject project   // files here show without a project prefix
-	projects    []project // innermost first
-	src         map[string][]string
-}
-
-func (p *printer) rel(file string) string {
-	for _, pr := range append([]project{p.seedProject}, p.projects...) {
-		if r, err := filepath.Rel(pr.dir, file); err == nil && !strings.HasPrefix(r, "..") {
-			if pr == p.seedProject {
-				return filepath.ToSlash(r)
-			}
-			return pr.Name + ":" + filepath.ToSlash(r)
-		}
-	}
-	return file
-}
-
-func (p *printer) text(file string, line int) string {
-	ls, ok := p.src[file]
-	if !ok {
-		b, _ := os.ReadFile(file)
-		ls = strings.Split(string(b), "\n")
-		p.src[file] = ls
-	}
-	if line < 1 || line > len(ls) {
-		return ""
-	}
-	return strings.TrimSpace(ls[line-1])
-}
-
-func (p *printer) where(pos token.Pos) string {
-	ps := p.t.fset.Position(pos)
-	return p.rel(ps.Filename) + ":" + strconv.Itoa(ps.Line)
-}
-
-func qual(pkg *types.Package) string { return pkg.Name() }
-
-// fieldName shows a field as pkg.Type.Field.
-func (p *printer) fieldName(k fieldKey) string {
-	s := string(k)
-	name := s[strings.LastIndex(s[:strings.LastIndex(s, ".")], ".")+1:] // Type.Field
-	if v := p.t.fields[k]; v.Pkg() != nil {
-		name = v.Pkg().Name() + "." + name
-	}
-	return name
+// fieldTrace turns a Go tracker's walks into the two trees.
+func fieldTrace(t *tracker, seedProject project, projects []project) *FieldTrace {
+	return t.result(newPrinter(seedProject, projects))
 }

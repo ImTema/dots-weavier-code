@@ -2,68 +2,54 @@ package domain
 
 import (
 	"slices"
-	"strconv"
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
 )
 
-func (t *jtrace) newWalk(back bool) *jwalk {
-	return &jwalk{t: t, back: back, hits: map[any]jhit{}}
-}
+func (t *jtrace) taint(w *fwalk, k, from tkey, how flow, at any) { w.add(k, from, how, at) }
 
-func (w *jwalk) taint(k, from any, how flow, fn *jvmFunc, at *sitter.Node, via string) {
-	if _, ok := w.hits[k]; ok {
-		return
-	}
-	w.hits[k] = jhit{from, how, fn, at, via}
-	w.order = append(w.order, k)
-	w.queue = append(w.queue, k)
+func (t *jtrace) follow(w *fwalk, k tkey) { (&jwalk{w, t}).follow(k) }
+
+func (w *jwalk) taint(k, from any, how flow, fn *jvmFunc, at *sitter.Node, via jref) {
+	w.add(k, from, how, jat{fn, at, via})
 }
 
 func (w *jwalk) expr(fn *jvmFunc, n *sitter.Node, from any, how flow) {
 	if n != nil {
-		w.taint(jexpr{fn, keyOf(fn.file, n)}, from, how, fn, n, "")
+		w.taint(jexpr{fn, keyOf(fn.file, n)}, from, how, fn, n, jref{})
 	}
 }
 
-func (w *jwalk) run() {
-	for len(w.queue) > 0 {
-		k := w.queue[0]
-		w.queue = w.queue[1:]
-		h := w.hits[k]
-		switch k := k.(type) {
-		case jexpr:
-			if w.back {
-				w.exprBack(k, h.fn, h.at)
-			} else {
-				w.exprFwd(k, h.fn, h.at)
-			}
-		case jvar:
-			if w.back {
-				w.varBack(k)
-			} else {
-				w.varFwd(k)
-			}
-		case jfield:
-			refs := w.t.reads[k]
-			how := fRead
-			if w.back {
-				refs, how = w.t.stores[k], fStore
-			}
-			for _, r := range refs {
-				w.expr(r.fn, r.n, k, how)
-			}
+func (w *jwalk) follow(k tkey) {
+	switch k := k.(type) {
+	case jexpr:
+		at := w.hits[k].at.(jat)
+		if w.back {
+			w.exprBack(k, at.fn, at.n)
+		} else {
+			w.exprFwd(k, at.fn, at.n)
+		}
+	case jvar:
+		if w.back {
+			w.varBack(k)
+		} else {
+			w.varFwd(k)
+		}
+	case jfield:
+		refs := w.t.reads[k]
+		how := fRead
+		if w.back {
+			refs, how = w.t.stores[k], fStore
+		}
+		for _, r := range refs {
+			w.expr(r.fn, r.n, k, how)
 		}
 	}
 }
 
-func (w *jwalk) where(fn *jvmFunc, n *sitter.Node) string {
-	return fn.file.rel + ":" + strconv.Itoa(line(n))
-}
-
 // param taints parameter i of m; via is the call site it was entered from.
-func (w *jwalk) param(m *jvmFunc, i int, from any, how flow, via string) {
+func (w *jwalk) param(m *jvmFunc, i int, from any, how flow, via jref) {
 	if i < 0 || i >= len(m.names) || m.names[i] == "" {
 		return
 	}
@@ -119,11 +105,11 @@ func (w *jwalk) exprFwd(k jexpr, fn *jvmFunc, e *sitter.Node) {
 	}
 	next := func(n *sitter.Node, how flow) { w.expr(fn, n, k, how) }
 	local := func(name string, at *sitter.Node, how flow) {
-		w.taint(jvar{fn, name}, k, how, fn, at, "")
+		w.taint(jvar{fn, name}, k, how, fn, at, jref{})
 	}
 	store := func(kf jfield, ok bool) {
 		if ok {
-			w.taint(kf, k, fStore, fn, p, "")
+			w.taint(kf, k, fStore, fn, p, jref{})
 		}
 	}
 	// declare is a declaration: a field initializer stores, a local assigns.
@@ -252,7 +238,7 @@ func (w *jwalk) exprFwd(k jexpr, fn *jvmFunc, e *sitter.Node) {
 		}
 	case "return_statement", "function_body", "jump_expression":
 		if slices.ContainsFunc(t.rets[fn], func(r *sitter.Node) bool { return same(r, e) }) {
-			w.taint(jvar{fn, ""}, k, fAssign, fn, p, "")
+			w.taint(jvar{fn, ""}, k, fAssign, fn, p, jref{})
 		}
 	case "enhanced_for_statement":
 		if same(e, p.ChildByFieldName("value")) {
@@ -292,14 +278,14 @@ func (w *jwalk) callArg(k jexpr, fn *jvmFunc, call, e *sitter.Node) {
 			if cp.names[i] != "" {
 				j = slices.Index(m.names, cp.names[i])
 			}
-			w.param(m, j, k, fArg, w.where(fn, call))
+			w.param(m, j, k, fArg, jref{fn, call})
 		}
 		return
 	}
 	if ty := t.record(fn, cp); ty != nil {
 		if c := compAt(ty, cp, i); c != "" {
 			if kf, ok := t.key(ty, c); ok {
-				w.taint(kf, k, fStore, fn, call, "")
+				w.taint(kf, k, fStore, fn, call, jref{})
 			}
 		}
 		return
@@ -308,7 +294,7 @@ func (w *jwalk) callArg(k jexpr, fn *jvmFunc, call, e *sitter.Node) {
 		return
 	}
 	if cp.recv != nil && isIdent(cp.recv) && t.local(fn, fn.file.text(cp.recv)) && slices.Contains(jvmMutators, cp.name) {
-		w.taint(jvar{fn, fn.file.text(cp.recv)}, k, fContainer, fn, call, "")
+		w.taint(jvar{fn, fn.file.text(cp.recv)}, k, fContainer, fn, call, jref{})
 	}
 	w.expr(fn, call, k, fTransform)
 	w.callbacks(k, fn, cp)
@@ -335,7 +321,7 @@ func (w *jwalk) callOn(k jexpr, fn *jvmFunc, call *sitter.Node) {
 func (w *jwalk) callbacks(k jexpr, fn *jvmFunc, cp callParts) {
 	for _, a := range cp.args {
 		for _, p := range lambdaParams(fn.file, a) {
-			w.taint(jvar{fn, paramName(fn.file, p)}, k, fCallback, fn, a, "")
+			w.taint(jvar{fn, paramName(fn.file, p)}, k, fCallback, fn, a, jref{})
 		}
 	}
 }
@@ -349,12 +335,12 @@ func (w *jwalk) exprBack(k jexpr, fn *jvmFunc, e *sitter.Node) {
 		name := f.text(e)
 		if t.local(fn, name) {
 			if i := slices.Index(fn.names, name); i >= 0 {
-				w.param(fn, i, k, fAssign, "")
+				w.param(fn, i, k, fAssign, jref{})
 				return
 			}
-			w.taint(jvar{fn, name}, k, fAssign, fn, e, "")
+			w.taint(jvar{fn, name}, k, fAssign, fn, e, jref{})
 		} else if kf, ok := t.fieldRef(fn, e); ok {
-			w.taint(kf, k, fRead, fn, e, "")
+			w.taint(kf, k, fRead, fn, e, jref{})
 		}
 	case "parenthesized_expression", "postfix_expression", "elvis_expression", "interpolated_expression", "spread_element":
 		for _, c := range exprs(e) {
@@ -396,7 +382,7 @@ func (w *jwalk) exprBack(k jexpr, fn *jvmFunc, e *sitter.Node) {
 		down(e.NamedChild(0), fContainer)
 	case "field_access", "navigation_expression":
 		if kf, ok := t.fieldRef(fn, e); ok {
-			w.taint(kf, k, fRead, fn, e, "")
+			w.taint(kf, k, fRead, fn, e, jref{})
 		} else if r := e.NamedChild(0); e.Type() == "navigation_expression" {
 			down(r, fContainer)
 		} else {
@@ -422,12 +408,12 @@ func (w *jwalk) callBack(k jexpr, fn *jvmFunc, call *sitter.Node) {
 	t, f := w.t, fn.file
 	if ms := t.callees(fn, call); len(ms) > 0 {
 		for _, m := range ms {
-			w.taint(jvar{m, ""}, k, fReturn, fn, call, "")
+			w.taint(jvar{m, ""}, k, fReturn, fn, call, jref{})
 		}
 		return
 	}
 	if kf, ok := t.fieldRef(fn, call); ok {
-		w.taint(kf, k, fRead, fn, call, "")
+		w.taint(kf, k, fRead, fn, call, jref{})
 		return
 	}
 	cp, ok := t.parts(f, call)

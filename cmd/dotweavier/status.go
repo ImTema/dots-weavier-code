@@ -7,9 +7,15 @@ import (
 	"time"
 )
 
-// status redraws label, phase and elapsed time on one stderr line until done prints the summary, the only line off a terminal.
+// status shows label, the current phase and the elapsed time on one stderr line,
+// redrawn in place while the work runs. Phase sets the phase; done replaces the line
+// with a final summary. Off a terminal only the summary is printed, so logs stay short.
+// Not verbose, both are no-ops.
 // shortcut: concurrent requests in the overview server share the line and overwrite each other.
-func status(label string) (phase func(string), done func(format string, a ...any)) {
+func status(label string, verbose bool) (phase func(string), done func(format string, a ...any)) {
+	if !verbose {
+		return func(string) {}, func(string, ...any) {}
+	}
 	fi, err := os.Stderr.Stat()
 	tty := err == nil && fi.Mode()&os.ModeCharDevice != 0
 	t0 := time.Now()

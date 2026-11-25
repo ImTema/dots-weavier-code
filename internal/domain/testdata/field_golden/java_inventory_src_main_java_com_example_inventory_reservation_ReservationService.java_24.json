@@ -33,9 +33,61 @@
          "kind": "field",
          "name": "ReserveRequest.itemsList"
         }
-       ]
+       ],
+       "call": {
+        "Steps": [
+         {
+          "Node": {
+           "Project": "java/inventory",
+           "File": "src/main/java/com/example/inventory/grpc/InventoryGrpcService.java",
+           "Name": "InventoryGrpcService.reserve",
+           "Line": 31
+          },
+          "Via": "",
+          "Method": ""
+         },
+         {
+          "Node": {
+           "Project": "java/inventory",
+           "File": "src/main/java/com/example/inventory/reservation/ReservationService.java",
+           "Name": "ReservationService.reserve",
+           "Line": 24
+          },
+          "Via": "call",
+          "Method": ""
+         }
+        ],
+        "Sure": 0,
+        "Iface": 0
+       }
       }
-     ]
+     ],
+     "call": {
+      "Steps": [
+       {
+        "Node": {
+         "Project": "java/inventory",
+         "File": "src/main/java/com/example/inventory/grpc/InventoryGrpcService.java",
+         "Name": "InventoryGrpcService.reserve",
+         "Line": 31
+        },
+        "Via": "",
+        "Method": ""
+       },
+       {
+        "Node": {
+         "Project": "java/inventory",
+         "File": "src/main/java/com/example/inventory/reservation/ReservationService.java",
+         "Name": "ReservationService.reserve",
+         "Line": 24
+        },
+        "Via": "call",
+        "Method": ""
+       }
+      ],
+      "Sure": 0,
+      "Iface": 0
+     }
     }
    ]
   }
@@ -84,7 +136,33 @@
          "before": "try {",
          "after": "return c.tier() == null || c.tier().isBlank() ? STANDARD : c.tier();",
          "type": "Customer",
-         "fn": "OrdersCustomerDirectory.tier"
+         "fn": "OrdersCustomerDirectory.tier",
+         "call": {
+          "Steps": [
+           {
+            "Node": {
+             "Project": "java/inventory",
+             "File": "src/main/java/com/example/inventory/reservation/ReservationService.java",
+             "Name": "ReservationService.reserve",
+             "Line": 24
+            },
+            "Via": "",
+            "Method": ""
+           },
+           {
+            "Node": {
+             "Project": "java/inventory",
+             "File": "src/main/java/com/example/inventory/customers/OrdersCustomerDirectory.java",
+             "Name": "OrdersCustomerDirectory.tier",
+             "Line": 19
+            },
+            "Via": "iface:guess",
+            "Method": ""
+           }
+          ],
+          "Sure": 0,
+          "Iface": 1
+         }
         },
         {
          "kind": "assign",
@@ -102,11 +180,99 @@
            "after": "super(message, cause);",
            "type": "String",
            "fn": "CustomerLookupException.\u003cinit\u003e",
-           "via": "src/main/java/com/example/inventory/customers/OrdersCustomerDirectory.java:33"
+           "via": "src/main/java/com/example/inventory/customers/OrdersCustomerDirectory.java:33",
+           "call": {
+            "Steps": [
+             {
+              "Node": {
+               "Project": "java/inventory",
+               "File": "src/main/java/com/example/inventory/reservation/ReservationService.java",
+               "Name": "ReservationService.reserve",
+               "Line": 24
+              },
+              "Via": "",
+              "Method": ""
+             },
+             {
+              "Node": {
+               "Project": "java/inventory",
+               "File": "src/main/java/com/example/inventory/customers/OrdersCustomerDirectory.java",
+               "Name": "OrdersCustomerDirectory.tier",
+               "Line": 19
+              },
+              "Via": "iface:guess",
+              "Method": ""
+             },
+             {
+              "Node": {
+               "Project": "java/inventory",
+               "File": "src/main/java/com/example/inventory/customers/CustomerLookupException.java",
+               "Name": "CustomerLookupException.\u003cinit\u003e",
+               "Line": 4
+              },
+              "Via": "call",
+              "Method": ""
+             }
+            ],
+            "Sure": 0,
+            "Iface": 1
+           }
           }
-         ]
+         ],
+         "call": {
+          "Steps": [
+           {
+            "Node": {
+             "Project": "java/inventory",
+             "File": "src/main/java/com/example/inventory/reservation/ReservationService.java",
+             "Name": "ReservationService.reserve",
+             "Line": 24
+            },
+            "Via": "",
+            "Method": ""
+           },
+           {
+            "Node": {
+             "Project": "java/inventory",
+             "File": "src/main/java/com/example/inventory/customers/OrdersCustomerDirectory.java",
+             "Name": "OrdersCustomerDirectory.tier",
+             "Line": 19
+            },
+            "Via": "iface:guess",
+            "Method": ""
+           }
+          ],
+          "Sure": 0,
+          "Iface": 1
+         }
         }
-       ]
+       ],
+       "call": {
+        "Steps": [
+         {
+          "Node": {
+           "Project": "java/inventory",
+           "File": "src/main/java/com/example/inventory/reservation/ReservationService.java",
+           "Name": "ReservationService.reserve",
+           "Line": 24
+          },
+          "Via": "",
+          "Method": ""
+         },
+         {
+          "Node": {
+           "Project": "java/inventory",
+           "File": "src/main/java/com/example/inventory/customers/OrdersCustomerDirectory.java",
+           "Name": "OrdersCustomerDirectory.tier",
+           "Line": 19
+          },
+          "Via": "iface:guess",
+          "Method": ""
+         }
+        ],
+        "Sure": 0,
+        "Iface": 1
+       }
       }
      ]
     }

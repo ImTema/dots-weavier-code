@@ -92,8 +92,22 @@ func TestTraceJVMField(t *testing.T) {
 	} {
 		dir, err := filepath.Abs(filepath.Join("..", "..", "samples", c.dir))
 		require.NoError(t, err)
-		r, _, err := traceJVMField(project{c.dir, dir, "jvm"}, filepath.Join(dir, c.file), c.line, false)
+		r, _, err := traceJVMField(t.Context(), project{c.dir, dir, "jvm"}, filepath.Join(dir, c.file), c.line, 1, false)
 		require.NoError(t, err)
 		assert.Subset(t, flat(r), c.want, "%s:%d", c.file, c.line)
 	}
+}
+
+// A hop lands on a handler's first annotation: one parse finds the signature below it.
+func TestTraceJVMFieldSkipsAnnotations(t *testing.T) {
+	dir, err := filepath.Abs("../../samples/java/inventory")
+	require.NoError(t, err)
+	file := filepath.Join(dir, "src/main/java/com/example/inventory/grpc/InventoryGrpcService.java")
+	p := project{"java/inventory", dir, "jvm"}
+	_, _, err = traceJVMField(t.Context(), p, file, 31, 1, false)
+	require.Error(t, err, "an annotation computes no value")
+	r, line, err := traceJVMField(t.Context(), p, file, 31, 12, false)
+	require.NoError(t, err)
+	assert.Equal(t, 33, line)
+	assert.NotEmpty(t, r.Uses)
 }

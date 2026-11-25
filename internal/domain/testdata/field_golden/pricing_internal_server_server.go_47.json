@@ -75,37 +75,37 @@
        "kids": [
         {
          "kind": "store",
-         "loc": "fulfillment:internal/pricing/client.go:24",
+         "loc": "golang/fulfillment:internal/pricing/client.go:24",
          "code": "func (c *Client) Tax(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
          "before": "// cents and returns only its tax.",
          "after": "resp, err := c.rpc.Quote(ctx, \u0026pricingv1.QuoteRequest{",
          "type": "string",
          "fn": "Client.Tax",
-         "via": "fulfillment:internal/pricing/client.go:26",
+         "via": "golang/fulfillment:internal/pricing/client.go:26",
          "kids": [
           {
            "kind": "arg",
-           "loc": "fulfillment:internal/plan/quote.go:61",
+           "loc": "golang/fulfillment:internal/plan/quote.go:61",
            "code": "func (p *Planner) askTax(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
            "before": "// askTax is one call to pricing, bounded by taxTimeout.",
            "after": "ctx, cancel := context.WithTimeout(ctx, taxTimeout)",
            "type": "string",
            "fn": "Planner.askTax",
-           "via": "fulfillment:internal/plan/quote.go:64",
+           "via": "golang/fulfillment:internal/plan/quote.go:64",
            "kids": [
             {
              "kind": "arg",
-             "loc": "fulfillment:internal/plan/quote.go:52",
+             "loc": "golang/fulfillment:internal/plan/quote.go:52",
              "code": "func (p *Planner) taxOn(ctx context.Context, customerID, region string, cents int64) (int64, error) {",
              "before": "// a pricing restart drops the odd call. A cancelled ctx is not retried.",
              "after": "tax, err := p.askTax(ctx, customerID, region, cents)",
              "type": "string",
              "fn": "Planner.taxOn",
-             "via": "fulfillment:internal/plan/quote.go:53",
+             "via": "golang/fulfillment:internal/plan/quote.go:53",
              "kids": [
               {
                "kind": "arg",
-               "loc": "fulfillment:internal/plan/quote.go:43",
+               "loc": "golang/fulfillment:internal/plan/quote.go:43",
                "code": "tax, err := p.taxOn(ctx, o.CustomerID, region, ins)",
                "before": "}",
                "after": "if err != nil {",
@@ -119,7 +119,7 @@
                  "kids": [
                   {
                    "kind": "store",
-                   "loc": "fulfillment:internal/server/server.go:28",
+                   "loc": "golang/fulfillment:internal/server/server.go:28",
                    "code": "CustomerID: req.GetCustomerId(),",
                    "before": "ID:         req.GetOrderId(),",
                    "after": "Units:      req.GetUnits(),",
@@ -128,7 +128,7 @@
                    "kids": [
                     {
                      "kind": "return",
-                     "loc": "fulfillment:api/fulfillment/v1/fulfillment.pb.go:73",
+                     "loc": "golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:73",
                      "code": "return x.CustomerId",
                      "before": "if x != nil {",
                      "after": "}",
@@ -142,7 +142,7 @@
                        "kids": [
                         {
                          "kind": "store",
-                         "loc": "fulfillment:internal/events/subscriber.go:82",
+                         "loc": "golang/fulfillment:internal/events/subscriber.go:82",
                          "code": "CustomerId: e.GetCustomerId(),",
                          "before": "OrderId:    e.GetOrderId(),",
                          "after": "Units:      e.GetUnits(),",
@@ -156,20 +156,232 @@
                            "kids": [
                             {
                              "kind": "store",
-                             "loc": "orders:internal/events/publisher.go:50",
+                             "loc": "golang/orders:internal/events/publisher.go:50",
                              "code": "CustomerId: o.CustomerID,",
                              "before": "OrderId:    o.ID,",
                              "after": "TotalCents: o.TotalCents,",
                              "type": "string",
-                             "fn": "Publisher.OrderPlaced"
+                             "fn": "Publisher.OrderPlaced",
+                             "call": {
+                              "Steps": [
+                               {
+                                "Node": {
+                                 "Project": "golang/orders",
+                                 "File": "internal/events/publisher.go",
+                                 "Name": "Publisher.OrderPlaced",
+                                 "Line": 44
+                                },
+                                "Via": "",
+                                "Method": ""
+                               },
+                               {
+                                "Node": {
+                                 "Project": "golang/fulfillment",
+                                 "File": "internal/events/subscriber.go",
+                                 "Name": "Subscriber.Run$1",
+                                 "Line": 56
+                                },
+                                "Via": "pubsub",
+                                "Method": "topic order-placed"
+                               },
+                               {
+                                "Node": {
+                                 "Project": "golang/fulfillment",
+                                 "File": "internal/events/subscriber.go",
+                                 "Name": "Subscriber.Handle",
+                                 "Line": 75
+                                },
+                                "Via": "call",
+                                "Method": ""
+                               },
+                               {
+                                "Node": {
+                                 "Project": "golang/fulfillment",
+                                 "File": "internal/server/server.go",
+                                 "Name": "Server.Schedule",
+                                 "Line": 25
+                                },
+                                "Via": "call",
+                                "Method": ""
+                               },
+                               {
+                                "Node": {
+                                 "Project": "golang/fulfillment",
+                                 "File": "internal/plan/planner.go",
+                                 "Name": "Planner.Plan",
+                                 "Line": 55
+                                },
+                                "Via": "call",
+                                "Method": ""
+                               },
+                               {
+                                "Node": {
+                                 "Project": "golang/fulfillment",
+                                 "File": "internal/plan/quote.go",
+                                 "Name": "Planner.quote",
+                                 "Line": 20
+                                },
+                                "Via": "call",
+                                "Method": ""
+                               },
+                               {
+                                "Node": {
+                                 "Project": "golang/fulfillment",
+                                 "File": "internal/plan/quote.go",
+                                 "Name": "Planner.insure",
+                                 "Line": 38
+                                },
+                                "Via": "call",
+                                "Method": ""
+                               },
+                               {
+                                "Node": {
+                                 "Project": "golang/fulfillment",
+                                 "File": "internal/plan/quote.go",
+                                 "Name": "Planner.taxOn",
+                                 "Line": 52
+                                },
+                                "Via": "call",
+                                "Method": ""
+                               },
+                               {
+                                "Node": {
+                                 "Project": "golang/fulfillment",
+                                 "File": "internal/plan/quote.go",
+                                 "Name": "Planner.askTax",
+                                 "Line": 61
+                                },
+                                "Via": "call",
+                                "Method": ""
+                               },
+                               {
+                                "Node": {
+                                 "Project": "golang/fulfillment",
+                                 "File": "internal/pricing/client.go",
+                                 "Name": "Client.Tax",
+                                 "Line": 24
+                                },
+                                "Via": "iface:sure",
+                                "Method": ""
+                               },
+                               {
+                                "Node": {
+                                 "Project": "golang/pricing",
+                                 "File": "internal/server/server.go",
+                                 "Name": "Server.Quote",
+                                 "Line": 43
+                                },
+                                "Via": "grpc",
+                                "Method": "/pricing.v1.PricingService/Quote"
+                               }
+                              ],
+                              "Sure": 1,
+                              "Iface": 1
+                             }
                             }
                            ]
                           }
-                         ]
+                         ],
+                         "call": {
+                          "Steps": [
+                           {
+                            "Node": {
+                             "Project": "golang/fulfillment",
+                             "File": "internal/events/subscriber.go",
+                             "Name": "Subscriber.Handle",
+                             "Line": 75
+                            },
+                            "Via": "",
+                            "Method": ""
+                           },
+                           {
+                            "Node": {
+                             "Project": "golang/fulfillment",
+                             "File": "internal/server/server.go",
+                             "Name": "Server.Schedule",
+                             "Line": 25
+                            },
+                            "Via": "call",
+                            "Method": ""
+                           },
+                           {
+                            "Node": {
+                             "Project": "golang/fulfillment",
+                             "File": "internal/plan/planner.go",
+                             "Name": "Planner.Plan",
+                             "Line": 55
+                            },
+                            "Via": "call",
+                            "Method": ""
+                           },
+                           {
+                            "Node": {
+                             "Project": "golang/fulfillment",
+                             "File": "internal/plan/quote.go",
+                             "Name": "Planner.quote",
+                             "Line": 20
+                            },
+                            "Via": "call",
+                            "Method": ""
+                           },
+                           {
+                            "Node": {
+                             "Project": "golang/fulfillment",
+                             "File": "internal/plan/quote.go",
+                             "Name": "Planner.insure",
+                             "Line": 38
+                            },
+                            "Via": "call",
+                            "Method": ""
+                           },
+                           {
+                            "Node": {
+                             "Project": "golang/fulfillment",
+                             "File": "internal/plan/quote.go",
+                             "Name": "Planner.taxOn",
+                             "Line": 52
+                            },
+                            "Via": "call",
+                            "Method": ""
+                           },
+                           {
+                            "Node": {
+                             "Project": "golang/fulfillment",
+                             "File": "internal/plan/quote.go",
+                             "Name": "Planner.askTax",
+                             "Line": 61
+                            },
+                            "Via": "call",
+                            "Method": ""
+                           },
+                           {
+                            "Node": {
+                             "Project": "golang/fulfillment",
+                             "File": "internal/pricing/client.go",
+                             "Name": "Client.Tax",
+                             "Line": 24
+                            },
+                            "Via": "iface:sure",
+                            "Method": ""
+                           },
+                           {
+                            "Node": {
+                             "Project": "golang/pricing",
+                             "File": "internal/server/server.go",
+                             "Name": "Server.Quote",
+                             "Line": 43
+                            },
+                            "Via": "grpc",
+                            "Method": "/pricing.v1.PricingService/Quote"
+                           }
+                          ],
+                          "Sure": 1,
+                          "Iface": 1
+                         }
                         },
                         {
                          "kind": "store",
-                         "loc": "orders:internal/fulfiller/client.go:25",
+                         "loc": "golang/orders:internal/fulfiller/client.go:25",
                          "code": "CustomerId: o.CustomerID,",
                          "before": "OrderId:    o.ID,",
                          "after": "Units:      o.Units,",
@@ -183,16 +395,148 @@
                            "kids": [
                             {
                              "kind": "store",
-                             "loc": "orders:internal/order/order.go:104",
+                             "loc": "golang/orders:internal/order/order.go:104",
                              "code": "CustomerID:    c.ID,",
                              "before": "ID:            fmt.Sprintf(\"o-%d\", s.seq.Add(1)),",
                              "after": "ReservationID: resID,",
                              "type": "string",
-                             "fn": "Service.Place"
+                             "fn": "Service.Place",
+                             "call": {
+                              "Steps": [
+                               {
+                                "Node": {
+                                 "Project": "golang/orders",
+                                 "File": "internal/order/order.go",
+                                 "Name": "Service.Place",
+                                 "Line": 82
+                                },
+                                "Via": "",
+                                "Method": ""
+                               },
+                               {
+                                "Node": {
+                                 "Project": "golang/orders",
+                                 "File": "internal/pricer/pricer.go",
+                                 "Name": "Client.Price",
+                                 "Line": 21
+                                },
+                                "Via": "iface:sure",
+                                "Method": ""
+                               },
+                               {
+                                "Node": {
+                                 "Project": "golang/pricing",
+                                 "File": "internal/server/server.go",
+                                 "Name": "Server.Quote",
+                                 "Line": 43
+                                },
+                                "Via": "grpc",
+                                "Method": "/pricing.v1.PricingService/Quote"
+                               }
+                              ],
+                              "Sure": 1,
+                              "Iface": 1
+                             }
                             }
                            ]
                           }
-                         ]
+                         ],
+                         "call": {
+                          "Steps": [
+                           {
+                            "Node": {
+                             "Project": "golang/orders",
+                             "File": "internal/fulfiller/client.go",
+                             "Name": "Client.Schedule",
+                             "Line": 22
+                            },
+                            "Via": "",
+                            "Method": ""
+                           },
+                           {
+                            "Node": {
+                             "Project": "golang/fulfillment",
+                             "File": "internal/server/server.go",
+                             "Name": "Server.Schedule",
+                             "Line": 25
+                            },
+                            "Via": "grpc",
+                            "Method": "/fulfillment.v1.FulfillmentService/Schedule"
+                           },
+                           {
+                            "Node": {
+                             "Project": "golang/fulfillment",
+                             "File": "internal/plan/planner.go",
+                             "Name": "Planner.Plan",
+                             "Line": 55
+                            },
+                            "Via": "call",
+                            "Method": ""
+                           },
+                           {
+                            "Node": {
+                             "Project": "golang/fulfillment",
+                             "File": "internal/plan/quote.go",
+                             "Name": "Planner.quote",
+                             "Line": 20
+                            },
+                            "Via": "call",
+                            "Method": ""
+                           },
+                           {
+                            "Node": {
+                             "Project": "golang/fulfillment",
+                             "File": "internal/plan/quote.go",
+                             "Name": "Planner.insure",
+                             "Line": 38
+                            },
+                            "Via": "call",
+                            "Method": ""
+                           },
+                           {
+                            "Node": {
+                             "Project": "golang/fulfillment",
+                             "File": "internal/plan/quote.go",
+                             "Name": "Planner.taxOn",
+                             "Line": 52
+                            },
+                            "Via": "call",
+                            "Method": ""
+                           },
+                           {
+                            "Node": {
+                             "Project": "golang/fulfillment",
+                             "File": "internal/plan/quote.go",
+                             "Name": "Planner.askTax",
+                             "Line": 61
+                            },
+                            "Via": "call",
+                            "Method": ""
+                           },
+                           {
+                            "Node": {
+                             "Project": "golang/fulfillment",
+                             "File": "internal/pricing/client.go",
+                             "Name": "Client.Tax",
+                             "Line": 24
+                            },
+                            "Via": "iface:sure",
+                            "Method": ""
+                           },
+                           {
+                            "Node": {
+                             "Project": "golang/pricing",
+                             "File": "internal/server/server.go",
+                             "Name": "Server.Quote",
+                             "Line": 43
+                            },
+                            "Via": "grpc",
+                            "Method": "/pricing.v1.PricingService/Quote"
+                           }
+                          ],
+                          "Sure": 1,
+                          "Iface": 1
+                         }
                         }
                        ]
                       }
@@ -200,27 +544,277 @@
                     },
                     {
                      "kind": "return",
-                     "loc": "fulfillment:api/fulfillment/v1/fulfillment.pb.go:75",
+                     "loc": "golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:75",
                      "code": "return \"\"",
                      "before": "}",
                      "after": "}",
                      "type": "string"
                     }
-                   ]
+                   ],
+                   "call": {
+                    "Steps": [
+                     {
+                      "Node": {
+                       "Project": "golang/fulfillment",
+                       "File": "internal/server/server.go",
+                       "Name": "Server.Schedule",
+                       "Line": 25
+                      },
+                      "Via": "",
+                      "Method": ""
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/fulfillment",
+                       "File": "internal/plan/planner.go",
+                       "Name": "Planner.Plan",
+                       "Line": 55
+                      },
+                      "Via": "call",
+                      "Method": ""
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/fulfillment",
+                       "File": "internal/plan/quote.go",
+                       "Name": "Planner.quote",
+                       "Line": 20
+                      },
+                      "Via": "call",
+                      "Method": ""
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/fulfillment",
+                       "File": "internal/plan/quote.go",
+                       "Name": "Planner.insure",
+                       "Line": 38
+                      },
+                      "Via": "call",
+                      "Method": ""
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/fulfillment",
+                       "File": "internal/plan/quote.go",
+                       "Name": "Planner.taxOn",
+                       "Line": 52
+                      },
+                      "Via": "call",
+                      "Method": ""
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/fulfillment",
+                       "File": "internal/plan/quote.go",
+                       "Name": "Planner.askTax",
+                       "Line": 61
+                      },
+                      "Via": "call",
+                      "Method": ""
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/fulfillment",
+                       "File": "internal/pricing/client.go",
+                       "Name": "Client.Tax",
+                       "Line": 24
+                      },
+                      "Via": "iface:sure",
+                      "Method": ""
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/pricing",
+                       "File": "internal/server/server.go",
+                       "Name": "Server.Quote",
+                       "Line": 43
+                      },
+                      "Via": "grpc",
+                      "Method": "/pricing.v1.PricingService/Quote"
+                     }
+                    ],
+                    "Sure": 1,
+                    "Iface": 1
+                   }
                   }
                  ]
                 }
-               ]
+               ],
+               "call": {
+                "Steps": [
+                 {
+                  "Node": {
+                   "Project": "golang/fulfillment",
+                   "File": "internal/plan/quote.go",
+                   "Name": "Planner.insure",
+                   "Line": 38
+                  },
+                  "Via": "",
+                  "Method": ""
+                 },
+                 {
+                  "Node": {
+                   "Project": "golang/fulfillment",
+                   "File": "internal/plan/quote.go",
+                   "Name": "Planner.taxOn",
+                   "Line": 52
+                  },
+                  "Via": "call",
+                  "Method": ""
+                 },
+                 {
+                  "Node": {
+                   "Project": "golang/fulfillment",
+                   "File": "internal/plan/quote.go",
+                   "Name": "Planner.askTax",
+                   "Line": 61
+                  },
+                  "Via": "call",
+                  "Method": ""
+                 },
+                 {
+                  "Node": {
+                   "Project": "golang/fulfillment",
+                   "File": "internal/pricing/client.go",
+                   "Name": "Client.Tax",
+                   "Line": 24
+                  },
+                  "Via": "iface:sure",
+                  "Method": ""
+                 },
+                 {
+                  "Node": {
+                   "Project": "golang/pricing",
+                   "File": "internal/server/server.go",
+                   "Name": "Server.Quote",
+                   "Line": 43
+                  },
+                  "Via": "grpc",
+                  "Method": "/pricing.v1.PricingService/Quote"
+                 }
+                ],
+                "Sure": 1,
+                "Iface": 1
+               }
               }
-             ]
+             ],
+             "call": {
+              "Steps": [
+               {
+                "Node": {
+                 "Project": "golang/fulfillment",
+                 "File": "internal/plan/quote.go",
+                 "Name": "Planner.taxOn",
+                 "Line": 52
+                },
+                "Via": "",
+                "Method": ""
+               },
+               {
+                "Node": {
+                 "Project": "golang/fulfillment",
+                 "File": "internal/plan/quote.go",
+                 "Name": "Planner.askTax",
+                 "Line": 61
+                },
+                "Via": "call",
+                "Method": ""
+               },
+               {
+                "Node": {
+                 "Project": "golang/fulfillment",
+                 "File": "internal/pricing/client.go",
+                 "Name": "Client.Tax",
+                 "Line": 24
+                },
+                "Via": "iface:sure",
+                "Method": ""
+               },
+               {
+                "Node": {
+                 "Project": "golang/pricing",
+                 "File": "internal/server/server.go",
+                 "Name": "Server.Quote",
+                 "Line": 43
+                },
+                "Via": "grpc",
+                "Method": "/pricing.v1.PricingService/Quote"
+               }
+              ],
+              "Sure": 1,
+              "Iface": 1
+             }
             }
-           ]
+           ],
+           "call": {
+            "Steps": [
+             {
+              "Node": {
+               "Project": "golang/fulfillment",
+               "File": "internal/plan/quote.go",
+               "Name": "Planner.askTax",
+               "Line": 61
+              },
+              "Via": "",
+              "Method": ""
+             },
+             {
+              "Node": {
+               "Project": "golang/fulfillment",
+               "File": "internal/pricing/client.go",
+               "Name": "Client.Tax",
+               "Line": 24
+              },
+              "Via": "iface:sure",
+              "Method": ""
+             },
+             {
+              "Node": {
+               "Project": "golang/pricing",
+               "File": "internal/server/server.go",
+               "Name": "Server.Quote",
+               "Line": 43
+              },
+              "Via": "grpc",
+              "Method": "/pricing.v1.PricingService/Quote"
+             }
+            ],
+            "Sure": 1,
+            "Iface": 1
+           }
           }
-         ]
+         ],
+         "call": {
+          "Steps": [
+           {
+            "Node": {
+             "Project": "golang/fulfillment",
+             "File": "internal/pricing/client.go",
+             "Name": "Client.Tax",
+             "Line": 24
+            },
+            "Via": "",
+            "Method": ""
+           },
+           {
+            "Node": {
+             "Project": "golang/pricing",
+             "File": "internal/server/server.go",
+             "Name": "Server.Quote",
+             "Line": 43
+            },
+            "Via": "grpc",
+            "Method": "/pricing.v1.PricingService/Quote"
+           }
+          ],
+          "Sure": 0,
+          "Iface": 0
+         }
         },
         {
          "kind": "store",
-         "loc": "orders:internal/pricer/pricer.go:23",
+         "loc": "golang/orders:internal/pricer/pricer.go:23",
          "code": "CustomerId: c.ID,",
          "before": "req := \u0026pricingv1.QuoteRequest{",
          "after": "Region:     c.Region,",
@@ -234,7 +828,7 @@
            "kids": [
             {
              "kind": "store",
-             "loc": "orders:internal/customer/store.go:33",
+             "loc": "golang/orders:internal/customer/store.go:33",
              "code": "{ID: \"c1\", Tier: api.TierGold, Region: \"EU\"},",
              "before": "return []api.Customer{",
              "after": "{ID: \"c2\", Tier: api.TierSilver, Region: \"US\", Phone: \"+15550100\"},",
@@ -242,7 +836,7 @@
             },
             {
              "kind": "store",
-             "loc": "orders:internal/customer/store.go:34",
+             "loc": "golang/orders:internal/customer/store.go:34",
              "code": "{ID: \"c2\", Tier: api.TierSilver, Region: \"US\", Phone: \"+15550100\"},",
              "before": "{ID: \"c1\", Tier: api.TierGold, Region: \"EU\"},",
              "after": "{ID: \"c3\", Region: \"UK\"},",
@@ -250,7 +844,7 @@
             },
             {
              "kind": "store",
-             "loc": "orders:internal/customer/store.go:35",
+             "loc": "golang/orders:internal/customer/store.go:35",
              "code": "{ID: \"c3\", Region: \"UK\"},",
              "before": "{ID: \"c2\", Tier: api.TierSilver, Region: \"US\", Phone: \"+15550100\"},",
              "after": "}",
@@ -258,11 +852,63 @@
             }
            ]
           }
-         ]
+         ],
+         "call": {
+          "Steps": [
+           {
+            "Node": {
+             "Project": "golang/orders",
+             "File": "internal/pricer/pricer.go",
+             "Name": "Client.Price",
+             "Line": 21
+            },
+            "Via": "",
+            "Method": ""
+           },
+           {
+            "Node": {
+             "Project": "golang/pricing",
+             "File": "internal/server/server.go",
+             "Name": "Server.Quote",
+             "Line": 43
+            },
+            "Via": "grpc",
+            "Method": "/pricing.v1.PricingService/Quote"
+           }
+          ],
+          "Sure": 0,
+          "Iface": 0
+         }
         }
        ]
       }
-     ]
+     ],
+     "call": {
+      "Steps": [
+       {
+        "Node": {
+         "Project": "golang/pricing",
+         "File": "internal/server/server.go",
+         "Name": "Server.Quote",
+         "Line": 43
+        },
+        "Via": "",
+        "Method": ""
+       },
+       {
+        "Node": {
+         "Project": "golang/pricing",
+         "File": "api/pricing/v1/pricing.pb.go",
+         "Name": "QuoteRequest.GetCustomerId",
+         "Line": 123
+        },
+        "Via": "call",
+        "Method": ""
+       }
+      ],
+      "Sure": 0,
+      "Iface": 0
+     }
     },
     {
      "kind": "return",
@@ -270,7 +916,33 @@
      "code": "return \"\"",
      "before": "}",
      "after": "}",
-     "type": "string"
+     "type": "string",
+     "call": {
+      "Steps": [
+       {
+        "Node": {
+         "Project": "golang/pricing",
+         "File": "internal/server/server.go",
+         "Name": "Server.Quote",
+         "Line": 43
+        },
+        "Via": "",
+        "Method": ""
+       },
+       {
+        "Node": {
+         "Project": "golang/pricing",
+         "File": "api/pricing/v1/pricing.pb.go",
+         "Name": "QuoteRequest.GetCustomerId",
+         "Line": 123
+        },
+        "Via": "call",
+        "Method": ""
+       }
+      ],
+      "Sure": 0,
+      "Iface": 0
+     }
     }
    ]
   }
@@ -333,7 +1005,33 @@
              "code": "defer resp.Body.Close()",
              "before": "}",
              "type": "*io.ReadCloser",
-             "fn": "Client.Tier"
+             "fn": "Client.Tier",
+             "call": {
+              "Steps": [
+               {
+                "Node": {
+                 "Project": "golang/pricing",
+                 "File": "internal/server/server.go",
+                 "Name": "Server.Quote",
+                 "Line": 43
+                },
+                "Via": "",
+                "Method": ""
+               },
+               {
+                "Node": {
+                 "Project": "golang/pricing",
+                 "File": "internal/customers/client.go",
+                 "Name": "Client.Tier",
+                 "Line": 27
+                },
+                "Via": "iface:sure",
+                "Method": ""
+               }
+              ],
+              "Sure": 1,
+              "Iface": 1
+             }
             },
             {
              "kind": "container",
@@ -341,7 +1039,33 @@
              "code": "if resp.StatusCode == http.StatusNotFound {",
              "after": "return ordersapi.TierStandard, nil",
              "type": "*int",
-             "fn": "Client.Tier"
+             "fn": "Client.Tier",
+             "call": {
+              "Steps": [
+               {
+                "Node": {
+                 "Project": "golang/pricing",
+                 "File": "internal/server/server.go",
+                 "Name": "Server.Quote",
+                 "Line": 43
+                },
+                "Via": "",
+                "Method": ""
+               },
+               {
+                "Node": {
+                 "Project": "golang/pricing",
+                 "File": "internal/customers/client.go",
+                 "Name": "Client.Tier",
+                 "Line": 27
+                },
+                "Via": "iface:sure",
+                "Method": ""
+               }
+              ],
+              "Sure": 1,
+              "Iface": 1
+             }
             },
             {
              "kind": "container",
@@ -350,7 +1074,33 @@
              "before": "return ordersapi.TierStandard, nil",
              "after": "return \"\", fmt.Errorf(\"get customer: unexpected status %s\", resp.Status)",
              "type": "*int",
-             "fn": "Client.Tier"
+             "fn": "Client.Tier",
+             "call": {
+              "Steps": [
+               {
+                "Node": {
+                 "Project": "golang/pricing",
+                 "File": "internal/server/server.go",
+                 "Name": "Server.Quote",
+                 "Line": 43
+                },
+                "Via": "",
+                "Method": ""
+               },
+               {
+                "Node": {
+                 "Project": "golang/pricing",
+                 "File": "internal/customers/client.go",
+                 "Name": "Client.Tier",
+                 "Line": 27
+                },
+                "Via": "iface:sure",
+                "Method": ""
+               }
+              ],
+              "Sure": 1,
+              "Iface": 1
+             }
             },
             {
              "kind": "container",
@@ -359,7 +1109,33 @@
              "before": "} else if resp.StatusCode != http.StatusOK {",
              "after": "}",
              "type": "*string",
-             "fn": "Client.Tier"
+             "fn": "Client.Tier",
+             "call": {
+              "Steps": [
+               {
+                "Node": {
+                 "Project": "golang/pricing",
+                 "File": "internal/server/server.go",
+                 "Name": "Server.Quote",
+                 "Line": 43
+                },
+                "Via": "",
+                "Method": ""
+               },
+               {
+                "Node": {
+                 "Project": "golang/pricing",
+                 "File": "internal/customers/client.go",
+                 "Name": "Client.Tier",
+                 "Line": 27
+                },
+                "Via": "iface:sure",
+                "Method": ""
+               }
+              ],
+              "Sure": 1,
+              "Iface": 1
+             }
             },
             {
              "kind": "container",
@@ -368,15 +1144,145 @@
              "before": "var cust ordersapi.Customer",
              "after": "return \"\", fmt.Errorf(\"decode customer: %w\", err)",
              "type": "*io.ReadCloser",
-             "fn": "Client.Tier"
+             "fn": "Client.Tier",
+             "call": {
+              "Steps": [
+               {
+                "Node": {
+                 "Project": "golang/pricing",
+                 "File": "internal/server/server.go",
+                 "Name": "Server.Quote",
+                 "Line": 43
+                },
+                "Via": "",
+                "Method": ""
+               },
+               {
+                "Node": {
+                 "Project": "golang/pricing",
+                 "File": "internal/customers/client.go",
+                 "Name": "Client.Tier",
+                 "Line": 27
+                },
+                "Via": "iface:sure",
+                "Method": ""
+               }
+              ],
+              "Sure": 1,
+              "Iface": 1
+             }
             }
-           ]
+           ],
+           "call": {
+            "Steps": [
+             {
+              "Node": {
+               "Project": "golang/pricing",
+               "File": "internal/server/server.go",
+               "Name": "Server.Quote",
+               "Line": 43
+              },
+              "Via": "",
+              "Method": ""
+             },
+             {
+              "Node": {
+               "Project": "golang/pricing",
+               "File": "internal/customers/client.go",
+               "Name": "Client.Tier",
+               "Line": 27
+              },
+              "Via": "iface:sure",
+              "Method": ""
+             }
+            ],
+            "Sure": 1,
+            "Iface": 1
+           }
           }
-         ]
+         ],
+         "call": {
+          "Steps": [
+           {
+            "Node": {
+             "Project": "golang/pricing",
+             "File": "internal/server/server.go",
+             "Name": "Server.Quote",
+             "Line": 43
+            },
+            "Via": "",
+            "Method": ""
+           },
+           {
+            "Node": {
+             "Project": "golang/pricing",
+             "File": "internal/customers/client.go",
+             "Name": "Client.Tier",
+             "Line": 27
+            },
+            "Via": "iface:sure",
+            "Method": ""
+           }
+          ],
+          "Sure": 1,
+          "Iface": 1
+         }
         }
-       ]
+       ],
+       "call": {
+        "Steps": [
+         {
+          "Node": {
+           "Project": "golang/pricing",
+           "File": "internal/server/server.go",
+           "Name": "Server.Quote",
+           "Line": 43
+          },
+          "Via": "",
+          "Method": ""
+         },
+         {
+          "Node": {
+           "Project": "golang/pricing",
+           "File": "internal/customers/client.go",
+           "Name": "Client.Tier",
+           "Line": 27
+          },
+          "Via": "iface:sure",
+          "Method": ""
+         }
+        ],
+        "Sure": 1,
+        "Iface": 1
+       }
       }
-     ]
+     ],
+     "call": {
+      "Steps": [
+       {
+        "Node": {
+         "Project": "golang/pricing",
+         "File": "internal/server/server.go",
+         "Name": "Server.Quote",
+         "Line": 43
+        },
+        "Via": "",
+        "Method": ""
+       },
+       {
+        "Node": {
+         "Project": "golang/pricing",
+         "File": "internal/customers/client.go",
+         "Name": "Client.Tier",
+         "Line": 27
+        },
+        "Via": "iface:sure",
+        "Method": ""
+       }
+      ],
+      "Sure": 1,
+      "Iface": 1
+     }
     }
    ]
   }

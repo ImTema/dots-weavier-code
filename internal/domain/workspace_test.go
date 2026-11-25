@@ -77,18 +77,26 @@ func TestWorkspaceRegistryAndInvalid(t *testing.T) {
 	_, loaded, _, _ := loadIndexes([]string{filepath.Join(ws, "other"), svc}, nil)
 	assert.True(t, loaded["a"] && loaded["b"], "default loads %v, want a and b", loaded)
 
-	// A field address resolves from any folder through the innermost registered folder.
+	// A field address resolves from any folder through the registered folders;
+	// the innermost registered folder wins.
+	// The run traces the registered folder holding the project, named as there.
 	elsewhere := t.TempDir()
-	dir, err := FieldDir(elsewhere, "b.go:3")
+	dir, addr, err := runFolder(elsewhere, "b.go:3")
 	assert.NoError(t, err)
 	assert.Equal(t, filepath.Join(ws, "other"), dir)
-	dir, err = FieldDir(elsewhere, "api/api.go:3")
+	assert.Equal(t, "b:b.go:3", addr)
+	dir, _, err = runFolder(elsewhere, "api/api.go:3")
 	assert.NoError(t, err)
 	assert.Equal(t, svc, dir, "want svc, inside the team folder")
-	dir, err = FieldDir(svc, "a.go:3")
+	dir, addr, err = runFolder(svc, "a.go:3")
 	assert.NoError(t, err)
 	assert.Equal(t, svc, dir, "the given folder has the file")
-	_, err = FieldDir(elsewhere, "nope.go:3")
+	assert.Equal(t, "a:a.go:3", addr)
+	dir, addr, err = runFolder(filepath.Join(svc, "a"), "a.go:3")
+	assert.NoError(t, err)
+	assert.Equal(t, svc, dir, "inside a project: want the registered folder holding it")
+	assert.Equal(t, "a:a.go:3", addr)
+	_, _, err = runFolder(elsewhere, "nope.go:3")
 	assert.ErrorContains(t, err, "no project has nope.go")
 
 	// Two folders of one workspace may not produce one project name.

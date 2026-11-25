@@ -70,31 +70,31 @@ func (t *tracker) referrers(v ssa.Value) []ssa.Instruction {
 
 // walk is one direction of propagation, matching calls one level deep (ADR 0009).
 type walk struct {
+	*fwalk
 	t       *tracker
-	back    bool
-	hits    map[tkey]hit
-	order   []tkey // taint order; a key's parent always comes first
-	queue   []tkey
 	entered map[*ssa.Function][]ssa.CallInstruction
 	free    map[*ssa.Function]bool
 	pend    map[*ssa.Function]map[int]ssa.Value // ways out: forward results, backward params
 }
 
-func (t *tracker) newWalk(back bool) *walk {
-	return &walk{t: t, back: back, hits: map[tkey]hit{}, entered: map[*ssa.Function][]ssa.CallInstruction{},
+func (t *tracker) newWalk(w *fwalk) *walk {
+	return &walk{fwalk: w, t: t, entered: map[*ssa.Function][]ssa.CallInstruction{},
 		free: map[*ssa.Function]bool{}, pend: map[*ssa.Function]map[int]ssa.Value{}}
 }
+
+func (t *tracker) taint(w *fwalk, k, from tkey, how flow, at any) {
+	t.walks[w].taint(k, from, how, at.(token.Pos))
+}
+
+func (t *tracker) follow(w *fwalk, k tkey) { t.walks[w].follow(k) }
 
 func (w *walk) taint(k, from tkey, how flow, pos token.Pos) {
 	if v, ok := k.(ssa.Value); ok && !useful(v.Type()) {
 		return
 	}
-	if _, ok := w.hits[k]; !ok {
-		w.hits[k] = hit{from, how, pos}
-		w.order = append(w.order, k)
-		w.queue = append(w.queue, k)
-	}
-	// Checked on every way in, so the result does not depend on visit order.
+	w.add(k, from, how, pos)
+	// Checked on every way in, not just the first, so the result does not depend
+	// on the order the walk happens to visit things.
 	enter, exit := fArg, fReturn
 	if w.back {
 		enter, exit = fReturn, fArg
@@ -156,34 +156,93 @@ func (w *walk) enter(f *ssa.Function, s ssa.CallInstruction) {
 	}
 }
 
-func (w *walk) run() {
-	for len(w.queue) > 0 {
-		k := w.queue[0]
-		w.queue = w.queue[1:]
-		switch k := k.(type) {
-		case fieldKey:
-			if w.back {
-				w.fieldBack(k)
-			} else {
-				w.field(k)
-			}
-		case ssa.Value:
-			if w.back {
-				w.valueBack(k)
-			} else {
-				w.value(k)
-			}
+func (w *walk) follow(k tkey) {
+	switch k := k.(type) {
+	case fieldKey:
+		if w.back {
+			w.fieldBack(k)
+		} else {
+			w.field(k)
+		}
+	case ssa.Value:
+		if w.back {
+			w.valueBack(k)
+		} else {
+			w.value(k)
 		}
 	}
 }
 
 // requeueFields revisits reached fields after a project was added: it has new uses.
-func (w *walk) requeueFields() {
+func requeueFields(w *fwalk) {
 	for _, k := range w.order {
 		if f, ok := k.(fieldKey); ok {
 			w.queue = append(w.queue, f)
 		}
 	}
+}
+
+// place shows a field as pkg.Type.Field and a value at its line; a parameter at
+// its declaration, the call site goes to via.
+func (t *tracker) place(w *fwalk, k tkey) fplace {
+	if f, ok := k.(fieldKey); ok {
+		v := t.fields[f]
+		p := fplace{field: string(f), typ: types.TypeString(v.Type(), qual)}
+		if v.Pkg() != nil {
+			p.pkg = v.Pkg().Name()
+		}
+		if !w.back {
+			p.over = t.overwrites(f)
+		}
+		return p
+	}
+	v, at := k.(ssa.Value), w.hits[k].at.(token.Pos)
+	pos := at
+	if p, ok := v.(*ssa.Parameter); ok && p.Pos().IsValid() {
+		pos = p.Pos()
+	}
+	if !pos.IsValid() {
+		pos = v.Pos()
+	}
+	fn := fnOf(v)
+	// SSA plumbing and method wrappers have no line of their own.
+	p := fplace{at: t.line(pos), fn: fn, join: !pos.IsValid() || fn != nil && fn.Synthetic != ""}
+	if fn != nil {
+		p.fnName = display(fn)
+	}
+	if _, ok := v.(*ssa.Parameter); ok && at != pos {
+		p.via = t.line(at)
+	}
+	if typ := v.Type(); useful(typ) {
+		if _, tuple := typ.(*types.Tuple); !tuple {
+			switch v.(type) {
+			case *ssa.Alloc, *ssa.Global:
+				typ = typ.Underlying().(*types.Pointer).Elem()
+			}
+			p.typ = types.TypeString(typ, qual)
+		}
+	}
+	return p
+}
+
+func (t *tracker) line(pos token.Pos) srcLine {
+	ps := t.fset.Position(pos)
+	return srcLine{ps.Filename, ps.Line}
+}
+
+func qual(pkg *types.Package) string { return pkg.Name() }
+
+// overwrites lists stores into f of values in neither tree: places where the
+// tracked value is replaced, e.g. `if app.ResultID == nil { app.ResultID = NewResultID() }`.
+func (t *tracker) overwrites(f fieldKey) []srcLine {
+	var out []srcLine
+	for st := range t.stores(f) {
+		_, used := t.fwd.hits[st.Val]
+		if _, origin := t.back.hits[st.Val]; !used && !origin {
+			out = append(out, t.line(st.Pos()))
+		}
+	}
+	return out
 }
 
 // field taints every read of a tainted struct field.

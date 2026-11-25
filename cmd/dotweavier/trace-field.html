@@ -68,7 +68,7 @@ function buildMenu(){const H=window.HISTORY||[], m=document.getElementById('hist
   addEventListener('mousedown',e=>{if(!m.contains(e.target)&&e.target!==btn)m.classList.remove('open');});
   addEventListener('keydown',e=>{if(e.key==='Escape')m.classList.remove('open');});}
 const escH=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-// An exported page (--export, or the export button) carries its run inline: no history, no server.
+// An exported page (--format html, or the export button) carries its run inline: no history, no server.
 if(window.EXPORTED){document.getElementById('menuBtn').remove(); start(window.TRACE);}
 else loadScript(HIST+'index.js',()=>{buildMenu(); loadScript(HIST+encodeURIComponent(traceName)+'.js',()=>start(window.TRACE),noData);});
 function noData(){document.body.insertAdjacentHTML('beforeend',`<div style="position:absolute;inset:40% 0 auto;text-align:center;color:#ff7a7a">no trace data at trace-field-history/${traceName.replace(/[<>&]/g,'')}.js<br><span style="color:#8b93c4">run: dotweavier trace field ADDR --format ui</span></div>`);}
@@ -78,7 +78,7 @@ const served=location.protocol.startsWith('http')&&!window.EXPORTED;
 const home=(D.addr.match(/^([^:]+):[^:]+\.(go|java|kt):\d+$/)||[])[1]||'';
 const KIND = {seed:'#ffffff',assign:'#6878b8',convert:'#6be4ff',transform:'#ffd06b',arg:'#7aa2ff',return:'#b88bff',
   store:'#ff9b6b',read:'#6dffc6',field:'#ff7ad9',container:'#c4ff6b',capture:'#9aa2d0','callback?':'#ffb35c',overwritten:'#ff5c5c',
-  grpc:'#ff4fe8',http:'#ff8c4f',pubsub:'#c88bff','pubsub:guess':'#a77bd6',lib:'#4fc3ff'};
+  grpc:'#ff4fe8',http:'#ff8c4f',pubsub:'#c88bff','pubsub:guess':'#a77bd6'};
 const mk=k=>'a'+k.replace(/[^a-z]/g,''); // marker id per kind
 const NW=300, NH=40, COL=360, ROW=52;
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -89,12 +89,15 @@ let all=[];
 // Open the first levels; a step with one way on stays open so chains read through.
 function wrap(d,side,depth,parent,j){const n={d,side,depth,parent,path:parent.path.concat(j),open:depth<(D.open||6)||(d.kids||[]).length<=1||isHop(d),kids:[]}; all.push(n);
   n.kids=(d.kids||[]).map((k,j)=>wrap(k,side,depth+1,n,j)); return n;}
-const isHop=d=>/^(grpc|http|pubsub|lib)/.test(d.kind);
+const isHop=d=>/^(grpc|http|pubsub)/.test(d.kind);
 const openHops=d=>(d.hops||[]).filter(h=>!h.followed).length;
 const centers=[];
-(D.uses||[]).forEach((u,i)=>{const o=(D.origin||[]).find(o=>o.loc===u.loc)||{kids:[]};
-  const c={d:u,side:0,depth:0,parent:null,path:[i],open:true,kids:[]}; all.push(c);
-  c.left=(o.kids||[]).map((k,j)=>wrap(k,-1,1,{path:[]},j)); c.left.forEach(k=>k.parent=c); c.right=(u.kids||[]).map((k,j)=>wrap(k,1,1,c,j)); centers.push(c);});
+// Seeds come from the uses tree; a run traced with --only origin has only the origin tree,
+// and its hops cannot be followed (follow looks steps up in the uses tree).
+const fromUses=(D.uses||[]).length>0;
+(fromUses?D.uses:(D.origin||[])).forEach((u,i)=>{const o=fromUses?(D.origin||[]).find(o=>o.loc===u.loc)||{kids:[]}:u;
+  const c={d:fromUses?u:{...u,hops:[]},side:0,depth:0,parent:null,path:[i],open:true,kids:[]}; all.push(c);
+  c.left=(o.kids||[]).map((k,j)=>wrap(k,-1,1,{path:[]},j)); c.left.forEach(k=>k.parent=c); c.right=fromUses?(u.kids||[]).map((k,j)=>wrap(k,1,1,c,j)):[]; centers.push(c);});
 const nOrigin=all.filter(n=>n.side<0).length, nUses=all.filter(n=>n.side>0).length;
 
 // ---- layout: tidy tree per side, leaves stacked, parents centered on their children ----
@@ -185,7 +188,12 @@ addEventListener('keydown',e=>{if(e.target.id==='q'){if(e.key==='Enter')search(t
 
 // ---- side panel ----
 const side=document.getElementById('side');
-side.innerHTML=`<div class="ctl"><h1>DOTWEAVIER · LIFECYCLE</h1><div class="ep">${esc(D.addr)}</div>
+// The options the run was traced with; runs saved before they were recorded show none.
+// A tree is empty only in a run traced with --only: the seed is in both otherwise.
+const only=!(D.origin||[]).length?'uses':!(D.uses||[]).length?'origin':'';
+const opts=[only&&'only='+only, D.maxProjects&&'max-projects='+D.maxProjects, D.includeTests&&'include-tests',
+  D.open&&'depth='+D.open].filter(Boolean).join(' ');
+side.innerHTML=`<div class="ctl"><h1>DOTWEAVIER · LIFECYCLE</h1><div class="ep">${esc(D.addr)}</div>${opts?`<div class="hint">${esc(opts)}</div>`:''}
  <div class="hint">${nOrigin} origin steps ◀ seed ▶ ${nUses} lifecycle steps</div>
  <input id="q" placeholder="search: file, code, field, type…"><div class="hint" id="hits"></div>
  <button id="ea">expand all</button><button id="ca">collapse all</button><button id="fi">fit</button><button id="fo">focus</button>${served?`<a href="/trace-field/export?run=${encodeURIComponent(traceName)}" download><button>export html</button></a>`:''}${served&&all.some(n=>n.side>=0&&openHops(n.d))?`<br><button id="fa">follow all hops</button> <select id="fd"><option>1</option><option selected>2</option><option>3</option></select> services deep <span class="hint" id="faMsg"></span>`:''}

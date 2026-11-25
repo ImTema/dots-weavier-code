@@ -317,7 +317,7 @@ type FieldStep struct {
 }
 
 // FieldTrace is a field trace run: the two trees, and what it ran with, so
-// FollowHop and FollowHops can continue it later, also from a saved copy.
+// FollowFieldRun can continue it later from a saved copy.
 type FieldTrace struct {
 	Origin       []*FieldStep // where the value comes from; each step flows into its parent
 	Uses         []*FieldStep // where it goes; each step flows into its kids

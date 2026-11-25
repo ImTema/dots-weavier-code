@@ -14,7 +14,6 @@ import (
 	"os"
 	"slices"
 	"strconv"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -265,7 +264,9 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write([]byte(fieldUITemplate))
 	})
-	mux.Handle("GET /trace-field-history/", http.StripPrefix("/trace-field-history/", http.FileServer(http.Dir(historyDir()))))
+	hist, err := domain.FieldHistoryDir()
+	must(err)
+	mux.Handle("GET /trace-field-history/", http.StripPrefix("/trace-field-history/", http.FileServer(http.Dir(hist))))
 	// GET /source?loc=[project:]rel/path[:LINE]: a whole file of an indexed project, for the
 	// field page's viewer. The header guard keeps other sites from reading it (no CORS reply).
 	mux.HandleFunc("GET /source", func(w http.ResponseWriter, r *http.Request) {
@@ -297,7 +298,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 	// saved as a new run, whose name it returns.
 	// GET /trace-field/export?run=RUN: the run as one self-contained HTML file, for download.
 	mux.HandleFunc("GET /trace-field/export", func(w http.ResponseWriter, r *http.Request) {
-		tr, open, err := loadFieldRun(r.URL.Query().Get("run"))
+		tr, open, err := domain.LoadFieldRun(r.URL.Query().Get("run"))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 			return
@@ -308,7 +309,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Content-Disposition", `attachment; filename="trace-field_`+traceName(tr.Addr)+`.html"`)
+		w.Header().Set("Content-Disposition", `attachment; filename="trace-field_`+domain.AddrFileName(tr.Addr)+`.html"`)
 		w.Write(page)
 	})
 	mux.HandleFunc("POST /trace-field/follow", func(w http.ResponseWriter, r *http.Request) {
@@ -321,47 +322,12 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 			reply(http.StatusForbidden, map[string]any{"error": "missing X-Dotweavier header"})
 			return
 		}
-		src := active(w)
-		if src == nil {
-			return
-		}
 		q := r.URL.Query()
-		tr, open, err := loadFieldRun(q.Get("run"))
-		if err == nil && tr.Dir == "" { // saved before runs kept their folder
-			tr.Dir, err = src.FolderOf(tr.Addr)
-		}
-		if err != nil {
-			reply(http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
-			return
-		}
 		phase, done := status("follow "+q.Get("run"), true)
-		seen := len(tr.Warnings)
-		if q.Get("path") == "" {
-			depth, _ := strconv.Atoi(q.Get("depth"))
-			n, errs := domain.FollowHops(r.Context(), tr, max(depth, 1), phase)
-			if n == 0 && len(errs) > 0 {
-				err = errs[0]
-			}
-		} else {
-			var path []int
-			for _, p := range strings.Split(q.Get("path"), ".") {
-				i, perr := strconv.Atoi(p)
-				if perr != nil {
-					err = fmt.Errorf("bad path %q", q.Get("path"))
-					break
-				}
-				path = append(path, i)
-			}
-			if err == nil {
-				k, _ := strconv.Atoi(q.Get("hop"))
-				err = domain.FollowHop(r.Context(), tr, path, k, phase)
-			}
-		}
-		warn(tr.Warnings[seen:])
-		var name string
-		if err == nil {
-			name, err = saveFieldRun(tr, open)
-		}
+		hop, _ := strconv.Atoi(q.Get("hop"))
+		depth, _ := strconv.Atoi(q.Get("depth"))
+		name, warns, err := domain.FollowFieldRun(r.Context(), domain.FollowQuery{Run: q.Get("run"), Step: q.Get("path"), Hop: hop, Depth: depth, Progress: phase})
+		warn(warns)
 		done("path=%s hop=%s: run=%s err=%v", q.Get("path"), q.Get("hop"), name, err)
 		if err != nil {
 			reply(http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
@@ -396,7 +362,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		if err == nil {
 			warn(tr.Warnings)
 			origin, uses = len(tr.Origin), len(tr.Uses)
-			name, err = saveFieldRun(tr, 0)
+			name, err = domain.SaveFieldRun(tr, 0)
 		}
 		done("origin=%d uses=%d run=%s err=%v", origin, uses, name, err)
 		if err != nil {

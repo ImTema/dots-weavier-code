@@ -98,28 +98,8 @@ func qualifyLocs(ss []*FieldStep, project string) {
 	}
 }
 
-// FollowHop continues run r: it grafts the trace of hop k of the lifecycle step
-// at path (indexes from r.Uses down through Kids) under that step, behind a step
-// of the hop's kind. progress, if set, is told each phase as it starts.
-func FollowHop(ctx context.Context, r *FieldTrace, path []int, k int, progress func(string)) error {
-	run, err := continueRun(r, progress)
-	if err != nil {
-		return err
-	}
-	return run.followHop(ctx, path, k)
-}
-
-// FollowHops continues run r: it follows every hop on the lifecycle side, then
-// the hops in what it grafted, depth services deep, at most 10 hops in all.
-// It returns how many it followed and why the others failed.
-func FollowHops(ctx context.Context, r *FieldTrace, depth int, progress func(string)) (followed int, errs []error) {
-	run, err := continueRun(r, progress)
-	if err != nil {
-		return 0, []error{err}
-	}
-	return run.followHops(ctx, depth)
-}
-
+// followHop grafts the trace of hop k of the lifecycle step at path (indexes
+// from r.Uses down through Kids) under that step, behind a step of the hop's kind.
 func (run *fieldRun) followHop(ctx context.Context, path []int, k int) error {
 	r := run.r
 	s, err := stepAt(r.Uses, path)
@@ -149,7 +129,9 @@ func hopStep(h *Hop, kids []*FieldStep) *FieldStep {
 	return &FieldStep{Kind: h.Kind, Name: h.Method, Loc: h.Addr, Code: h.Method, Fn: h.Fn, Kids: kids}
 }
 
-// followHops is FollowHops, breadth-first, with maxFollow hops for budget.
+// followHops follows every hop on the lifecycle side, then the hops in what it
+// grafted, depth services deep, breadth-first, with maxFollow hops for budget. It
+// returns how many it followed and why the others failed.
 // ponytail: breadth-first with a flat budget; per-service limits if traces fan out.
 func (run *fieldRun) followHops(ctx context.Context, depth int) (followed int, errs []error) {
 	r := run.r

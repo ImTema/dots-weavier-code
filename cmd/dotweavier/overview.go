@@ -303,7 +303,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 			return
 		}
-		data, err := fieldData(&domain.FieldTrace{Origin: run.Origin, Uses: run.Uses}, run.Addr, run.Open)
+		data, err := fieldData(&domain.FieldTrace{Origin: run.Origin, Uses: run.Uses}, run.fieldOpts)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -365,7 +365,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		var name string
 		if err == nil {
 			var data []byte
-			if data, err = fieldData(tr, run.Addr, run.Open); err == nil {
+			if data, err = fieldData(tr, run.fieldOpts); err == nil {
 				name, err = saveFieldRun(data, run.Addr)
 			}
 		}
@@ -407,7 +407,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		var name string
 		if err == nil {
 			var data []byte
-			if data, err = fieldData(tr, a, 0); err == nil {
+			if data, err = fieldData(tr, fieldOpts{Addr: a}); err == nil {
 				name, err = saveFieldRun(data, a)
 			}
 		}

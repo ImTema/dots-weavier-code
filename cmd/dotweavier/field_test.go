@@ -19,7 +19,7 @@ func TestTraceFieldLifecycle(t *testing.T) {
 	r, err := domain.TraceField(t.Context(), domain.FieldQuery{Dir: ws, MaxProjects: 1}, "fieldproj:main.go:16") // func convert(raw string)
 	require.NoError(t, err)
 	var b bytes.Buffer
-	lifecycle(&b, r, 0)
+	lifecycle(&b, r, 0, "")
 	got := b.String()
 	for _, w := range []string{
 		"└─ [arg] main.go:44  req, _ := convert(\"42\")  : string",
@@ -40,6 +40,7 @@ func TestTraceFieldLifecycle(t *testing.T) {
 }
 
 // The domain returns warnings; the CLI prints them to stderr with the old text.
+// --only origin leaves the lifecycle out of stdout.
 func TestTraceFieldPrintsWarnings(t *testing.T) {
 	t.Setenv("HOME", t.TempDir()) // no index: call paths are skipped
 	ws, err := filepath.Abs("testdata")
@@ -56,13 +57,54 @@ func TestTraceFieldPrintsWarnings(t *testing.T) {
 	outW, outC := capture()
 	stderr, stdout := os.Stderr, os.Stdout
 	os.Stderr, os.Stdout = errW, outW
-	runTraceField(t.Context(), []string{"fieldproj:main.go:16", "--project", ws, "--max-projects", "1"})
+	runTraceField(t.Context(), []string{"fieldproj:main.go:16", "--project", ws, "--max-projects", "1", "--only", "origin"})
 	os.Stderr, os.Stdout = stderr, stdout
 	errW.Close()
 	outW.Close()
 	out := "\n" + string(<-errC)
-	assert.Contains(t, string(<-outC), "[seed] main.go:16", "stdout has no tree")
+	stdoutText := string(<-outC)
+	assert.Contains(t, stdoutText, "[seed] main.go:16", "stdout has no tree")
+	assert.NotContains(t, stdoutText, "== lifecycle", "--only origin printed the lifecycle")
 	for _, want := range []string{"loaded fieldproj: pkgs=", "call paths skipped: seed is not in the index (run: dotweavier index "} {
 		assert.Contains(t, out, "\n"+want, "missing line")
 	}
+}
+
+// --only prints one tree and leaves the other's heading out; a depth cut names
+// the tree's direction.
+func TestLifecycleOnlyAndDepth(t *testing.T) {
+	chain := func() []*domain.FieldStep { // three steps deep
+		return []*domain.FieldStep{{Kind: "seed", Kids: []*domain.FieldStep{{Kind: "arg", Kids: []*domain.FieldStep{{Kind: "arg"}}}}}}
+	}
+	for _, c := range []struct {
+		only       string
+		want, miss []string
+	}{
+		{"", []string{"== origin", "== lifecycle", "… +1 more steps up (raise --depth)", "… +1 more steps down (raise --depth)"}, nil},
+		{"origin", []string{"== origin", "… +1 more steps up (raise --depth)"}, []string{"== lifecycle", "steps down"}},
+		{"uses", []string{"== lifecycle", "… +1 more steps down (raise --depth)"}, []string{"== origin", "steps up"}},
+	} {
+		var b bytes.Buffer
+		lifecycle(&b, &domain.FieldTrace{Origin: chain(), Uses: chain()}, 1, c.only)
+		got := b.String()
+		for _, w := range c.want {
+			assert.Contains(t, got, w, "only=%q", c.only)
+		}
+		for _, w := range c.miss {
+			assert.NotContains(t, got, w, "only=%q", c.only)
+		}
+	}
+}
+
+// A saved run keeps the options it was traced with.
+func TestFieldRunKeepsOptions(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	o := fieldOpts{Addr: "p:a.go:3", Open: 2, Only: "uses", MaxProjects: 1, IncludeTests: true, Follow: 2}
+	data, err := fieldData(&domain.FieldTrace{}, o)
+	require.NoError(t, err)
+	name, err := saveFieldRun(data, o.Addr)
+	require.NoError(t, err)
+	run, err := loadFieldRun(name)
+	require.NoError(t, err)
+	assert.Equal(t, o, run.fieldOpts)
 }

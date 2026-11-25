@@ -95,9 +95,12 @@ function wrap(d,side,depth,parent,j){const n={d,side,depth,parent,path:parent.pa
 const isHop=d=>/^(grpc|http|pubsub|lib)/.test(d.kind);
 const openHops=d=>(d.hops||[]).filter(h=>!h.followed).length;
 const centers=[];
-(D.uses||[]).forEach((u,i)=>{const o=(D.origin||[]).find(o=>o.loc===u.loc)||{kids:[]};
-  const c={d:u,side:0,depth:0,parent:null,path:[i],open:true,kids:[]}; all.push(c);
-  c.left=(o.kids||[]).map((k,j)=>wrap(k,-1,1,{path:[]},j)); c.left.forEach(k=>k.parent=c); c.right=(u.kids||[]).map((k,j)=>wrap(k,1,1,c,j)); centers.push(c);});
+// Seeds come from the uses tree; a run traced with --only origin has only the origin tree,
+// and its hops cannot be followed (follow looks steps up in the uses tree).
+const fromUses=(D.uses||[]).length>0;
+(fromUses?D.uses:(D.origin||[])).forEach((u,i)=>{const o=fromUses?(D.origin||[]).find(o=>o.loc===u.loc)||{kids:[]}:u;
+  const c={d:fromUses?u:{...u,hops:[]},side:0,depth:0,parent:null,path:[i],open:true,kids:[]}; all.push(c);
+  c.left=(o.kids||[]).map((k,j)=>wrap(k,-1,1,{path:[]},j)); c.left.forEach(k=>k.parent=c); c.right=fromUses?(u.kids||[]).map((k,j)=>wrap(k,1,1,c,j)):[]; centers.push(c);});
 const nOrigin=all.filter(n=>n.side<0).length, nUses=all.filter(n=>n.side>0).length;
 
 // ---- layout: tidy tree per side, leaves stacked, parents centered on their children ----
@@ -192,7 +195,10 @@ addEventListener('keydown',e=>{if(e.target.id==='q'){if(e.key==='Enter')search(t
 
 // ---- side panel ----
 const side=document.getElementById('side');
-side.innerHTML=`<div class="ctl"><h1>DOTWEAVIER · LIFECYCLE</h1><div class="ep">${esc(D.addr)}</div>
+// The options the run was traced with; runs saved before they were recorded show none.
+const opts=[D.only&&'only='+D.only, D.maxProjects&&'max-projects='+D.maxProjects, D.includeTests&&'include-tests',
+  D.follow&&'follow='+D.follow, D.open&&'depth='+D.open].filter(Boolean).join(' ');
+side.innerHTML=`<div class="ctl"><h1>DOTWEAVIER · LIFECYCLE</h1><div class="ep">${esc(D.addr)}</div>${opts?`<div class="hint">${esc(opts)}</div>`:''}
  <div class="hint">${nOrigin} origin steps ◀ seed ▶ ${nUses} lifecycle steps</div>
  <input id="q" placeholder="search: file, code, field, type…"><div class="hint" id="hits"></div>
  <button id="ea">expand all</button><button id="ca">collapse all</button><button id="fi">fit</button><button id="fo">focus</button>${served?`<a href="/trace-field/export?run=${encodeURIComponent(traceName)}" download><button>export html</button></a>`:''}${served&&all.some(n=>n.side>=0&&openHops(n.d))?`<br><button id="fa">follow all hops</button> <select id="fd"><option>1</option><option selected>2</option><option>3</option></select> services deep <span class="hint" id="faMsg"></span>`:''}

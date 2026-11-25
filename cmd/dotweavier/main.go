@@ -4,7 +4,7 @@
 //	dotweavier init [DIR] [--workspace NAME]
 //	dotweavier index [DIR] [--workspace NAME]
 //	dotweavier trace path -A <addr> -B <addr> [--workspace NAME] [--max-paths 10] [--include-tests]
-//	dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--depth N] [--include-tests] [--format text|ui|html] [--verbose]
+//	dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--only origin|uses] [--depth N] [--include-tests] [--format text|ui|html] [--verbose]
 //
 // Addresses: project::Type.Method, project:rel/path.go:Type.Method, project:rel/path.go:LINE.
 package main
@@ -35,7 +35,7 @@ func usage() {
   dotweavier init [DIR] [--workspace NAME]    add DIR (default: current folder) to workspace NAME (default: default); its projects are detected, not indexed
   dotweavier index [DIR] [--workspace NAME]   index the project in DIR (default: current folder) and its modules into workspace NAME (default: default)
   dotweavier trace path -A <addr> -B <addr> [--workspace NAME] [--max-paths N] [--include-tests] [--format text|ui|html] [--verbose]
-  dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--project DIR] [--depth N] [--include-tests] [--max-projects N] [--follow N] [--export FILE] [--format text|ui|html] [--verbose]`)
+  dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--project DIR] [--only origin|uses] [--depth N] [--include-tests] [--max-projects N] [--follow N] [--export FILE] [--format text|ui|html] [--verbose]`)
 	os.Exit(2)
 }
 
@@ -188,6 +188,7 @@ func runTrace(args []string) {
 func runTraceField(ctx context.Context, args []string) {
 	fl := flag.NewFlagSet("trace field", flag.ExitOnError)
 	ws := fl.String("project", defaultProjectDir(), "project folder; projects (and modules) under it are found by their manifest")
+	only := fl.String("only", "", "origin or uses: show that tree alone (both walks still run, each feeds the other)")
 	depth := fl.Int("depth", 0, "text: print at most N levels of each tree (0: all); ui: levels open at first (0: 6)")
 	tests := fl.Bool("include-tests", false, "include test code (_test.go, mock/fake packages)")
 	maxProjects := fl.Int("max-projects", 10, "load at most N projects when following fields shared across projects")
@@ -215,6 +216,9 @@ func runTraceField(ctx context.Context, args []string) {
 		must(err)
 		*ws = dir
 	}
+	if *only != "" && *only != "origin" && *only != "uses" {
+		must(fmt.Errorf("--only %q, want origin or uses", *only))
+	}
 	v := *verbose || *format != "text"
 	phase, done := status("trace field "+pos[0], v)
 	q := domain.FieldQuery{Dir: *ws, IncludeTests: *tests, MaxProjects: *maxProjects, Progress: phase}
@@ -223,6 +227,15 @@ func runTraceField(ctx context.Context, args []string) {
 		done("err=%v", err)
 	}
 	must(err)
+	// Both walks always run: each feeds the other (the uses walk loads projects the
+	// origin walk continues in, overwrites need the origin), so --only drops a tree
+	// afterwards rather than skipping its walk.
+	switch *only {
+	case "origin":
+		r.Uses = nil
+	case "uses":
+		r.Origin = nil
+	}
 	done("origin=%d uses=%d", len(r.Origin), len(r.Uses))
 	warn(r.Warnings)
 	if *follow > 0 {
@@ -236,15 +249,16 @@ func runTraceField(ctx context.Context, args []string) {
 			fmt.Fprintln(os.Stderr, "hop not followed:", e)
 		}
 	}
+	opts := fieldOpts{Addr: pos[0], Open: *depth, Only: *only, MaxProjects: *maxProjects, IncludeTests: *tests, Follow: *follow}
 	if *export != "" {
-		data, err := fieldData(r, pos[0], *depth)
+		data, err := fieldData(r, opts)
 		must(err)
 		must(os.WriteFile(*export, exportField(data), 0o644))
 		fmt.Fprintf(os.Stderr, "exported %s\n", *export)
 	}
 	switch *format {
 	case "ui":
-		data, err := fieldData(r, pos[0], *depth)
+		data, err := fieldData(r, opts)
 		must(err)
 		name, err := saveFieldRun(data, pos[0])
 		must(err)
@@ -252,28 +266,38 @@ func runTraceField(ctx context.Context, args []string) {
 		must(err)
 		serveOverview(overviewAddr, wsName, overviewMaxNodes, "/ui/trace-field.html?t="+url.QueryEscape(name))
 	case "html":
-		data, err := fieldData(r, pos[0], *depth)
+		data, err := fieldData(r, opts)
 		must(err)
 		page := writeUI("trace-field_"+traceName(pos[0])+".html", exportField(data))
 		fmt.Printf("lifecycle of %s -> file://%s\n", pos[0], page)
 		openPage(page)
 	default:
-		if n := lifecycle(os.Stdout, r, *depth); v {
+		if n := lifecycle(os.Stdout, r, *depth, *only); v {
 			fmt.Fprintf(os.Stderr, "%d steps\n", n)
 		}
 	}
 }
 
-// lifecycle prints both trees of a field trace and returns the number of steps printed.
-func lifecycle(w io.Writer, r *domain.FieldTrace, depth int) int {
+// lifecycle prints the trees of a field trace, both or only's one, and returns
+// the number of steps printed.
+func lifecycle(w io.Writer, r *domain.FieldTrace, depth int, only string) int {
 	p := &treePrinter{w: w, depth: depth}
-	fmt.Fprintln(w, "== origin: each line flows into the one above it ==")
-	for _, s := range r.Origin {
-		p.print(s, nil, "", true, 0)
+	if only != "uses" {
+		fmt.Fprintln(w, "== origin: each line flows into the one above it ==")
+		p.dir = "up"
+		for _, s := range r.Origin {
+			p.print(s, nil, "", true, 0)
+		}
 	}
-	fmt.Fprintln(w, "\n== lifecycle: each line flows into the ones below it ==")
-	for _, s := range r.Uses {
-		p.print(s, nil, "", true, 0)
+	if only == "" {
+		fmt.Fprintln(w)
+	}
+	if only != "origin" {
+		fmt.Fprintln(w, "== lifecycle: each line flows into the ones below it ==")
+		p.dir = "down"
+		for _, s := range r.Uses {
+			p.print(s, nil, "", true, 0)
+		}
 	}
 	return p.steps
 }
@@ -281,6 +305,7 @@ func lifecycle(w io.Writer, r *domain.FieldTrace, depth int) int {
 type treePrinter struct {
 	w     io.Writer
 	depth int
+	dir   string // "up" in the origin tree, "down" in the lifecycle
 	steps int
 }
 
@@ -321,7 +346,7 @@ func (p *treePrinter) print(s, parent *domain.FieldStep, prefix string, last boo
 	fmt.Fprintln(p.w, prefix+branch+label(s, parent))
 	if p.depth > 0 && depth >= p.depth {
 		if n := count(s) - 1; n > 0 {
-			fmt.Fprintf(p.w, "%s%s… %d more steps below (raise --depth)\n", prefix, next, n)
+			fmt.Fprintf(p.w, "%s%s… +%d more steps %s (raise --depth)\n", prefix, next, n, p.dir)
 		}
 		return
 	}
@@ -421,8 +446,8 @@ func pathUI(paths []domain.Path, a, b string) ([]byte, error) {
 
 // fieldData is one trace for the static field page: a script that sets window.TRACE.
 // Both trees: origin grows left of the seed, uses right.
-func fieldData(r *domain.FieldTrace, addr string, open int) ([]byte, error) {
-	js, err := json.Marshal(fieldRun{addr, open, r.Origin, r.Uses}) // escapes <, > and &, so it is safe inside a script
+func fieldData(r *domain.FieldTrace, o fieldOpts) ([]byte, error) {
+	js, err := json.Marshal(fieldRun{o, r.Origin, r.Uses}) // escapes <, > and &, so it is safe inside a script
 	if err != nil {
 		return nil, err
 	}
@@ -488,10 +513,20 @@ func dotDir(name string) string {
 
 // fieldRun is one saved run of the field page, as fieldData writes it.
 type fieldRun struct {
-	Addr   string              `json:"addr"`
-	Open   int                 `json:"open,omitempty"`
+	fieldOpts
 	Origin []*domain.FieldStep `json:"origin"`
 	Uses   []*domain.FieldStep `json:"uses"`
+}
+
+// fieldOpts is how a run was traced, shown in the field page's header. Runs
+// saved before the options were recorded have only Addr and Open.
+type fieldOpts struct {
+	Addr         string `json:"addr"`
+	Open         int    `json:"open,omitempty"` // --depth
+	Only         string `json:"only,omitempty"`
+	MaxProjects  int    `json:"maxProjects,omitempty"`
+	IncludeTests bool   `json:"includeTests,omitempty"`
+	Follow       int    `json:"follow,omitempty"`
 }
 
 // loadFieldRun reads a run back from the history folder; name is a bare run name.

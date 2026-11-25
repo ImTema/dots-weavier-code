@@ -35,7 +35,7 @@ func usage() {
   dotweavier init [DIR] [--workspace NAME]    add DIR (default: current folder) to workspace NAME (default: default); its projects are detected, not indexed
   dotweavier index [DIR] [--workspace NAME]   index the project in DIR (default: current folder) and its modules into workspace NAME (default: default)
   dotweavier trace path -A <addr> -B <addr> [--workspace NAME] [--max-paths N] [--include-tests] [--format text|ui|html] [--verbose]
-  dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--project DIR] [--depth N] [--include-tests] [--max-projects N] [--follow N] [--export FILE] [--format text|ui|html] [--verbose]`)
+  dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--project DIR] [--depth N] [--include-tests] [--max-projects N] [--follow N] [--format text|ui|html] [--verbose]`)
 	os.Exit(2)
 }
 
@@ -192,7 +192,6 @@ func runTraceField(ctx context.Context, args []string) {
 	tests := fl.Bool("include-tests", false, "include test code (_test.go, mock/fake packages)")
 	maxProjects := fl.Int("max-projects", 10, "load at most N projects when following fields shared across projects")
 	format := fl.String("format", "text", "text (two trees), ui (serve the overview and open the run in it) or html (one self-contained file in ~/.dotweavier/ui, opened)")
-	export := fl.String("export", "", "also write the result as one self-contained HTML file, e.g. trace.html")
 	follow := fl.Int("follow", 0, "follow gRPC/HTTP/Pub/Sub hops into other projects, N services deep (at most 10 hops)")
 	verbose := fl.Bool("verbose", false, "text: also print progress and stats to stderr (always on for ui and html)")
 	// Accept the address before or after the flags.
@@ -217,16 +216,11 @@ func runTraceField(ctx context.Context, args []string) {
 	must(err)
 	done("origin=%d uses=%d", len(r.Origin), len(r.Uses))
 	warn(r.Warnings)
-	if *export != "" {
-		page, err := exportField(r, *depth)
-		must(err)
-		must(os.WriteFile(*export, page, 0o644))
-		fmt.Fprintf(os.Stderr, "exported %s\n", *export)
-	}
 	switch *format {
 	case "ui":
 		name, err := saveFieldRun(r, *depth)
 		must(err)
+		fmt.Fprintf(os.Stderr, "saved %s\n", filepath.Join(historyDir(), name+".js"))
 		wsName, err := domain.WorkspaceOf(r.Dir)
 		must(err)
 		serveOverview(overviewAddr, wsName, overviewMaxNodes, "/ui/trace-field.html?t="+url.QueryEscape(name))

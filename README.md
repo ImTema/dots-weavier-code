@@ -89,7 +89,7 @@ Flags:
 - `--include-tests`
 - `--follow N`: follow gRPC, HTTP and Pub/Sub calls into the services that handle them, N services deep (at most 10 calls)
 - `--format ui`: start the overview server (`127.0.0.1:7357`) and open the run in it, where hops can be followed and sources read; Ctrl-C stops it. Every run is kept in `~/.dotweavier/trace-field-history`. With the overview already running, the page opens there.
-- `--format html`: write one self-contained file, like `--export`, to `~/.dotweavier/ui/trace-field_<address>.html` and open it
+- `--format html`: write one self-contained file to `~/.dotweavier/ui/trace-field_<address>.html` and open it
 
 #### Example: follow a value into other services
 

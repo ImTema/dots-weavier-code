@@ -70,7 +70,7 @@ function buildMenu(){const H=window.HISTORY||[], m=document.getElementById('hist
   addEventListener('mousedown',e=>{if(!m.contains(e.target)&&e.target!==btn)m.classList.remove('open');});
   addEventListener('keydown',e=>{if(e.key==='Escape')m.classList.remove('open');});}
 const escH=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-// An exported page (--export, or the export button) carries its run inline: no history, no server.
+// An exported page (--format html, or the export button) carries its run inline: no history, no server.
 if(window.EXPORTED){document.getElementById('menuBtn').remove(); start(window.TRACE);}
 else loadScript(HIST+'index.js',()=>{buildMenu(); loadScript(HIST+encodeURIComponent(traceName)+'.js',()=>start(window.TRACE),noData);});
 function noData(){document.body.insertAdjacentHTML('beforeend',`<div style="position:absolute;inset:40% 0 auto;text-align:center;color:#ff7a7a">no trace data at trace-field-history/${traceName.replace(/[<>&]/g,'')}.js<br><span style="color:#8b93c4">run: dotweavier trace field ADDR --format ui</span></div>`);}

@@ -244,7 +244,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 			return
 		}
 		a, b := r.URL.Query().Get("a"), r.URL.Query().Get("b")
-		phase, done := status("trace path " + a + " -> " + b)
+		phase, done := status("trace path "+a+" -> "+b, true)
 		res, err := domain.TracePath(domain.PathQuery{Workspace: src.Workspace(), A: a, B: b, MaxPaths: 10, Progress: phase})
 		if err != nil {
 			done("err=%v", err)
@@ -334,7 +334,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 			reply(http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
 			return
 		}
-		phase, done := status("follow " + q.Get("run"))
+		phase, done := status("follow "+q.Get("run"), true)
 		seen := len(tr.Warnings)
 		if q.Get("path") == "" {
 			depth, _ := strconv.Atoi(q.Get("depth"))
@@ -379,7 +379,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 			return
 		}
 		a := r.URL.Query().Get("addr")
-		phase, done := status("trace field " + a)
+		phase, done := status("trace field "+a, true)
 		reply := func(code int, v map[string]any) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(code)

@@ -4,7 +4,7 @@
 //	dotweavier init [DIR] [--workspace NAME]
 //	dotweavier index [DIR] [--workspace NAME]
 //	dotweavier trace path -A <addr> -B <addr> [--workspace NAME] [--max-paths 10] [--include-tests]
-//	dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--depth N] [--include-tests] [--format text|ui|html]
+//	dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--depth N] [--include-tests] [--format text|ui|html] [--verbose]
 //
 // Addresses: project::Type.Method, project:rel/path.go:Type.Method, project:rel/path.go:LINE.
 package main
@@ -34,8 +34,8 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `usage:
   dotweavier init [DIR] [--workspace NAME]    add DIR (default: current folder) to workspace NAME (default: default); its projects are detected, not indexed
   dotweavier index [DIR] [--workspace NAME]   index the project in DIR (default: current folder) and its modules into workspace NAME (default: default)
-  dotweavier trace path -A <addr> -B <addr> [--workspace NAME] [--max-paths N] [--include-tests] [--format text|ui|html]
-  dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--project DIR] [--depth N] [--include-tests] [--max-projects N] [--follow N] [--export FILE] [--format text|ui|html]`)
+  dotweavier trace path -A <addr> -B <addr> [--workspace NAME] [--max-paths N] [--include-tests] [--format text|ui|html] [--verbose]
+  dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--project DIR] [--depth N] [--include-tests] [--max-projects N] [--follow N] [--export FILE] [--format text|ui|html] [--verbose]`)
 	os.Exit(2)
 }
 
@@ -145,9 +145,11 @@ func runTrace(args []string) {
 	maxPaths := fl.Int("max-paths", 10, "number of paths to print")
 	tests := fl.Bool("include-tests", false, "include test nodes (_test.go, mock/fake packages)")
 	format := fl.String("format", "text", "text (one line per path), ui (serve the overview and open the paths in it) or html (one self-contained file in ~/.dotweavier/ui, opened)")
+	verbose := fl.Bool("verbose", false, "text: also print progress and stats to stderr (always on for ui and html)")
 	_ = fl.Parse(args)
+	v := *verbose || *format != "text"
 
-	phase, done := status("trace path")
+	phase, done := status("trace path", v)
 	r, err := domain.TracePath(domain.PathQuery{Workspace: *wsFlag, A: *aFlag, B: *bFlag, MaxPaths: *maxPaths, IncludeTests: *tests, Progress: phase})
 	if err != nil {
 		done("err=%v", err)
@@ -155,9 +157,11 @@ func runTrace(args []string) {
 	must(err)
 	done("%d paths", len(r.Paths))
 	warn(r.Warnings)
-	fmt.Fprintf(os.Stderr, "loaded %d indexes: nodes=%d edges=%d grpcHops=%d pubsubHops=%d grpcClientCalls=%d servedMethods=%d\n",
-		r.Indexes, r.Nodes, r.Edges, r.GRPCHops, r.PubsubHops, r.GRPCCalls, r.ServedMethods)
-	fmt.Fprintf(os.Stderr, "A = %s\nB = %s\n", r.A, r.B)
+	if v {
+		fmt.Fprintf(os.Stderr, "loaded %d indexes: nodes=%d edges=%d grpcHops=%d pubsubHops=%d grpcClientCalls=%d servedMethods=%d\n",
+			r.Indexes, r.Nodes, r.Edges, r.GRPCHops, r.PubsubHops, r.GRPCCalls, r.ServedMethods)
+		fmt.Fprintf(os.Stderr, "A = %s\nB = %s\n", r.A, r.B)
+	}
 	switch *format {
 	case "ui": // the page traces again on the server, with its defaults (10 paths, no tests)
 		ws := cmp.Or(*wsFlag, domain.DefaultWorkspace)
@@ -190,6 +194,7 @@ func runTraceField(ctx context.Context, args []string) {
 	format := fl.String("format", "text", "text (two trees), ui (serve the overview and open the run in it) or html (one self-contained file in ~/.dotweavier/ui, opened)")
 	export := fl.String("export", "", "also write the result as one self-contained HTML file, e.g. trace.html")
 	follow := fl.Int("follow", 0, "follow gRPC/HTTP/Pub/Sub hops into other projects, N services deep (at most 10 hops)")
+	verbose := fl.Bool("verbose", false, "text: also print progress and stats to stderr (always on for ui and html)")
 	// Accept the address before or after the flags.
 	var pos []string
 	for len(args) > 0 {
@@ -203,7 +208,8 @@ func runTraceField(ctx context.Context, args []string) {
 	if len(pos) != 1 {
 		usage()
 	}
-	phase, done := status("trace field " + pos[0])
+	v := *verbose || *format != "text"
+	phase, done := status("trace field "+pos[0], v)
 	r, err := domain.TraceField(ctx, domain.FieldQuery{Dir: *ws, IncludeTests: *tests, MaxProjects: *maxProjects, Follow: *follow, Progress: phase}, pos[0])
 	if err != nil {
 		done("err=%v", err)
@@ -231,7 +237,9 @@ func runTraceField(ctx context.Context, args []string) {
 		fmt.Printf("lifecycle of %s -> file://%s\n", pos[0], page)
 		openPage(page)
 	default:
-		fmt.Fprintf(os.Stderr, "%d steps\n", lifecycle(os.Stdout, r, *depth))
+		if n := lifecycle(os.Stdout, r, *depth); v {
+			fmt.Fprintf(os.Stderr, "%d steps\n", n)
+		}
 	}
 }
 

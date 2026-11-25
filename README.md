@@ -67,6 +67,7 @@ Flags:
 - `--max-paths N` (default 10)
 - `--include-tests`: also follow `_test.go` files and mock/fake packages
 - `--format ui`: start the overview server (`127.0.0.1:7357`) and open the paths in it; Ctrl-C stops it
+- `--verbose`: with `--format text`, also print progress and stats to stderr; ui and html always print them
 - `--format html`: write a self-contained view to `~/.dotweavier/ui/trace-path.html` and open it
 
 ### 3. Trace a value's lifecycle

@@ -36,18 +36,37 @@ func pathStrings(g *graph, paths []*state) []string {
 	return out
 }
 
+// Every form of a symbol address parses to its parts and prints back as written;
+// each caller then asks for the parts it needs.
 func TestParseAddr(t *testing.T) {
 	for in, want := range map[string]address{
 		"billing::Service.proxyPolicy":           {Project: "billing", Name: "Service.proxyPolicy"},
 		"billing:internal/a/b.go:Server.Approve": {Project: "billing", File: "internal/a/b.go", Name: "Server.Approve"},
 		"billing-system:service/x.go:243":        {Project: "billing-system", File: "service/x.go", Line: 243},
+		"golang/orders:internal/a.go":            {Project: "golang/orders", File: "internal/a.go"},
+		"internal/a.go:12":                       {File: "internal/a.go", Line: 12},
+		"internal/a.go":                          {File: "internal/a.go"},
 	} {
 		got, err := parseAddr(in)
 		require.NoError(t, err, in)
 		assert.Equal(t, want, got, in)
+		assert.Equal(t, in, got.String(), "round trip")
 	}
-	_, err := parseAddr("nope")
-	assert.ErrorContains(t, err, "bad address")
+	for _, bad := range []string{"", "a::", "::b", "a:b:c:d", "a::b:c:", ":a.go:3", "a.go:-1"} {
+		_, err := parseAddr(bad)
+		assert.ErrorContains(t, err, "bad address", "%q", bad)
+	}
+	for _, bad := range []string{"nope", "a.go:12", "billing:a.go"} {
+		_, err := symbolAddr(bad)
+		assert.ErrorContains(t, err, "bad address", "trace path end %q", bad)
+	}
+	for _, bad := range []string{"p:a.go", "p:a.txt:3", "p::F"} {
+		_, _, err := fieldAddr(bad)
+		assert.ErrorContains(t, err, "bad address", "field seed %q", bad)
+	}
+	assert.Equal(t, "java/inventory:a.kt:3", qualify("a.kt:3", "java/inventory"))
+	assert.Equal(t, "golang/pricing:z.go:4", qualify("golang/pricing:z.go:4", "java/inventory"), "already qualified")
+	assert.Equal(t, "pkg.Type.Field", qualify("pkg.Type.Field", "java/inventory"), "a struct field has no location")
 }
 
 func TestJoinPubsub(t *testing.T) {

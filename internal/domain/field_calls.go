@@ -3,7 +3,6 @@ package domain
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 )
 
 // attach gives every field step of r the best call path, over the run's graph,
@@ -66,17 +65,12 @@ func (run *fieldRun) attach(r *FieldTrace, seedAt address) {
 
 // stepAddr turns a step location, [project:]rel/path.go:LINE, into a graph address.
 func stepAddr(loc, seedProject string) (address, bool) {
-	i := strings.LastIndex(loc, ":")
-	if i < 0 {
+	a, err := parseAddr(loc)
+	if err != nil || a.Line == 0 {
 		return address{}, false
 	}
-	var line int
-	if _, err := fmt.Sscan(loc[i+1:], &line); err != nil {
-		return address{}, false
+	if a.Project == "" {
+		a.Project = seedProject
 	}
-	proj, file := seedProject, loc[:i]
-	if p, f, ok := strings.Cut(file, ":"); ok {
-		proj, file = p, f
-	}
-	return address{Project: proj, File: file, Line: line}, true
+	return a, true
 }

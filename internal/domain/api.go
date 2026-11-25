@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -223,11 +222,11 @@ func TracePath(q PathQuery) (*PathTrace, error) {
 	if err != nil {
 		return nil, err
 	}
-	addrA, err := parseAddr(a)
+	addrA, err := symbolAddr(a)
 	if err != nil {
 		return nil, err
 	}
-	addrB, err := parseAddr(b)
+	addrB, err := symbolAddr(b)
 	if err != nil {
 		return nil, err
 	}
@@ -354,16 +353,14 @@ func (q FieldQuery) maxProjects() int {
 	return q.MaxProjects
 }
 
-// parseFieldAddr splits [project:]rel/path.{go,java,kt}:LINE into its file part,
-// language and line.
-func parseFieldAddr(addr string) (loc, lang string, line int, err error) {
-	i := strings.LastIndex(addr, ":")
-	line, err = strconv.Atoi(addr[i+1:])
-	lang = langOfExt(addr[:max(i, 0)])
-	if i < 0 || err != nil || lang == "" {
-		return "", "", 0, fmt.Errorf("bad address %q, want [project:]rel/path.{go,java,kt}:LINE", addr)
+// symbolAddr parses the address of a trace's end: it names a project and a
+// symbol or line.
+func symbolAddr(s string) (address, error) {
+	a, err := parseAddr(s)
+	if err != nil || a.Project == "" || a.Name == "" && a.Line == 0 {
+		return address{}, fmt.Errorf("bad address %q, want project::Type.Method, project:rel/path:Type.Method or project:rel/path:LINE", s)
 	}
-	return addr[:i], lang, line, nil
+	return a, nil
 }
 
 // langOfExt is the language of a source file by its extension, "" if unknown.
@@ -371,10 +368,10 @@ func langOfExt(file string) string {
 	return map[string]string{".go": "go", ".java": "jvm", ".kt": "jvm"}[filepath.Ext(file)]
 }
 
-// langProjects is the projects under dir written in lang.
+// langProjects is the projects under dir written in lang; every project for "".
 func langProjects(dir, lang string) ([]project, error) {
 	ps, err := discover(dir)
-	return slices.DeleteFunc(ps, func(p project) bool { return p.lang != lang }), err
+	return slices.DeleteFunc(ps, func(p project) bool { return lang != "" && p.lang != lang }), err
 }
 
 // runFolder resolves addr from folder dir: it returns the folder a run traces
@@ -385,7 +382,7 @@ func langProjects(dir, lang string) ([]project, error) {
 // as their indexes name them; outside every registered folder, the folder addr
 // resolved in.
 func runFolder(dir, addr string) (string, string, error) {
-	loc, lang, line, err := parseFieldAddr(addr)
+	a, lang, err := fieldAddr(addr)
 	if err != nil {
 		return "", "", err
 	}
@@ -400,9 +397,9 @@ func runFolder(dir, addr string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	p, file, miss := resolveFile(ps, loc)
+	p, file, miss := resolveFile(ps, a)
 	if miss != nil {
-		f, err := folderWithFile(fs, loc, lang)
+		f, err := folderWithFile(fs, a, lang)
 		if errors.Is(err, errNoProject) {
 			return "", "", miss
 		}
@@ -412,7 +409,7 @@ func runFolder(dir, addr string) (string, string, error) {
 		if ps, err = langProjects(f, lang); err != nil {
 			return "", "", err
 		}
-		if p, file, err = resolveFile(ps, loc); err != nil {
+		if p, file, err = resolveFile(ps, a); err != nil {
 			return "", "", err
 		}
 		dir = f
@@ -428,13 +425,13 @@ func runFolder(dir, addr string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	return dir, filepath.ToSlash(name) + ":" + filepath.ToSlash(rel) + ":" + strconv.Itoa(line), nil
+	return dir, address{Project: filepath.ToSlash(name), File: filepath.ToSlash(rel), Line: a.Line}.String(), nil
 }
 
-// folderWithFile is the one folder of folders whose projects in lang have the file
-// loc ([project:]rel/path) names. The innermost folder wins over a folder
-// containing it, as in OverviewSource.FolderOf. A missing folder is skipped.
-func folderWithFile(folders []string, loc, lang string) (string, error) {
+// folderWithFile is the one folder of folders whose projects in lang ("": any)
+// have the file a names. The innermost folder wins over a folder containing it.
+// A missing folder is skipped.
+func folderWithFile(folders []string, a address, lang string) (string, error) {
 	folders = slices.Clone(folders)
 	slices.SortFunc(folders, func(a, b string) int { return cmp.Compare(len(b), len(a)) })
 	found := map[string]bool{} // absolute files already found
@@ -444,7 +441,7 @@ func folderWithFile(folders []string, loc, lang string) (string, error) {
 		if err != nil {
 			continue // a registered folder that was moved or deleted
 		}
-		_, abs, err := resolveFile(ps, loc)
+		_, abs, err := resolveFile(ps, a)
 		if err != nil {
 			if !errors.Is(err, errNoProject) {
 				return "", err // in several projects of one folder: the user must pick
@@ -458,11 +455,11 @@ func folderWithFile(folders []string, loc, lang string) (string, error) {
 	}
 	switch len(hits) {
 	case 0:
-		return "", fmt.Errorf("%w %s", errNoProject, loc)
+		return "", fmt.Errorf("%w %s", errNoProject, a.loc())
 	case 1:
 		return hits[0], nil
 	}
-	return "", fmt.Errorf("%s is in several workspace folders (%s); pass --project DIR", loc, strings.Join(hits, ", "))
+	return "", fmt.Errorf("%s is in several workspace folders (%s); pass --project DIR", a.loc(), strings.Join(hits, ", "))
 }
 
 // WorkspaceOf is a registered workspace with a folder containing dir, or "" if none.

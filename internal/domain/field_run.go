@@ -26,15 +26,16 @@ type fieldRun struct {
 // JVM trace seeds at the first of lines lines from LINE on that computes a value.
 func (run *fieldRun) trace(ctx context.Context, addr string, keep func(ssa.Value) bool, lines int) (*FieldTrace, error) {
 	q := run.q
-	loc, lang, line, err := parseFieldAddr(addr)
+	a, lang, err := fieldAddr(addr)
 	if err != nil {
 		return nil, err
 	}
+	line := a.Line
 	projects, err := langProjects(q.Dir, lang)
 	if err != nil {
 		return nil, err
 	}
-	seedProject, file, err := resolveFile(projects, loc)
+	seedProject, file, err := resolveFile(projects, a)
 	if err != nil {
 		return nil, err
 	}

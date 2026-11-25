@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"go/types"
 	"strconv"
-	"strings"
 
 	"golang.org/x/tools/go/ssa"
 )
@@ -49,14 +48,13 @@ func hopsOf(g *graph, n int32) []Hop {
 // yields a trace is the signature. Every location in the result carries its
 // project, so the trees can be grafted into another project's trace.
 func (run *fieldRun) traceHop(ctx context.Context, addr string) (*FieldTrace, error) {
-	i := strings.LastIndex(addr, ":")
-	if _, err := strconv.Atoi(addr[i+1:]); i < 0 || err != nil {
+	a, lang, err := fieldAddr(addr)
+	if err != nil || a.Project == "" {
 		return nil, fmt.Errorf("bad handler address %q", addr)
 	}
-	proj, _, _ := strings.Cut(addr, ":")
+	proj := a.Project
 	var r *FieldTrace
-	var err error
-	if strings.HasSuffix(addr[:i], ".go") {
+	if lang == "go" {
 		r, err = run.trace(ctx, addr, requestParam, 1)
 	} else {
 		r, err = run.trace(ctx, addr, nil, 12) // annotations, then the signature
@@ -85,15 +83,19 @@ func requestParam(v ssa.Value) bool {
 	return true
 }
 
+// qualify prefixes project to location loc if it has none ("rel.go:LINE").
+func qualify(loc, project string) string {
+	if a, err := parseAddr(loc); err == nil && a.Project == "" && a.Line > 0 {
+		a.Project = project
+		return a.String()
+	}
+	return loc
+}
+
 // qualifyLocs prefixes project to every location that has none ("rel.go:LINE").
 func qualifyLocs(ss []*FieldStep, project string) {
 	for _, s := range ss {
-		if s.Loc != "" && strings.Count(s.Loc, ":") == 1 {
-			s.Loc = project + ":" + s.Loc
-		}
-		if s.Via != "" && strings.Count(s.Via, ":") == 1 {
-			s.Via = project + ":" + s.Via
-		}
+		s.Loc, s.Via = qualify(s.Loc, project), qualify(s.Via, project)
 		qualifyLocs(s.Kids, project)
 	}
 }

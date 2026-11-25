@@ -125,7 +125,7 @@ func LoadFieldRun(name string) (*FieldTrace, int, error) {
 	r := &FieldTrace{Addr: f.Addr, Origin: f.Origin, Uses: f.Uses, Warnings: f.Warnings, Dir: f.Dir,
 		IncludeTests: f.IncludeTests, MaxProjects: f.MaxProjects}
 	if r.Dir == "" {
-		loc, lang, _, err := parseFieldAddr(r.Addr)
+		a, lang, err := fieldAddr(r.Addr)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -133,7 +133,7 @@ func LoadFieldRun(name string) (*FieldTrace, int, error) {
 		if err != nil {
 			return nil, 0, err
 		}
-		if r.Dir, err = folderWithFile(fs, loc, lang); err != nil {
+		if r.Dir, err = folderWithFile(fs, a, lang); err != nil {
 			return nil, 0, err
 		}
 	}

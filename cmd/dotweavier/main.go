@@ -186,7 +186,7 @@ func runTraceField(ctx context.Context, args []string) {
 	fl := flag.NewFlagSet("trace field", flag.ExitOnError)
 	ws := fl.String("project", defaultProjectDir(), "folder the address is looked up in, before the registered workspace folders; the trace runs over the registered folder holding its project")
 	only := fl.String("only", "", "origin or uses: show that tree alone (both walks still run, each feeds the other)")
-	depth := fl.Int("depth", 0, "text: print at most N levels of each tree (0: all); ui: levels open at first (0: 6)")
+	depth := fl.Int("depth", 0, "text: print at most N levels of each tree (0: 100); ui: levels open at first (0: 6)")
 	tests := fl.Bool("include-tests", false, "include test code (_test.go, mock/fake packages)")
 	maxProjects := fl.Int("max-projects", 10, "load at most N projects when following fields shared across projects")
 	format := fl.String("format", "text", "text (two trees), ui (serve the overview and open the run in it) or html (one self-contained file in ~/.dotweavier/ui, opened)")
@@ -244,7 +244,11 @@ func runTraceField(ctx context.Context, args []string) {
 		fmt.Printf("lifecycle of %s -> file://%s\n", pos[0], page)
 		openPage(page)
 	default:
-		if n := lifecycle(os.Stdout, r, *depth, *only); v {
+		d := *depth
+		if d == 0 {
+			d = 100
+		}
+		if n := lifecycle(os.Stdout, r, d, *only); v {
 			fmt.Fprintf(os.Stderr, "%d steps\n", n)
 		}
 	}

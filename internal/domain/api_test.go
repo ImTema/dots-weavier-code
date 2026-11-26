@@ -90,6 +90,30 @@ func TestCancelledIndexWritesNoIndex(t *testing.T) {
 	assert.False(t, ok, "a cancelled index wrote an index")
 }
 
+// A module whose only file is build-tagged out (a tools.go module) loads no packages; that is an empty index, not an error.
+func TestBuildTaggedOnlyModuleIndexesEmpty(t *testing.T) {
+	isolate(t)
+	dir := filepath.Join(t.TempDir(), "tools")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	for f, body := range map[string]string{
+		"go.mod":   "module tools\n\ngo 1.22\n",
+		"tools.go": "//go:build tools\n\npackage tools\n",
+	} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, f), []byte(body), 0o644))
+	}
+	_, err := InitWorkspace(filepath.Dir(dir), "")
+	require.NoError(t, err)
+	var errs []error
+	require.NoError(t, Index(t.Context(), IndexOptions{Progress: func(r IndexResult) {
+		if r.Err != nil {
+			errs = append(errs, r.Err)
+		}
+	}}))
+	assert.Empty(t, errs)
+	_, ok := indexBuilt(dir)
+	assert.True(t, ok, "no index written, so sync would retry it forever")
+}
+
 // A field trace reports what it skipped in its result and prints nothing.
 func TestFieldTraceReturnsWarnings(t *testing.T) {
 	isolate(t) // no index: the seed has no call paths

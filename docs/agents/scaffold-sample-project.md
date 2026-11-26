@@ -118,6 +118,12 @@ Done when each README command has been run and printed what the README says.
   Kotlin with Gradle toolchains. Run a built jar
   with a JDK 25 `java`, and confirm library versions against Maven Central
   rather than memory.
+- **Spring Boot 4** splits its starters: `spring-boot-starter-webmvc`,
+  `spring-boot-starter-restclient` and `spring-boot-starter-webmvc-test`
+  (`MockMvc` is in `org.springframework.boot.webmvc.test.autoconfigure`).
+  Snake_case on the wire is one property,
+  `spring.jackson.property-naming-strategy=SNAKE_CASE`, shared by the
+  controllers and the `RestClient.Builder` Spring provides.
 - **Quarkus gRPC** runs on its own port (`quarkus.grpc.server.use-separate-server=true`),
   and Quarkus also opens an HTTP port; inventory takes `8092`. A gRPC handler
   that makes a blocking call is annotated `@Blocking`.

@@ -1,17 +1,18 @@
 # Samples
 
-Five small services in three languages that call each other over gRPC,
+Six small services in three languages that call each other over gRPC,
 HTTP and Pub/Sub. They give
 dotweavier a known target: every hop between and inside the projects is listed
 here, so a trace can be checked against what the code really does.
 
 | Service     | Language          | Path                     | Serves                                        | Calls                                    |
 |-------------|-------------------|--------------------------|-----------------------------------------------|------------------------------------------|
-| `orders`    | Go                | `golang/orders`          | HTTP `:8080`: `POST /orders`, `GET /customers/{id}` | inventory (gRPC), pricing (gRPC), fulfillment (gRPC); publishes `order-placed` |
+| `orders`    | Go                | `golang/orders`          | HTTP `:8080`: `POST /orders`, `GET /orders/{id}`, `GET /customers/{id}` | inventory (gRPC), pricing (gRPC), payments (HTTP), fulfillment (gRPC); publishes `order-placed` |
 | `pricing`   | Go                | `golang/pricing`         | gRPC `:9090`: `pricing.v1.PricingService`     | orders (HTTP), shipping (HTTP); subscribes to `order-placed` |
 | `fulfillment` | Go              | `golang/fulfillment`     | gRPC `:9092`: `fulfillment.v1.FulfillmentService` | pricing (gRPC), shipping (HTTP); subscribes to `order-placed` |
 | `inventory` | Java 25, Quarkus  | `java/inventory`         | gRPC `:9091`: `inventory.v1.InventoryService` | orders (HTTP)                            |
 | `shipping`  | Kotlin, Ktor      | `kotlin/shipping`        | HTTP `:8081`: `GET /rates`                    | orders (HTTP)                            |
+| `payments`  | Java 25, Spring Boot | `java/payments`       | HTTP `:8082`: `POST /payments/charges`, `GET /payments/charges/{id}` | orders (HTTP)                |
 
 ## Topology
 
@@ -27,6 +28,8 @@ orders    ──gRPC──▶ fulfillment Schedule
 orders    ──Pub/Sub──▶ fulfillment  topic order-placed, subscription fulfillment-order-placed
 fulfillment ──gRPC──▶ pricing   Quote (tax on the insurance premium)
 fulfillment ──HTTP──▶ shipping  GET /rates
+orders    ──HTTP──▶ payments    POST /payments/charges, GET /payments/charges/{id}
+payments  ──HTTP──▶ orders      GET /customers/{id}
 ```
 
 Every hop between projects:
@@ -44,6 +47,9 @@ Every hop between projects:
 | Pub/Sub | Go `orders` `events.Publisher.OrderPlaced` | Go `fulfillment` `events.Subscriber.Handle` | `golang/orders/api/events/v1/events.proto` |
 | gRPC | Go `fulfillment` `pricing.Client.Tax`      | Go `pricing` `server.Server.Quote`             | `golang/pricing/api/pricing/v1/pricing.proto` |
 | HTTP | Go `fulfillment` `shipping.Client.Rate`    | Kotlin `shipping` `GET /rates`                 | `RateResponse` in `kotlin/shipping/.../http/Routes.kt` |
+| HTTP | Go `orders` `payments.Client.Charge`       | Java `payments` `ChargeController.charge` (`POST /payments/charges`) | `ChargeRequest`/`ChargeResponse` in `java/payments/.../http/ChargeController.java` |
+| HTTP | Go `orders` `payments.Client.Charged`      | Java `payments` `ChargeController.get` (`GET /payments/charges/{id}`) | `ChargeResponse` in `java/payments/.../http/ChargeController.java` |
+| HTTP | Java `payments` `OrdersCustomerDirectory.find` (`OrdersApi`, `@HttpExchange`) | Go `orders` `GET /customers/{id}` | `golang/orders/api` |
 
 The inventory proto lives with its owner, the Java service. Go `orders`
 generates its client from that file (`golang/orders/buf.gen.inventory.yaml`)
@@ -59,7 +65,9 @@ publisher, `orders`; `pricing` imports it.
 3. `orders` asks `pricing` for a quote. `pricing` asks `orders` for the tier
    (for the discount) and `shipping` for the delivery price. `shipping` asks
    `orders` for the region and tier.
-4. If pricing fails, `orders` releases the reservation.
+4. `orders` asks `payments` to charge the total; a free order is not charged.
+   `payments` asks `orders` for the tier, because the tier caps one charge.
+   If pricing or the charge fails, `orders` releases the reservation.
 5. `orders` publishes `OrderPlaced` to Pub/Sub, asks `fulfillment` to schedule
    the shipment, notifies the customer and returns the order. A failed publish
    or schedule is logged and does not fail the order. `fulfillment` asks
@@ -83,6 +91,7 @@ Pub/Sub endpoint; locally that is the in-memory emulator in
 export PUBSUB_EMULATOR_HOST=localhost:8085   # in each Go service's shell
 (cd java/inventory && ./mvnw package && java -jar target/quarkus-app/quarkus-run.jar)
 (cd kotlin/shipping && ./gradlew run)
+(cd java/payments && ./mvnw package && java -jar target/payments-0.1.0.jar)
 (cd golang/pricing && go run ./cmd/pricing)
 (cd golang/fulfillment && go run ./cmd/fulfillment)
 (cd golang/orders && go run ./cmd/orders)
@@ -90,11 +99,13 @@ export PUBSUB_EMULATOR_HOST=localhost:8085   # in each Go service's shell
 curl -XPOST localhost:8080/orders \
   -d '{"customer_id":"c3","items":[{"sku":"a","unit_cents":1000,"qty":12}]}'
 # {"order_id":"o-1","total_cents":15050}
+curl localhost:8080/orders/o-1
+# {"order_id":"o-1","customer_id":"c3","total_cents":15050,"charge_id":"ch-1","charged_cents":15050}
 ```
 
-The JVM projects build for JDK 25: inventory through Maven
+The JVM projects build for JDK 25: inventory and payments through Maven
 (`maven.compiler.release`), shipping through Gradle toolchains. Run the
-inventory jar with a JDK 25 or newer `java`. Start everything before calling
+inventory and payments jars with a JDK 25 or newer `java`. Start everything before calling
 `POST /orders`. `orders` creates the topic; `pricing` creates its
 subscription and, if it starts first, waits for the topic.
 
@@ -103,9 +114,11 @@ fourth 14210 once the loyalty discount applies.
 
 | Response | When |
 |----------|------|
+| 200      | `GET /orders/{id}`: the order and what payments charged; 404 if unknown. |
 | 201      | Order placed. |
 | 400      | Malformed request, missing items, unknown customer. |
 | 409      | Inventory refused: out of stock, unknown SKU, over the tier limit. |
+| 402      | Payments declined: over the tier's charge limit, or a customer's fourth charge within a minute. |
 | 502      | A downstream service is down or failing. |
 
 ## Tests
@@ -115,6 +128,7 @@ fourth 14210 once the loyalty discount applies.
 (cd golang/pricing && go test ./...)
 (cd golang/fulfillment && go test ./...)
 (cd java/inventory && ./mvnw test)
+(cd java/payments && ./mvnw test)
 (cd kotlin/shipping && ./gradlew test)
 ```
 
@@ -123,12 +137,15 @@ library's in-process fake (`pstest`).
 
 ## Tracing with dotweavier
 
-`index` picks up every project: the Go ones by `go.mod`, `java/inventory` by
-`pom.xml` and `kotlin/shipping` by `build.gradle.kts`. Indexed from this
-directory, the project names are their paths, such as `golang/orders`:
+`init` detects every project: the Go ones by `go.mod`, `java/inventory` and
+`java/payments` by `pom.xml` and `kotlin/shipping` by `build.gradle.kts`.
+The project names are their paths, such as `golang/orders`:
 
 ```sh
-dotweavier index --project samples-monorepo
+dotweavier init samples-monorepo
+for p in golang/orders golang/pricing golang/fulfillment java/inventory java/payments kotlin/shipping; do
+  dotweavier index samples-monorepo/$p
+done
 dotweavier trace path -A golang/orders::Handler.placeOrder -B golang/pricing::TierRule.Discount
 # 1. Handler.placeOrder -call-> Service.Place -iface:sure-> Client.Price
 #    -grpc /pricing.v1.PricingService/Quote-> Server.Quote -call-> Calculate
@@ -161,6 +178,24 @@ dotweavier trace path -A golang/pricing::Server.Quote -B golang/orders::Handler.
 dotweavier trace path -A golang/pricing::Server.Quote -B kotlin/shipping::ShippingRates.quote
 # 1. Server.Quote -iface:sure-> Client.Rate
 #    -http GET /rates-> Application.shippingModule -call-> ShippingRates.quote  (1/1 sure)
+```
+
+Spring routes and clients are not read yet, so the hops between `orders`
+and `payments` end at their clients: `orders`' `POST /payments/charges` and
+`GET /payments/charges/{}` are extracted but meet no route, and the
+`@HttpExchange` client in `payments` is not an HTTP call. Inside each
+project the traces hold:
+
+```sh
+dotweavier trace path -A golang/orders::Service.Place -B golang/orders::Client.Charge
+# 1. Service.Place -iface:sure-> Client.Charge  (1/1 sure)
+dotweavier trace path -A golang/orders::Handler.getOrder -B golang/orders::Client.Charged
+# 1. Handler.getOrder -call-> Service.Get -iface:sure-> Client.Charged  (1/1 sure)
+dotweavier trace path -A java/payments::ChargeController.charge -B java/payments::TierLimits.limitCents
+# 1. ChargeController.charge -call-> ChargeService.charge -call-> ChargeService.approve
+#    -call-> TierLimits.limitCents
+dotweavier trace path -A golang/orders::Service.Place -B java/payments::ChargeController.charge
+# no path
 ```
 
 dotweavier does not link Pub/Sub yet either: a trace from

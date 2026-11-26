@@ -2,13 +2,12 @@ package domain
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
 
 	"golang.org/x/tools/go/ssa"
 )
 
-// maxFollow caps the hops one call of TraceField or FollowHops follows.
+// maxFollow caps the hops one call of TraceField or FollowFieldRun follows.
 const maxFollow = 10
 
 // fieldRun is a field trace run while it traces and follows hops: its options,
@@ -22,28 +21,21 @@ type fieldRun struct {
 	loaded bool
 }
 
-// continueRun picks up run r, as TraceField returned it, to follow more hops.
-func continueRun(r *FieldTrace, progress func(string)) (*fieldRun, error) {
-	if r.Dir == "" {
-		return nil, errors.New("the run has no folder to follow hops in")
-	}
-	return &fieldRun{r: r, q: FieldQuery{Dir: r.Dir, IncludeTests: r.IncludeTests, MaxProjects: r.MaxProjects, Progress: progress}}, nil
-}
-
 // trace traces the value at addr ([project:]rel/path:LINE in the run's folder)
 // and attaches call paths and hops. keep, if set, picks a Go trace's seeds. A
 // JVM trace seeds at the first of lines lines from LINE on that computes a value.
 func (run *fieldRun) trace(ctx context.Context, addr string, keep func(ssa.Value) bool, lines int) (*FieldTrace, error) {
 	q := run.q
-	loc, lang, line, err := parseFieldAddr(addr)
+	a, lang, err := fieldAddr(addr)
 	if err != nil {
 		return nil, err
 	}
+	line := a.Line
 	projects, err := langProjects(q.Dir, lang)
 	if err != nil {
 		return nil, err
 	}
-	seedProject, file, err := resolveFile(projects, loc)
+	seedProject, file, err := resolveFile(projects, a)
 	if err != nil {
 		return nil, err
 	}

@@ -120,6 +120,16 @@ func TestWorkspaceRegistryAndInvalid(t *testing.T) {
 	dir, err = src.FolderOf("b.go:3")
 	assert.NoError(t, err, "an unprefixed address resolves by its file")
 	assert.Equal(t, filepath.Join(ws, "other"), dir)
+	// FolderOf resolves as a field trace does, so the server traces where the CLI would.
+	for _, a := range []string{"b:b.go:3", "api/api.go:3", "a:a.go:3"} {
+		want, _, err := runFolder(elsewhere, a)
+		require.NoError(t, err, a)
+		dir, err = src.FolderOf(a)
+		assert.NoError(t, err, a)
+		assert.Equal(t, want, dir, a)
+	}
+	_, err = src.FolderOf("b:nope.go:3")
+	assert.ErrorContains(t, err, "no project has b:nope.go in workspace")
 	name, err := WorkspaceOf(filepath.Join(svc, "a"))
 	assert.NoError(t, err)
 	assert.Equal(t, DefaultWorkspace, name)

@@ -9,31 +9,74 @@ import (
 	"strings"
 )
 
+// address is a symbol address (GLOSSARY.md), parsed: project::Name,
+// project:file:Name, or [project:]file[:LINE]. File is relative to the project.
 type address struct {
 	Project, File, Name string
 	Line                int
 }
 
+// parseAddr parses any form of a symbol address. A two-part address is
+// project:file unless its last part is a line. Which parts a caller needs is
+// for the caller to check.
 func parseAddr(s string) (address, error) {
 	if proj, name, ok := strings.Cut(s, "::"); ok {
+		if proj == "" || name == "" || strings.Contains(name, ":") {
+			return address{}, fmt.Errorf("bad address %q", s)
+		}
 		return address{Project: proj, Name: name}, nil
 	}
-	proj, rest, ok := strings.Cut(s, ":")
-	if !ok {
+	parts := strings.Split(s, ":")
+	if len(parts) > 3 || slices.Contains(parts, "") {
 		return address{}, fmt.Errorf("bad address %q", s)
 	}
-	i := strings.LastIndex(rest, ":")
-	if i < 0 {
+	var a address
+	if n, err := strconv.Atoi(parts[len(parts)-1]); err == nil && len(parts) > 1 {
+		a.Line, parts = n, parts[:len(parts)-1]
+	} else if len(parts) == 3 {
+		a.Name, parts = parts[2], parts[:2]
+	}
+	if len(parts) == 2 {
+		a.Project, parts = parts[0], parts[1:]
+	}
+	if len(parts) != 1 || a.Line < 0 {
 		return address{}, fmt.Errorf("bad address %q", s)
 	}
-	file, tail := rest[:i], rest[i+1:]
-	a := address{Project: proj, File: file}
-	if n, err := strconv.Atoi(tail); err == nil {
-		a.Line = n
-	} else {
-		a.Name = tail
-	}
+	a.File = parts[0]
 	return a, nil
+}
+
+// String is the address as parseAddr reads it back.
+func (a address) String() string {
+	if a.File == "" {
+		return a.Project + "::" + a.Name
+	}
+	s := a.loc()
+	if a.Line > 0 {
+		s += ":" + strconv.Itoa(a.Line)
+	} else if a.Name != "" {
+		s += ":" + a.Name
+	}
+	return s
+}
+
+// loc is the file part: [project:]file.
+func (a address) loc() string {
+	if a.Project == "" {
+		return a.File
+	}
+	return a.Project + ":" + a.File
+}
+
+// fieldAddr parses the address of a field trace's seed, [project:]file.{go,java,kt}:LINE,
+// and returns it with the file's language.
+func fieldAddr(s string) (address, string, error) {
+	a, err := parseAddr(s)
+	lang := langOfExt(a.File)
+	if err != nil || a.Line == 0 || lang == "" {
+		return address{}, "", fmt.Errorf("bad address %q, want [project:]rel/path.{go,java,kt}:LINE", s)
+	}
+	return a, lang, nil
 }
 
 func (g *graph) resolve(a address, tests bool) (int32, error) {

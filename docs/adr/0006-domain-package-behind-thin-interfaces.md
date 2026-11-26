@@ -10,4 +10,4 @@ dotweavier will have more than one interface: the CLI now, a UI later. Both must
 
 - The UI will reuse `domain` as-is, with no CLI code in between.
 - Storage (`store` code, ADR 0004) lives inside `domain` for now. Split it into its own package when a second store or a store-only consumer appears.
-- `domain` never writes to stdout or stderr. Progress and skipped projects come back as warnings in each result (`FieldTrace.Warnings`, `PathTrace.Warnings`, `IndexResult.Warnings`), and each interface decides how to show them. Long-running calls (`Index`, `TraceField`, `FollowHops`) take a `context.Context` and stop when it is cancelled.
+- `domain` never writes to stdout or stderr. Progress and skipped projects come back as warnings in each result (`FieldTrace.Warnings`, `PathTrace.Warnings`, `IndexResult.Warnings`), and each interface decides how to show them. Long-running calls (`Index`, `TraceField`, `FollowFieldRun`) take a `context.Context` and stop when it is cancelled.

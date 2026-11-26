@@ -10,7 +10,6 @@
 package main
 
 import (
-	"bytes"
 	"cmp"
 	"context"
 	_ "embed"
@@ -230,16 +229,18 @@ func runTraceField(ctx context.Context, args []string) {
 	}
 	switch *format {
 	case "ui":
-		name, err := saveFieldRun(r, *depth)
+		name, err := domain.SaveFieldRun(r, *depth)
 		must(err)
-		fmt.Fprintf(os.Stderr, "saved %s\n", filepath.Join(historyDir(), name+".js"))
+		dir, err := domain.FieldHistoryDir()
+		must(err)
+		fmt.Fprintf(os.Stderr, "saved %s\n", filepath.Join(dir, name+".js"))
 		wsName, err := domain.WorkspaceOf(r.Dir)
 		must(err)
 		serveOverview(overviewAddr, wsName, overviewMaxNodes, "/ui/trace-field.html?t="+url.QueryEscape(name))
 	case "html":
 		html, err := exportField(r, *depth)
 		must(err)
-		page := writeUI("trace-field_"+traceName(r.Addr)+".html", html)
+		page := writeUI("trace-field_"+domain.AddrFileName(r.Addr)+".html", html)
 		fmt.Printf("lifecycle of %s -> file://%s\n", pos[0], page)
 		openPage(page)
 	default:
@@ -414,111 +415,11 @@ func pathUI(paths []domain.Path, a, b string) ([]byte, error) {
 	return fill(pathUITemplate, data)
 }
 
-// fieldData is one run for the static field page: a script that sets window.TRACE.
-// Both trees: origin grows left of the seed, uses right. open is how many levels
-// the page opens at first.
-func fieldData(r *domain.FieldTrace, open int) ([]byte, error) {
-	js, err := json.Marshal(fieldRun{r.Addr, open, r.Origin, r.Uses, r.Warnings, r.Dir, r.IncludeTests, r.MaxProjects}) // escapes <, > and &, so it is safe inside a script
-	if err != nil {
-		return nil, err
-	}
-	return append(append([]byte(tracePrefix), js...), ";\n"...), nil
-}
-
-const tracePrefix = "window.TRACE = "
-
-// traceJSON is the JSON of a run file, as fieldData writes it.
-func traceJSON(b []byte) []byte {
-	return bytes.TrimSuffix(bytes.TrimSpace(bytes.TrimPrefix(b, []byte(tracePrefix))), []byte(";"))
-}
-
-// saveFieldRun saves a field trace run to the history folder, with latest.js and index.js, and returns its name for ?t=.
-// ponytail: history is never pruned; add a cap when the folder grows large.
-func saveFieldRun(r *domain.FieldTrace, open int) (string, error) {
-	data, err := fieldData(r, open)
-	if err != nil {
-		return "", err
-	}
-	dir := historyDir()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-	// Milliseconds keep runs apart: a follow often saves within the second of its trace.
-	name := time.Now().Format("20060102-150405.000") + "_" + traceName(r.Addr)
-	for _, f := range []string{name + ".js", "latest.js"} {
-		if err := os.WriteFile(filepath.Join(dir, f), data, 0o644); err != nil {
-			return "", err
-		}
-	}
-
-	type run struct {
-		Name string `json:"name"`
-		Addr string `json:"addr"`
-		At   string `json:"at"`
-	}
-	var runs []run
-	files, _ := filepath.Glob(filepath.Join(dir, "*_*.js"))
-	for i := len(files) - 1; i >= 0; i-- { // names start with the time, so sorted means oldest first
-		n := strings.TrimSuffix(filepath.Base(files[i]), ".js")
-		at, _, _ := strings.Cut(n, "_")
-		t, err := time.ParseInLocation("20060102-150405.000", at, time.Local)
-		if err != nil { // runs saved before milliseconds were added
-			t, err = time.ParseInLocation("20060102-150405", at, time.Local)
-		}
-		if err != nil {
-			continue
-		}
-		var head struct{ Addr string } // the real address; the file name is a mangled copy
-		if b, err := os.ReadFile(files[i]); err == nil {
-			_ = json.Unmarshal(traceJSON(b), &head)
-		}
-		runs = append(runs, run{n, head.Addr, t.Format("2006-01-02 15:04:05")})
-	}
-	js, err := json.Marshal(runs)
-	if err != nil {
-		return "", err
-	}
-	return name, os.WriteFile(filepath.Join(dir, "index.js"), append(append([]byte("window.HISTORY = "), js...), ";\n"...), 0o644)
-}
-
-func historyDir() string { return dotDir("trace-field-history") }
-
 // dotDir is a folder under ~/.dotweavier; without a home folder it exits rather than write into a target project.
 func dotDir(name string) string {
 	home, err := os.UserHomeDir()
 	must(err)
 	return filepath.Join(home, ".dotweavier", name)
-}
-
-// fieldRun is one saved run of the field page, as fieldData writes it: the
-// domain's run, whole so it can be continued, and the levels the page opens.
-type fieldRun struct {
-	Addr         string              `json:"addr"`
-	Open         int                 `json:"open,omitempty"`
-	Origin       []*domain.FieldStep `json:"origin"`
-	Uses         []*domain.FieldStep `json:"uses"`
-	Warnings     []string            `json:"warnings,omitempty"`
-	Dir          string              `json:"dir,omitempty"` // empty in runs saved before runs kept their folder
-	IncludeTests bool                `json:"includeTests,omitempty"`
-	MaxProjects  int                 `json:"maxProjects,omitempty"`
-}
-
-// loadFieldRun reads a run back from the history folder, with the levels its
-// page opens; name is a bare run name.
-func loadFieldRun(name string) (*domain.FieldTrace, int, error) {
-	if name == "" || filepath.Base(name) != name || strings.ContainsAny(name, `/\`) {
-		return nil, 0, fmt.Errorf("bad run %q", name)
-	}
-	b, err := os.ReadFile(filepath.Join(historyDir(), name+".js"))
-	if err != nil {
-		return nil, 0, err
-	}
-	var f fieldRun
-	if err := json.Unmarshal(traceJSON(b), &f); err != nil {
-		return nil, 0, err
-	}
-	return &domain.FieldTrace{Addr: f.Addr, Origin: f.Origin, Uses: f.Uses, Warnings: f.Warnings, Dir: f.Dir,
-		IncludeTests: f.IncludeTests, MaxProjects: f.MaxProjects}, f.Open, nil
 }
 
 // exportField is the field page with one run inlined: a single file that opens
@@ -527,23 +428,13 @@ func loadFieldRun(name string) (*domain.FieldTrace, int, error) {
 func exportField(r *domain.FieldTrace, open int) ([]byte, error) {
 	view := *r
 	view.Dir, view.Warnings = "", nil
-	data, err := fieldData(&view, open)
+	data, err := domain.FieldRunScript(&view, open)
 	if err != nil {
 		return nil, err
 	}
 	page := fieldUITemplate
 	i := strings.Index(page, "<script>")
 	return []byte(page[:i] + "<script>" + string(data) + "window.EXPORTED = true;</script>\n" + page[i:]), nil
-}
-
-// traceName turns an address into a file name: golang/orders:a/b.go:45 -> golang_orders_a_b.go_45.
-func traceName(addr string) string {
-	return strings.Map(func(r rune) rune {
-		if r == '.' || r == '-' || r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' {
-			return r
-		}
-		return '_'
-	}, addr)
 }
 
 func fill(template string, data any) ([]byte, error) {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"go/types"
 	"strconv"
-	"strings"
 
 	"golang.org/x/tools/go/ssa"
 )
@@ -47,14 +46,13 @@ func hopsOf(g *graph, n int32) []Hop {
 // yields a trace is the signature. Every location in the result carries its
 // project, so the trees can be grafted into another project's trace.
 func (run *fieldRun) traceHop(ctx context.Context, addr string) (*FieldTrace, error) {
-	i := strings.LastIndex(addr, ":")
-	if _, err := strconv.Atoi(addr[i+1:]); i < 0 || err != nil {
+	a, lang, err := fieldAddr(addr)
+	if err != nil || a.Project == "" {
 		return nil, fmt.Errorf("bad handler address %q", addr)
 	}
-	proj, _, _ := strings.Cut(addr, ":")
+	proj := a.Project
 	var r *FieldTrace
-	var err error
-	if strings.HasSuffix(addr[:i], ".go") {
+	if lang == "go" {
 		r, err = run.trace(ctx, addr, requestParam, 1)
 	} else {
 		r, err = run.trace(ctx, addr, nil, 12) // annotations, then the signature
@@ -83,41 +81,25 @@ func requestParam(v ssa.Value) bool {
 	return true
 }
 
+// qualify prefixes project to location loc if it has none ("rel.go:LINE").
+func qualify(loc, project string) string {
+	if a, err := parseAddr(loc); err == nil && a.Project == "" && a.Line > 0 {
+		a.Project = project
+		return a.String()
+	}
+	return loc
+}
+
 // qualifyLocs prefixes project to every location that has none ("rel.go:LINE").
 func qualifyLocs(ss []*FieldStep, project string) {
 	for _, s := range ss {
-		if s.Loc != "" && strings.Count(s.Loc, ":") == 1 {
-			s.Loc = project + ":" + s.Loc
-		}
-		if s.Via != "" && strings.Count(s.Via, ":") == 1 {
-			s.Via = project + ":" + s.Via
-		}
+		s.Loc, s.Via = qualify(s.Loc, project), qualify(s.Via, project)
 		qualifyLocs(s.Kids, project)
 	}
 }
 
-// FollowHop continues run r: it grafts the trace of hop k of the lifecycle step
-// at path (indexes from r.Uses down through Kids) under that step, behind a step
-// of the hop's kind. progress, if set, is told each phase as it starts.
-func FollowHop(ctx context.Context, r *FieldTrace, path []int, k int, progress func(string)) error {
-	run, err := continueRun(r, progress)
-	if err != nil {
-		return err
-	}
-	return run.followHop(ctx, path, k)
-}
-
-// FollowHops continues run r: it follows every hop on the lifecycle side, then
-// the hops in what it grafted, depth services deep, at most 10 hops in all.
-// It returns how many it followed and why the others failed.
-func FollowHops(ctx context.Context, r *FieldTrace, depth int, progress func(string)) (followed int, errs []error) {
-	run, err := continueRun(r, progress)
-	if err != nil {
-		return 0, []error{err}
-	}
-	return run.followHops(ctx, depth)
-}
-
+// followHop grafts the trace of hop k of the lifecycle step at path (indexes
+// from r.Uses down through Kids) under that step, behind a step of the hop's kind.
 func (run *fieldRun) followHop(ctx context.Context, path []int, k int) error {
 	r := run.r
 	s, err := stepAt(r.Uses, path)
@@ -146,7 +128,9 @@ func hopStep(h *Hop, kids []*FieldStep) *FieldStep {
 	return &FieldStep{Kind: h.Kind, Name: h.Method, Loc: h.Addr, Code: h.Method, Fn: h.Fn, Kids: kids}
 }
 
-// followHops is FollowHops, breadth-first, with maxFollow hops for budget.
+// followHops follows every hop on the lifecycle side, then the hops in what it
+// grafted, depth services deep, breadth-first, with maxFollow hops for budget. It
+// returns how many it followed and why the others failed.
 // ponytail: breadth-first with a flat budget; per-service limits if traces fan out.
 func (run *fieldRun) followHops(ctx context.Context, depth int) (followed int, errs []error) {
 	r := run.r

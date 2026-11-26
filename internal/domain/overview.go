@@ -14,7 +14,6 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -78,33 +77,19 @@ func (src *OverviewSource) Warnings() []string {
 // Workspace is the name of the workspace this overview shows.
 func (src *OverviewSource) Workspace() string { return src.ws }
 
-// FolderOf is the folder that field traces and Source of address addr ([project:]rest) run over.
+// FolderOf is the folder that field traces and Source of address addr run over: the innermost one whose projects have its file, as folderWithFile finds it.
 // ponytail: a field trace sees only the projects under that one folder; trace over
 // every folder of the workspace if hops into other folders are needed.
 func (src *OverviewSource) FolderOf(addr string) (string, error) {
-	name, _, _ := strings.Cut(addr, ":")
-	ps, err := projectsIn(src.folders)
+	a, err := parseAddr(addr)
 	if err != nil {
 		return "", err
 	}
-	for _, p := range ps {
-		if p.Name == name {
-			return deepest(src.folders, p.dir), nil
-		}
+	f, err := folderWithFile(src.folders, a, langOfExt(a.File))
+	if errors.Is(err, errNoProject) {
+		return "", fmt.Errorf("%w in workspace %s", err, src.ws)
 	}
-	// No project of that name: addr may be an unprefixed rel/path[:LINE] instead.
-	loc := addr
-	if i := strings.LastIndex(addr, ":"); i >= 0 {
-		if _, err := strconv.Atoi(addr[i+1:]); err == nil {
-			loc = addr[:i]
-		}
-	}
-	if lang := langOfExt(loc); lang != "" {
-		if f, err := folderWithFile(src.folders, loc, lang); err == nil {
-			return f, nil
-		}
-	}
-	return "", fmt.Errorf("project %q not found in workspace %s", name, src.ws)
+	return f, err
 }
 
 // mergedGraph merges the indexes of every project inside the absolute folders, joined and without tests.

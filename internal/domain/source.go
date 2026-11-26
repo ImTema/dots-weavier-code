@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 )
 
@@ -24,47 +23,44 @@ const maxSource = 2 << 20
 
 // Source reads the file at [project:]rel/path[:LINE] in a project under ws; a path leaving the project is an error.
 func Source(ws, loc string) (*SourceFile, error) {
-	line := 0
-	if i := strings.LastIndex(loc, ":"); i >= 0 {
-		if n, err := strconv.Atoi(loc[i+1:]); err == nil {
-			loc, line = loc[:i], n
-		}
+	a, err := parseAddr(loc)
+	if err != nil {
+		return nil, err
 	}
 	projects, err := discover(ws)
 	if err != nil {
 		return nil, err
 	}
-	p, path, err := resolveFile(projects, loc)
+	p, path, err := resolveFile(projects, a)
 	if err != nil {
 		return nil, err
 	}
 	rel, err := filepath.Rel(p.dir, path)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-		return nil, fmt.Errorf("%s is outside project %s", loc, p.Name)
+		return nil, fmt.Errorf("%s is outside project %s", a.loc(), p.Name)
 	}
 	st, err := os.Stat(path)
 	if err != nil {
 		return nil, err
 	}
 	if !st.Mode().IsRegular() || st.Size() > maxSource {
-		return nil, fmt.Errorf("%s is not a regular file under %d MB", loc, maxSource>>20)
+		return nil, fmt.Errorf("%s is not a regular file under %d MB", a.loc(), maxSource>>20)
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	return &SourceFile{Project: p.Name, File: filepath.ToSlash(rel), Line: line, Text: string(b)}, nil
+	return &SourceFile{Project: p.Name, File: filepath.ToSlash(rel), Line: a.Line, Text: string(b)}, nil
 }
 
 // errNoProject: no project has the file an address names.
 var errNoProject = errors.New("no project has")
 
-// resolveFile finds the project and absolute path of [project:]rel/path.go.
-func resolveFile(projects []project, s string) (project, string, error) {
-	name, file, ok := strings.Cut(s, ":")
-	if !ok {
-		name, file = "", s
-	}
+// resolveFile finds the project and absolute path of the file a names. Without
+// a project, the file is relative to any project, else absolute or relative to
+// the current folder, where the innermost project holding it wins.
+func resolveFile(projects []project, a address) (project, string, error) {
+	name, file, s := a.Project, a.File, a.loc()
 	var hits []project
 	for _, p := range projects {
 		if name != "" && p.Name != name {

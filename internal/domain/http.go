@@ -2,6 +2,7 @@ package domain
 
 import (
 	"go/constant"
+	"go/token"
 	"go/types"
 	"regexp"
 	"strings"
@@ -114,4 +115,113 @@ func (jp *jvmProject) ktorRequest(fn *jvmFunc, recv, name string, suffix *sitter
 	if key := httpRoute(verb, url); key != "" {
 		jp.g.Calls = append(jp.g.Calls, grpcCall{fn.id, key, "HttpClient." + name})
 	}
+}
+
+// goRequest is the route key of a net/http client request (http.NewRequest, http.Get, Client.Post, ...) with a constant method, or "".
+func goRequest(c *ssa.CallCommon) string {
+	sc := c.StaticCallee()
+	if sc == nil || sc.Object() == nil || sc.Object().Pkg() == nil || sc.Object().Pkg().Path() != "net/http" {
+		return ""
+	}
+	args := c.Args
+	if sc.Signature.Recv() != nil {
+		if types.TypeString(sc.Signature.Recv().Type(), nil) != "*net/http.Client" {
+			return ""
+		}
+		args = args[1:]
+	}
+	var method string
+	var u ssa.Value
+	switch sc.Name() {
+	case "NewRequest", "NewRequestWithContext":
+		k, ok := args[len(args)-3].(*ssa.Const)
+		if !ok || k.Value == nil || k.Value.Kind() != constant.String {
+			return ""
+		}
+		method, u = constant.StringVal(k.Value), args[len(args)-2]
+	case "Get", "Head", "Post", "PostForm":
+		method, u = strings.ToUpper(strings.TrimSuffix(sc.Name(), "Form")), args[0]
+	default:
+		return ""
+	}
+	p := urlText(u, 0)
+	if i := strings.Index(p, "://"); i >= 0 { // scheme and host
+		p = p[i+3:]
+		p = p[strings.Index(p+"/", "/"):]
+	}
+	p = strings.TrimPrefix(p, "{}") // the base URL
+	if q := strings.IndexAny(p, "?#"); q >= 0 {
+		p = p[:q]
+	}
+	for strings.Contains(p, "//") {
+		p = strings.ReplaceAll(p, "//", "/")
+	}
+	return httpRoute(method, p)
+}
+
+var printfVerb = regexp.MustCompile(`%[-+# 0-9.*]*[a-zA-Z]`)
+
+// urlText rebuilds the URL a value holds from constants, +, fmt.Sprintf, url.JoinPath, url.Parse
+// and URL.JoinPath/String; any other part becomes {}.
+// ponytail: follows values within one function only, no phis or struct fields; widen when a target builds URLs elsewhere.
+func urlText(v ssa.Value, depth int) string {
+	if depth > 16 {
+		return "{}"
+	}
+	switch x := v.(type) {
+	case *ssa.Const:
+		if x.Value != nil && x.Value.Kind() == constant.String {
+			return constant.StringVal(x.Value)
+		}
+	case *ssa.BinOp:
+		if x.Op == token.ADD {
+			return urlText(x.X, depth+1) + urlText(x.Y, depth+1)
+		}
+	case *ssa.Extract: // u, err := url.Parse(s)
+		return urlText(x.Tuple, depth+1)
+	case *ssa.Call:
+		sc := x.Call.StaticCallee()
+		if sc == nil || sc.Object() == nil || sc.Object().Pkg() == nil {
+			break
+		}
+		a := x.Call.Args
+		switch sc.Object().Pkg().Path() + "." + sc.Name() {
+		case "fmt.Sprintf":
+			if k, ok := a[0].(*ssa.Const); ok && k.Value != nil && k.Value.Kind() == constant.String {
+				return strings.ReplaceAll(printfVerb.ReplaceAllString(constant.StringVal(k.Value), "{}"), "%%", "%")
+			}
+		case "net/url.Parse", "net/url.String":
+			return urlText(a[0], depth+1)
+		case "net/url.JoinPath": // url.JoinPath(base, elem...) and (*URL).JoinPath(elem...)
+			s := urlText(a[0], depth+1)
+			for _, e := range varargs(a[len(a)-1]) {
+				s += "/" + urlText(e, depth+1)
+			}
+			return s
+		}
+	}
+	return "{}"
+}
+
+// varargs are the values stored into the slice passed as a ...T argument.
+func varargs(v ssa.Value) []ssa.Value {
+	sl, ok := v.(*ssa.Slice)
+	if !ok {
+		return nil
+	}
+	arr, ok := sl.X.(*ssa.Alloc)
+	if !ok {
+		return nil
+	}
+	var out []ssa.Value
+	for _, r := range *arr.Referrers() {
+		if ia, ok := r.(*ssa.IndexAddr); ok {
+			for _, rr := range *ia.Referrers() {
+				if st, ok := rr.(*ssa.Store); ok && st.Addr == ia {
+					out = append(out, st.Val)
+				}
+			}
+		}
+	}
+	return out
 }

@@ -1067,6 +1067,15 @@
                    "before": "}",
                    "type": "*io.ReadCloser",
                    "fn": "Client.Tier",
+                   "kids": [
+                    {
+                     "kind": "http",
+                     "name": "GET /customers/{}",
+                     "loc": "golang/orders:internal/httpapi/httpapi.go:61",
+                     "code": "GET /customers/{}  (traced at another step)",
+                     "fn": "Handler.getCustomer"
+                    }
+                   ],
                    "call": {
                     "Steps": [
                      {
@@ -1102,7 +1111,17 @@
                     ],
                     "Sure": 1,
                     "Iface": 1
-                   }
+                   },
+                   "hops": [
+                    {
+                     "kind": "http",
+                     "method": "GET /customers/{}",
+                     "project": "golang/orders",
+                     "fn": "Handler.getCustomer",
+                     "addr": "golang/orders:internal/httpapi/httpapi.go:61",
+                     "followed": true
+                    }
+                   ]
                   },
                   {
                    "kind": "container",
@@ -1111,6 +1130,15 @@
                    "after": "return ordersapi.TierStandard, nil",
                    "type": "*int",
                    "fn": "Client.Tier",
+                   "kids": [
+                    {
+                     "kind": "http",
+                     "name": "GET /customers/{}",
+                     "loc": "golang/orders:internal/httpapi/httpapi.go:61",
+                     "code": "GET /customers/{}  (traced at another step)",
+                     "fn": "Handler.getCustomer"
+                    }
+                   ],
                    "call": {
                     "Steps": [
                      {
@@ -1146,7 +1174,17 @@
                     ],
                     "Sure": 1,
                     "Iface": 1
-                   }
+                   },
+                   "hops": [
+                    {
+                     "kind": "http",
+                     "method": "GET /customers/{}",
+                     "project": "golang/orders",
+                     "fn": "Handler.getCustomer",
+                     "addr": "golang/orders:internal/httpapi/httpapi.go:61",
+                     "followed": true
+                    }
+                   ]
                   },
                   {
                    "kind": "container",
@@ -1156,6 +1194,15 @@
                    "after": "return \"\", fmt.Errorf(\"get customer: unexpected status %s\", resp.Status)",
                    "type": "*int",
                    "fn": "Client.Tier",
+                   "kids": [
+                    {
+                     "kind": "http",
+                     "name": "GET /customers/{}",
+                     "loc": "golang/orders:internal/httpapi/httpapi.go:61",
+                     "code": "GET /customers/{}  (traced at another step)",
+                     "fn": "Handler.getCustomer"
+                    }
+                   ],
                    "call": {
                     "Steps": [
                      {
@@ -1191,7 +1238,17 @@
                     ],
                     "Sure": 1,
                     "Iface": 1
-                   }
+                   },
+                   "hops": [
+                    {
+                     "kind": "http",
+                     "method": "GET /customers/{}",
+                     "project": "golang/orders",
+                     "fn": "Handler.getCustomer",
+                     "addr": "golang/orders:internal/httpapi/httpapi.go:61",
+                     "followed": true
+                    }
+                   ]
                   },
                   {
                    "kind": "container",
@@ -1201,6 +1258,15 @@
                    "after": "}",
                    "type": "*string",
                    "fn": "Client.Tier",
+                   "kids": [
+                    {
+                     "kind": "http",
+                     "name": "GET /customers/{}",
+                     "loc": "golang/orders:internal/httpapi/httpapi.go:61",
+                     "code": "GET /customers/{}  (traced at another step)",
+                     "fn": "Handler.getCustomer"
+                    }
+                   ],
                    "call": {
                     "Steps": [
                      {
@@ -1236,7 +1302,17 @@
                     ],
                     "Sure": 1,
                     "Iface": 1
-                   }
+                   },
+                   "hops": [
+                    {
+                     "kind": "http",
+                     "method": "GET /customers/{}",
+                     "project": "golang/orders",
+                     "fn": "Handler.getCustomer",
+                     "addr": "golang/orders:internal/httpapi/httpapi.go:61",
+                     "followed": true
+                    }
+                   ]
                   },
                   {
                    "kind": "container",
@@ -1246,6 +1322,15 @@
                    "after": "return \"\", fmt.Errorf(\"decode customer: %w\", err)",
                    "type": "*io.ReadCloser",
                    "fn": "Client.Tier",
+                   "kids": [
+                    {
+                     "kind": "http",
+                     "name": "GET /customers/{}",
+                     "loc": "golang/orders:internal/httpapi/httpapi.go:61",
+                     "code": "GET /customers/{}  (traced at another step)",
+                     "fn": "Handler.getCustomer"
+                    }
+                   ],
                    "call": {
                     "Steps": [
                      {
@@ -1281,7 +1366,24 @@
                     ],
                     "Sure": 1,
                     "Iface": 1
-                   }
+                   },
+                   "hops": [
+                    {
+                     "kind": "http",
+                     "method": "GET /customers/{}",
+                     "project": "golang/orders",
+                     "fn": "Handler.getCustomer",
+                     "addr": "golang/orders:internal/httpapi/httpapi.go:61",
+                     "followed": true
+                    }
+                   ]
+                  },
+                  {
+                   "kind": "http",
+                   "name": "GET /customers/{}",
+                   "loc": "golang/orders:internal/httpapi/httpapi.go:61",
+                   "code": "GET /customers/{}  (traced at another step)",
+                   "fn": "Handler.getCustomer"
                   }
                  ],
                  "call": {
@@ -1319,7 +1421,24 @@
                   ],
                   "Sure": 1,
                   "Iface": 1
-                 }
+                 },
+                 "hops": [
+                  {
+                   "kind": "http",
+                   "method": "GET /customers/{}",
+                   "project": "golang/orders",
+                   "fn": "Handler.getCustomer",
+                   "addr": "golang/orders:internal/httpapi/httpapi.go:61",
+                   "followed": true
+                  }
+                 ]
+                },
+                {
+                 "kind": "http",
+                 "name": "GET /customers/{}",
+                 "loc": "golang/orders:internal/httpapi/httpapi.go:61",
+                 "code": "GET /customers/{}  (traced at another step)",
+                 "fn": "Handler.getCustomer"
                 }
                ],
                "call": {
@@ -1357,7 +1476,24 @@
                 ],
                 "Sure": 1,
                 "Iface": 1
-               }
+               },
+               "hops": [
+                {
+                 "kind": "http",
+                 "method": "GET /customers/{}",
+                 "project": "golang/orders",
+                 "fn": "Handler.getCustomer",
+                 "addr": "golang/orders:internal/httpapi/httpapi.go:61",
+                 "followed": true
+                }
+               ]
+              },
+              {
+               "kind": "http",
+               "name": "GET /customers/{}",
+               "loc": "golang/orders:internal/httpapi/httpapi.go:61",
+               "code": "GET /customers/{}  (traced at another step)",
+               "fn": "Handler.getCustomer"
               }
              ],
              "call": {
@@ -1395,7 +1531,121 @@
               ],
               "Sure": 1,
               "Iface": 1
-             }
+             },
+             "hops": [
+              {
+               "kind": "http",
+               "method": "GET /customers/{}",
+               "project": "golang/orders",
+               "fn": "Handler.getCustomer",
+               "addr": "golang/orders:internal/httpapi/httpapi.go:61",
+               "followed": true
+              }
+             ]
+            },
+            {
+             "kind": "http",
+             "name": "GET /customers/{}",
+             "loc": "golang/orders:internal/httpapi/httpapi.go:61",
+             "code": "GET /customers/{}",
+             "fn": "Handler.getCustomer",
+             "kids": [
+              {
+               "kind": "seed",
+               "loc": "golang/orders:internal/httpapi/httpapi.go:61",
+               "code": "func (h *Handler) getCustomer(w http.ResponseWriter, r *http.Request) {",
+               "before": "// getCustomer serves the HTTP hop pricing makes back into orders.",
+               "after": "c, err := h.customers.Lookup(r.PathValue(\"id\"))",
+               "type": "*http.Request",
+               "fn": "Handler.getCustomer",
+               "kids": [
+                {
+                 "kind": "transform",
+                 "loc": "golang/orders:internal/httpapi/httpapi.go:62",
+                 "code": "c, err := h.customers.Lookup(r.PathValue(\"id\"))",
+                 "before": "func (h *Handler) getCustomer(w http.ResponseWriter, r *http.Request) {",
+                 "after": "if errors.Is(err, customer.ErrNotFound) {",
+                 "type": "string",
+                 "fn": "Handler.getCustomer",
+                 "kids": [
+                  {
+                   "kind": "arg",
+                   "loc": "golang/orders:internal/customer/store.go:40",
+                   "code": "func (s *Store) Lookup(id string) (api.Customer, error) {",
+                   "before": "// Lookup returns the customer with id. A missing tier defaults to standard.",
+                   "after": "s.mu.RLock()",
+                   "type": "string",
+                   "fn": "Store.Lookup",
+                   "via": "golang/orders:internal/httpapi/httpapi.go:62",
+                   "kids": [
+                    {
+                     "kind": "transform",
+                     "loc": "golang/orders:internal/customer/store.go:42",
+                     "code": "c, ok := s.byID[strings.TrimSpace(id)]",
+                     "before": "s.mu.RLock()",
+                     "after": "s.mu.RUnlock()",
+                     "type": "string",
+                     "fn": "Store.Lookup",
+                     "call": {
+                      "Steps": [
+                       {
+                        "Node": {
+                         "Project": "golang/orders",
+                         "File": "internal/httpapi/httpapi.go",
+                         "Name": "Handler.getCustomer",
+                         "Line": 61
+                        },
+                        "Via": "",
+                        "Method": ""
+                       },
+                       {
+                        "Node": {
+                         "Project": "golang/orders",
+                         "File": "internal/customer/store.go",
+                         "Name": "Store.Lookup",
+                         "Line": 40
+                        },
+                        "Via": "call",
+                        "Method": ""
+                       }
+                      ],
+                      "Sure": 0,
+                      "Iface": 0
+                     }
+                    }
+                   ],
+                   "call": {
+                    "Steps": [
+                     {
+                      "Node": {
+                       "Project": "golang/orders",
+                       "File": "internal/httpapi/httpapi.go",
+                       "Name": "Handler.getCustomer",
+                       "Line": 61
+                      },
+                      "Via": "",
+                      "Method": ""
+                     },
+                     {
+                      "Node": {
+                       "Project": "golang/orders",
+                       "File": "internal/customer/store.go",
+                       "Name": "Store.Lookup",
+                       "Line": 40
+                      },
+                      "Via": "call",
+                      "Method": ""
+                     }
+                    ],
+                    "Sure": 0,
+                    "Iface": 0
+                   }
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
             }
            ],
            "call": {
@@ -1433,7 +1683,17 @@
             ],
             "Sure": 1,
             "Iface": 1
-           }
+           },
+           "hops": [
+            {
+             "kind": "http",
+             "method": "GET /customers/{}",
+             "project": "golang/orders",
+             "fn": "Handler.getCustomer",
+             "addr": "golang/orders:internal/httpapi/httpapi.go:61",
+             "followed": true
+            }
+           ]
           }
          ],
          "call": {

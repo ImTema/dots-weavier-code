@@ -8,6 +8,7 @@ call golang/pricing:cmd/pricing/main.go:run lib (*google.golang.org/grpc.Server)
 call golang/pricing:cmd/pricing/main.go:run lib cloud.google.com/go/pubsub/v2.NewClient ext=
 call golang/pricing:cmd/pricing/main.go:run lib google.golang.org/grpc.NewServer ext=
 call golang/pricing:cmd/pricing/main.go:run$2 lib (*google.golang.org/grpc.Server).GracefulStop ext=
+call golang/pricing:internal/customers/client.go:Client.Tier http GET /customers/{} ext=http.NewRequestWithContext
 call golang/pricing:internal/events/subscriber.go:EnsureSubscription lib (*cloud.google.com/go/pubsub/v2.Client).Project ext=
 call golang/pricing:internal/events/subscriber.go:EnsureSubscription lib (*cloud.google.com/go/pubsub/v2/apiv1.SubscriptionAdminClient).CreateSubscription ext=
 call golang/pricing:internal/events/subscriber.go:EnsureSubscription lib google.golang.org/grpc/status.Code ext=
@@ -30,6 +31,7 @@ call golang/pricing:internal/events/subscriber_test.go:TestSubscriberRecordsOrde
 call golang/pricing:internal/events/subscriber_test.go:TestSubscriberRecordsOrders lib google.golang.org/protobuf/proto.Marshal ext=
 call golang/pricing:internal/server/server.go:Server.Quote lib google.golang.org/grpc/status.Error ext=
 call golang/pricing:internal/server/server.go:Server.Quote lib google.golang.org/grpc/status.Errorf ext=
+call golang/pricing:internal/shipping/client.go:Client.Rate http GET /rates ext=http.NewRequestWithContext
 edge golang/pricing:api/pricing/v1/pricing.pb.go:Item.Descriptor -call -> golang/pricing:api/pricing/v1/pricing.pb.go:file_api_pricing_v1_pricing_proto_rawDescGZIP
 edge golang/pricing:api/pricing/v1/pricing.pb.go:QuoteRequest.Descriptor -call -> golang/pricing:api/pricing/v1/pricing.pb.go:file_api_pricing_v1_pricing_proto_rawDescGZIP
 edge golang/pricing:api/pricing/v1/pricing.pb.go:QuoteResponse.Descriptor -call -> golang/pricing:api/pricing/v1/pricing.pb.go:file_api_pricing_v1_pricing_proto_rawDescGZIP

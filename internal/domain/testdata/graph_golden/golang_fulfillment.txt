@@ -53,6 +53,7 @@ call golang/fulfillment:internal/pricing/client_test.go:fakePricing.Quote lib (*
 call golang/fulfillment:internal/pricing/client_test.go:fakePricing.Quote lib (*example.com/samples/pricing/api/pricing/v1.QuoteRequest).GetRegion ext=
 call golang/fulfillment:internal/pricing/client_test.go:fakePricing.Quote lib google.golang.org/grpc/status.Error ext=
 call golang/fulfillment:internal/server/server.go:Server.Schedule lib google.golang.org/grpc/status.Error ext=
+call golang/fulfillment:internal/shipping/client.go:Client.Rate http GET /rates ext=http.NewRequestWithContext
 edge golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleRequest.Descriptor -call -> golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:file_api_fulfillment_v1_fulfillment_proto_rawDescGZIP
 edge golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.Descriptor -call -> golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:file_api_fulfillment_v1_fulfillment_proto_rawDescGZIP
 edge golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:file_api_fulfillment_v1_fulfillment_proto_init -iface:guess -> external: reflect.Type.PkgPath

@@ -30,6 +30,7 @@ call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib google.
 call golang/orders:internal/events/publisher_test.go:TestOrderPlaced lib google.golang.org/protobuf/proto.Unmarshal ext=
 call golang/orders:internal/fulfiller/client.go:Client.Schedule /fulfillment.v1.FulfillmentService/Schedule ext=fulfillmentv1.FulfillmentServiceClient.Schedule
 call golang/orders:internal/fulfiller/client.go:Client.Schedule lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleResponse).GetShipmentId ext=
+call golang/orders:internal/httpapi/httpapi_test.go:TestGetCustomer$1 http GET /customers/{} ext=http.Get
 call golang/orders:internal/inventory/client.go:Client.Release /inventory.v1.InventoryService/Release ext=inventoryv1.InventoryServiceClient.Release
 call golang/orders:internal/inventory/client.go:Client.Reserve /inventory.v1.InventoryService/Reserve ext=inventoryv1.InventoryServiceClient.Reserve
 call golang/orders:internal/inventory/client.go:Client.Reserve lib google.golang.org/grpc/status.Code ext=

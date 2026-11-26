@@ -294,6 +294,9 @@ func extract(ctx context.Context, g *graph, p project, tests bool) (st loadStats
 				} else if sc := c.StaticCallee(); sc != nil {
 					name = sc.Name()
 					httpServes(g, prog, c, nodeOf, keep)
+					if key := goRequest(c); key != "" {
+						g.Calls = append(g.Calls, grpcCall{from, key, "http." + name})
+					}
 					if key := libFunc(sc); key != "" && !own[sc.Object().Pkg()] {
 						libCall(from, key)
 					}

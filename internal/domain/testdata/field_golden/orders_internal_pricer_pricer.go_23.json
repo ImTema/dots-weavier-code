@@ -700,7 +700,16 @@
                     ],
                     "Sure": 1,
                     "Iface": 1
-                   }
+                   },
+                   "hops": [
+                    {
+                     "kind": "http",
+                     "method": "GET /customers/{}",
+                     "project": "golang/orders",
+                     "fn": "Handler.getCustomer",
+                     "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+                    }
+                   ]
                   },
                   {
                    "kind": "container",
@@ -744,7 +753,16 @@
                     ],
                     "Sure": 1,
                     "Iface": 1
-                   }
+                   },
+                   "hops": [
+                    {
+                     "kind": "http",
+                     "method": "GET /customers/{}",
+                     "project": "golang/orders",
+                     "fn": "Handler.getCustomer",
+                     "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+                    }
+                   ]
                   },
                   {
                    "kind": "container",
@@ -789,7 +807,16 @@
                     ],
                     "Sure": 1,
                     "Iface": 1
-                   }
+                   },
+                   "hops": [
+                    {
+                     "kind": "http",
+                     "method": "GET /customers/{}",
+                     "project": "golang/orders",
+                     "fn": "Handler.getCustomer",
+                     "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+                    }
+                   ]
                   },
                   {
                    "kind": "container",
@@ -834,7 +861,16 @@
                     ],
                     "Sure": 1,
                     "Iface": 1
-                   }
+                   },
+                   "hops": [
+                    {
+                     "kind": "http",
+                     "method": "GET /customers/{}",
+                     "project": "golang/orders",
+                     "fn": "Handler.getCustomer",
+                     "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+                    }
+                   ]
                   },
                   {
                    "kind": "container",
@@ -879,7 +915,16 @@
                     ],
                     "Sure": 1,
                     "Iface": 1
-                   }
+                   },
+                   "hops": [
+                    {
+                     "kind": "http",
+                     "method": "GET /customers/{}",
+                     "project": "golang/orders",
+                     "fn": "Handler.getCustomer",
+                     "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+                    }
+                   ]
                   }
                  ],
                  "call": {
@@ -917,7 +962,16 @@
                   ],
                   "Sure": 1,
                   "Iface": 1
-                 }
+                 },
+                 "hops": [
+                  {
+                   "kind": "http",
+                   "method": "GET /customers/{}",
+                   "project": "golang/orders",
+                   "fn": "Handler.getCustomer",
+                   "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+                  }
+                 ]
                 }
                ],
                "call": {
@@ -955,7 +1009,16 @@
                 ],
                 "Sure": 1,
                 "Iface": 1
-               }
+               },
+               "hops": [
+                {
+                 "kind": "http",
+                 "method": "GET /customers/{}",
+                 "project": "golang/orders",
+                 "fn": "Handler.getCustomer",
+                 "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+                }
+               ]
               }
              ],
              "call": {
@@ -993,7 +1056,16 @@
               ],
               "Sure": 1,
               "Iface": 1
-             }
+             },
+             "hops": [
+              {
+               "kind": "http",
+               "method": "GET /customers/{}",
+               "project": "golang/orders",
+               "fn": "Handler.getCustomer",
+               "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+              }
+             ]
             }
            ],
            "call": {
@@ -1031,7 +1103,16 @@
             ],
             "Sure": 1,
             "Iface": 1
-           }
+           },
+           "hops": [
+            {
+             "kind": "http",
+             "method": "GET /customers/{}",
+             "project": "golang/orders",
+             "fn": "Handler.getCustomer",
+             "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+            }
+           ]
           }
          ],
          "call": {

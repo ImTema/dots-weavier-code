@@ -51,6 +51,7 @@ func TestGraphGolden(t *testing.T) {
 		{"golang/orders::Service.Place", "golang/pricing::Subscriber.Handle", false},
 		{"golang/orders::Service.Place", "java/inventory::StockLedger.reserve", false},
 		{"kotlin/shipping::ShippingRates.quote", "golang/orders::Handler.getCustomer", false},
+		{"golang/pricing::Server.Quote", "golang/orders::Handler.getCustomer", false},
 		{"golang/orders::Handler.placeOrder", "golang/pricing::TierRule.Discount", true},
 		{"golang/orders:internal/pricer/pricer.go:23", "golang/pricing::TierRule.Discount", false},
 	} {

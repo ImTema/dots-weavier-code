@@ -20,6 +20,7 @@ edge golang/orders:internal/events/publisher.go:Publisher.OrderPlaced -pubsub:gu
 edge golang/orders:internal/events/publisher.go:Publisher.OrderPlaced -pubsub:guess type example.com/samples/orders/api/events/v1.OrderPlaced-> golang/pricing:internal/events/subscriber.go:Subscriber.Handle
 edge golang/orders:internal/fulfiller/client.go:Client.Schedule -grpc /fulfillment.v1.FulfillmentService/Schedule-> golang/fulfillment:internal/server/server.go:Server.Schedule
 edge golang/orders:internal/fulfiller/client.go:Client.Schedule -lib (*example.com/samples/fulfillment/api/fulfillment/v1.ScheduleResponse).GetShipmentId-> golang/fulfillment:api/fulfillment/v1/fulfillment.pb.go:ScheduleResponse.GetShipmentId
+edge golang/orders:internal/httpapi/httpapi_test.go:TestGetCustomer$1 -http GET /customers/{}-> golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer
 edge golang/orders:internal/inventory/client.go:Client.Release -grpc /inventory.v1.InventoryService/Release-> java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.release
 edge golang/orders:internal/inventory/client.go:Client.Reserve -grpc /inventory.v1.InventoryService/Reserve-> java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.reserve
 edge golang/orders:internal/inventorypb/inventory/v1/inventory_grpc.pb.go:inventoryServiceClient.Release -grpc /inventory.v1.InventoryService/Release-> java/inventory:src/main/java/com/example/inventory/grpc/InventoryGrpcService.java:InventoryGrpcService.release
@@ -29,6 +30,7 @@ edge golang/orders:internal/pricer/pricer.go:Client.Price -grpc /pricing.v1.Pric
 edge golang/orders:internal/pricer/pricer.go:Client.Price -lib (*example.com/samples/pricing/api/pricing/v1.QuoteResponse).GetTotalCents-> golang/pricing:api/pricing/v1/pricing.pb.go:QuoteResponse.GetTotalCents
 edge golang/pricing:api/pricing/v1/pricing_grpc.pb.go:pricingServiceClient.Quote -grpc /pricing.v1.PricingService/Quote-> golang/fulfillment:internal/pricing/client_test.go:fakePricing.Quote
 edge golang/pricing:api/pricing/v1/pricing_grpc.pb.go:pricingServiceClient.Quote -grpc /pricing.v1.PricingService/Quote-> golang/pricing:internal/server/server.go:Server.Quote
+edge golang/pricing:internal/customers/client.go:Client.Tier -http GET /customers/{}-> golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer
 edge golang/pricing:internal/events/subscriber.go:Subscriber.Handle -lib (*example.com/samples/orders/api/events/v1.OrderPlaced).GetCustomerId-> golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetCustomerId
 edge golang/pricing:internal/events/subscriber.go:Subscriber.Handle -lib (*example.com/samples/orders/api/events/v1.OrderPlaced).GetOrderId-> golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetOrderId
 edge kotlin/shipping:src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:OrdersCustomerDirectory.find -http GET /customers/{}-> golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer

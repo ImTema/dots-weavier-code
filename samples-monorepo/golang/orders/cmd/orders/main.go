@@ -1,5 +1,6 @@
 // Command orders is the entry point: an HTTP server for placing orders.
-// Placing an order calls pricing over gRPC; pricing calls back GET /customers/{id}.
+// Placing an order calls pricing over gRPC (pricing calls back GET /customers/{id})
+// and charges it through payments over HTTP.
 package main
 
 import (
@@ -27,6 +28,7 @@ import (
 	inventoryv1 "example.com/samples/orders/internal/inventorypb/inventory/v1"
 	"example.com/samples/orders/internal/notify"
 	"example.com/samples/orders/internal/order"
+	"example.com/samples/orders/internal/payments"
 	"example.com/samples/orders/internal/pricer"
 	pricingv1 "example.com/samples/pricing/api/pricing/v1"
 )
@@ -43,6 +45,7 @@ func run() error {
 	pricingAddr := flag.String("pricing", "127.0.0.1:9090", "pricing gRPC address")
 	inventoryAddr := flag.String("inventory", "127.0.0.1:9091", "inventory gRPC address")
 	fulfillmentAddr := flag.String("fulfillment", "127.0.0.1:9092", "fulfillment gRPC address")
+	paymentsURL := flag.String("payments", "http://localhost:8082", "payments base URL")
 	project := flag.String("pubsub-project", "samples-local", "Pub/Sub project ID; set PUBSUB_EMULATOR_HOST to use an emulator")
 	sms := flag.Bool("sms", false, "notify by SMS instead of email")
 	flag.Parse()
@@ -90,7 +93,8 @@ func run() error {
 		inventory.New(inventoryv1.NewInventoryServiceClient(inventoryConn)),
 		pricer.New(pricingv1.NewPricingServiceClient(pricingConn)),
 		publisher,
-		fulfiller.New(fulfillmentv1.NewFulfillmentServiceClient(fulfillmentConn)))
+		fulfiller.New(fulfillmentv1.NewFulfillmentServiceClient(fulfillmentConn)),
+		payments.NewClient(*paymentsURL, &http.Client{Timeout: 5 * time.Second}))
 	srv := &http.Server{
 		Addr:              *addr,
 		Handler:           httpapi.New(svc, store, n).Routes(),

@@ -105,7 +105,7 @@
       },
       {
        "kind": "read",
-       "loc": "internal/order/order.go:90",
+       "loc": "internal/order/order.go:109",
        "code": "resID, err := s.reserver.Reserve(ctx, c.ID, req.Items)",
        "before": "}",
        "after": "if err != nil {",
@@ -120,7 +120,7 @@
          "after": "req := \u0026inventoryv1.ReserveRequest{",
          "type": "string",
          "fn": "Client.Reserve",
-         "via": "internal/order/order.go:90",
+         "via": "internal/order/order.go:109",
          "kids": [
           {
            "kind": "field",
@@ -157,7 +157,7 @@
            "Project": "golang/orders",
            "File": "internal/order/order.go",
            "Name": "Service.Place",
-           "Line": 82
+           "Line": 101
           },
           "Via": "",
           "Method": ""
@@ -179,7 +179,7 @@
       },
       {
        "kind": "read",
-       "loc": "internal/order/order.go:104",
+       "loc": "internal/order/order.go:121",
        "code": "CustomerID:    c.ID,",
        "before": "ID:            fmt.Sprintf(\"o-%d\", s.seq.Add(1)),",
        "after": "ReservationID: resID,",
@@ -637,6 +637,22 @@
              "addr": "golang/fulfillment:internal/server/server.go:25"
             }
            ]
+          },
+          {
+           "kind": "read",
+           "loc": "internal/httpapi/httpapi.go:75",
+           "code": "writeJSON(w, http.StatusOK, api.OrderStatus{OrderID: st.ID, CustomerID: st.CustomerID, TotalCents: st.TotalCents,",
+           "before": "}",
+           "after": "ChargeID: st.ChargeID, ChargedCents: st.ChargedCents})",
+           "type": "string",
+           "fn": "Handler.getOrder",
+           "kids": [
+            {
+             "kind": "field",
+             "name": "api.OrderStatus.CustomerID",
+             "type": "string"
+            }
+           ]
           }
          ]
         }
@@ -648,7 +664,61 @@
            "Project": "golang/orders",
            "File": "internal/order/order.go",
            "Name": "Service.Place",
-           "Line": 82
+           "Line": 101
+          },
+          "Via": "",
+          "Method": ""
+         },
+         {
+          "Node": {
+           "Project": "golang/orders",
+           "File": "internal/pricer/pricer.go",
+           "Name": "Client.Price",
+           "Line": 21
+          },
+          "Via": "iface:sure",
+          "Method": ""
+         }
+        ],
+        "Sure": 1,
+        "Iface": 1
+       }
+      },
+      {
+       "kind": "read",
+       "loc": "internal/order/order.go:128",
+       "code": "if o.ChargeID, err = s.payments.Charge(ctx, o.ID, c.ID, total); err != nil {",
+       "before": "if total \u003e 0 {",
+       "after": "s.release(ctx, resID, \"charge\")",
+       "type": "string",
+       "fn": "Service.Place",
+       "kids": [
+        {
+         "kind": "arg",
+         "loc": "internal/payments/client.go:49",
+         "code": "func (c *Client) Charge(ctx context.Context, orderID, customerID string, cents int64) (string, error) {",
+         "before": "// A declined charge is wrapped in order.ErrDeclined.",
+         "after": "u, err := url.JoinPath(c.base, ChargesPath)",
+         "type": "string",
+         "fn": "Client.Charge",
+         "via": "internal/order/order.go:128",
+         "kids": [
+          {
+           "kind": "field",
+           "name": "payments.chargeRequest.CustomerID",
+           "type": "string"
+          }
+         ]
+        }
+       ],
+       "call": {
+        "Steps": [
+         {
+          "Node": {
+           "Project": "golang/orders",
+           "File": "internal/order/order.go",
+           "Name": "Service.Place",
+           "Line": 101
           },
           "Via": "",
           "Method": ""
@@ -779,7 +849,7 @@
                      "method": "GET /customers/{}",
                      "project": "golang/orders",
                      "fn": "Handler.getCustomer",
-                     "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+                     "addr": "golang/orders:internal/httpapi/httpapi.go:80"
                     }
                    ]
                   },
@@ -832,7 +902,7 @@
                      "method": "GET /customers/{}",
                      "project": "golang/orders",
                      "fn": "Handler.getCustomer",
-                     "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+                     "addr": "golang/orders:internal/httpapi/httpapi.go:80"
                     }
                    ]
                   },
@@ -886,7 +956,7 @@
                      "method": "GET /customers/{}",
                      "project": "golang/orders",
                      "fn": "Handler.getCustomer",
-                     "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+                     "addr": "golang/orders:internal/httpapi/httpapi.go:80"
                     }
                    ]
                   },
@@ -940,7 +1010,7 @@
                      "method": "GET /customers/{}",
                      "project": "golang/orders",
                      "fn": "Handler.getCustomer",
-                     "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+                     "addr": "golang/orders:internal/httpapi/httpapi.go:80"
                     }
                    ]
                   },
@@ -994,7 +1064,7 @@
                      "method": "GET /customers/{}",
                      "project": "golang/orders",
                      "fn": "Handler.getCustomer",
-                     "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+                     "addr": "golang/orders:internal/httpapi/httpapi.go:80"
                     }
                    ]
                   }
@@ -1041,7 +1111,7 @@
                    "method": "GET /customers/{}",
                    "project": "golang/orders",
                    "fn": "Handler.getCustomer",
-                   "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+                   "addr": "golang/orders:internal/httpapi/httpapi.go:80"
                   }
                  ]
                 }
@@ -1088,7 +1158,7 @@
                  "method": "GET /customers/{}",
                  "project": "golang/orders",
                  "fn": "Handler.getCustomer",
-                 "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+                 "addr": "golang/orders:internal/httpapi/httpapi.go:80"
                 }
                ]
               }
@@ -1135,7 +1205,7 @@
                "method": "GET /customers/{}",
                "project": "golang/orders",
                "fn": "Handler.getCustomer",
-               "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+               "addr": "golang/orders:internal/httpapi/httpapi.go:80"
               }
              ]
             }
@@ -1182,7 +1252,7 @@
              "method": "GET /customers/{}",
              "project": "golang/orders",
              "fn": "Handler.getCustomer",
-             "addr": "golang/orders:internal/httpapi/httpapi.go:61"
+             "addr": "golang/orders:internal/httpapi/httpapi.go:80"
             }
            ]
           }

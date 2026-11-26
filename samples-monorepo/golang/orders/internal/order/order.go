@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -20,6 +21,10 @@ var (
 	// ErrUnavailable marks items inventory cannot reserve: out of stock,
 	// unknown SKU or over the customer's tier limit.
 	ErrUnavailable = errors.New("items unavailable")
+	// ErrDeclined marks an order payments refused to charge.
+	ErrDeclined = errors.New("payment declined")
+	// ErrNotFound is returned for unknown order IDs.
+	ErrNotFound = errors.New("order not found")
 )
 
 // Reserver holds stock for an order. main wires in the gRPC adapter to the
@@ -47,12 +52,20 @@ type Scheduler interface {
 	Schedule(ctx context.Context, o Order) (shipmentID string, err error)
 }
 
+// Payments charges orders. main wires in the HTTP adapter to the Java
+// payments service, so calls through it are sure interface hops.
+type Payments interface {
+	Charge(ctx context.Context, orderID, customerID string, cents int64) (chargeID string, err error)
+	Charged(ctx context.Context, chargeID string) (cents int64, err error)
+}
+
 // Order is a placed order.
 type Order struct {
 	ID            string
 	CustomerID    string
 	ReservationID string
 	ShipmentID    string // empty when scheduling failed; fulfillment then schedules from OrderPlaced
+	ChargeID      string // empty for a free order
 	TotalCents    int64
 	Units         int64
 	PlacedAt      time.Time
@@ -65,20 +78,26 @@ type Service struct {
 	pricer    Pricer
 	events    EventPublisher
 	scheduler Scheduler
+	payments  Payments
 	now       func() time.Time
 	seq       atomic.Int64
+
+	mu     sync.Mutex
+	placed map[string]Order
 }
 
 // NewService returns a Service backed by the given store, reserver, pricer,
-// event publisher and shipment scheduler.
-func NewService(customers *customer.Store, reserver Reserver, pricer Pricer, events EventPublisher, scheduler Scheduler) *Service {
-	return &Service{customers: customers, reserver: reserver, pricer: pricer, events: events, scheduler: scheduler, now: time.Now}
+// event publisher, shipment scheduler and payments.
+func NewService(customers *customer.Store, reserver Reserver, pricer Pricer, events EventPublisher, scheduler Scheduler, payments Payments) *Service {
+	return &Service{customers: customers, reserver: reserver, pricer: pricer, events: events, scheduler: scheduler, payments: payments,
+		now: time.Now, placed: map[string]Order{}}
 }
 
-// Place validates req, reserves stock, prices it, publishes OrderPlaced,
-// schedules the shipment and notifies the customer. If pricing fails the
-// reservation is released. A failed publish or schedule is logged and does not
-// fail the order: fulfillment also schedules from OrderPlaced.
+// Place validates req, reserves stock, prices it, charges it, publishes
+// OrderPlaced, schedules the shipment and notifies the customer. If pricing or
+// the charge fails the reservation is released; a free order is not charged.
+// A failed publish or schedule is logged and does not fail the order:
+// fulfillment also schedules from OrderPlaced.
 func (s *Service) Place(ctx context.Context, req api.PlaceOrderRequest) (Order, error) {
 	if err := Validate(req); err != nil {
 		return Order{}, err
@@ -93,9 +112,7 @@ func (s *Service) Place(ctx context.Context, req api.PlaceOrderRequest) (Order, 
 	}
 	total, err := s.pricer.Price(ctx, c, req.Items)
 	if err != nil {
-		if rerr := s.reserver.Release(context.WithoutCancel(ctx), resID); rerr != nil {
-			slog.ErrorContext(ctx, "release after failed pricing", "reservation", resID, "err", rerr)
-		}
+		s.release(ctx, resID, "pricing")
 		return Order{}, fmt.Errorf("price order: %w", err)
 	}
 
@@ -107,6 +124,15 @@ func (s *Service) Place(ctx context.Context, req api.PlaceOrderRequest) (Order, 
 		Units:         units(req.Items),
 		PlacedAt:      s.now(),
 	}
+	if total > 0 {
+		if o.ChargeID, err = s.payments.Charge(ctx, o.ID, c.ID, total); err != nil {
+			s.release(ctx, resID, "charge")
+			return Order{}, fmt.Errorf("charge order: %w", err)
+		}
+	}
+	s.mu.Lock()
+	s.placed[o.ID] = o
+	s.mu.Unlock()
 	// ponytail: publish after commit can lose an event on crash; a transactional outbox fixes that.
 	if err := s.events.OrderPlaced(ctx, o); err != nil {
 		slog.ErrorContext(ctx, "publish OrderPlaced", "order", o.ID, "err", err)
@@ -120,6 +146,38 @@ func (s *Service) Place(ctx context.Context, req api.PlaceOrderRequest) (Order, 
 		notify.Send(ctx, c, "order "+o.ID+" confirmed")
 	}
 	return o, nil
+}
+
+// Status is a placed order and what payments charged for it.
+type Status struct {
+	Order
+	ChargedCents int64
+}
+
+// Get returns a placed order with the amount payments charged for it.
+func (s *Service) Get(ctx context.Context, id string) (Status, error) {
+	s.mu.Lock()
+	o, ok := s.placed[id]
+	s.mu.Unlock()
+	if !ok {
+		return Status{}, fmt.Errorf("%w: %s", ErrNotFound, id)
+	}
+	st := Status{Order: o}
+	if o.ChargeID == "" {
+		return st, nil
+	}
+	var err error
+	if st.ChargedCents, err = s.payments.Charged(ctx, o.ChargeID); err != nil {
+		return Status{}, fmt.Errorf("get charge: %w", err)
+	}
+	return st, nil
+}
+
+// release returns a reservation after a later step failed.
+func (s *Service) release(ctx context.Context, resID, after string) {
+	if err := s.reserver.Release(context.WithoutCancel(ctx), resID); err != nil {
+		slog.ErrorContext(ctx, "release after failed "+after, "reservation", resID, "err", err)
+	}
 }
 
 func units(items []api.Item) int64 {

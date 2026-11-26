@@ -11,7 +11,7 @@
    "kids": [
     {
      "kind": "arg",
-     "loc": "internal/order/order.go:111",
+     "loc": "internal/order/order.go:137",
      "code": "if err := s.events.OrderPlaced(ctx, o); err != nil {",
      "before": "// ponytail: publish after commit can lose an event on crash; a transactional outbox fixes that.",
      "after": "slog.ErrorContext(ctx, \"publish OrderPlaced\", \"order\", o.ID, \"err\", err)",
@@ -25,17 +25,17 @@
        "kids": [
         {
          "kind": "store",
-         "loc": "internal/order/order.go:74",
-         "code": "func NewService(customers *customer.Store, reserver Reserver, pricer Pricer, events EventPublisher, scheduler Scheduler) *Service {",
-         "before": "// event publisher and shipment scheduler.",
-         "after": "return \u0026Service{customers: customers, reserver: reserver, pricer: pricer, events: events, scheduler: scheduler, now: time.Now}",
+         "loc": "internal/order/order.go:91",
+         "code": "func NewService(customers *customer.Store, reserver Reserver, pricer Pricer, events EventPublisher, scheduler Scheduler, payments Payments) *Service {",
+         "before": "// event publisher, shipment scheduler and payments.",
+         "after": "return \u0026Service{customers: customers, reserver: reserver, pricer: pricer, events: events, scheduler: scheduler, payments: payments,",
          "type": "order.EventPublisher",
          "fn": "NewService",
-         "via": "internal/order/order.go:75",
+         "via": "internal/order/order.go:92",
          "kids": [
           {
            "kind": "arg",
-           "loc": "cmd/orders/main.go:89",
+           "loc": "cmd/orders/main.go:92",
            "code": "svc := order.NewService(store,",
            "before": "store := customer.NewStore(customer.Seed())",
            "after": "inventory.New(inventoryv1.NewInventoryServiceClient(inventoryConn)),",
@@ -44,7 +44,7 @@
            "kids": [
             {
              "kind": "convert",
-             "loc": "cmd/orders/main.go:78",
+             "loc": "cmd/orders/main.go:81",
              "code": "publisher := events.NewPublisher(ps)",
              "before": "}",
              "after": "defer publisher.Stop()",
@@ -70,7 +70,7 @@
       },
       {
        "kind": "assign",
-       "loc": "internal/order/order.go:102",
+       "loc": "internal/order/order.go:119",
        "code": "o := Order{",
        "after": "ID:            fmt.Sprintf(\"o-%d\", s.seq.Add(1)),",
        "type": "order.Order",
@@ -82,7 +82,7 @@
            "Project": "golang/orders",
            "File": "internal/order/order.go",
            "Name": "Service.Place",
-           "Line": 82
+           "Line": 101
           },
           "Via": "",
           "Method": ""
@@ -110,7 +110,7 @@
          "Project": "golang/orders",
          "File": "internal/order/order.go",
          "Name": "Service.Place",
-         "Line": 82
+         "Line": 101
         },
         "Via": "",
         "Method": ""

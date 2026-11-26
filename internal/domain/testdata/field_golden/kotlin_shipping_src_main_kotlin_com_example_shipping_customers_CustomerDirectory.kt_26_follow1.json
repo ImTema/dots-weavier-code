@@ -196,7 +196,7 @@
       {
        "kind": "http",
        "name": "GET /customers/{}",
-       "loc": "golang/orders:internal/httpapi/httpapi.go:61",
+       "loc": "golang/orders:internal/httpapi/httpapi.go:80",
        "code": "GET /customers/{}  (traced at another step)",
        "fn": "Handler.getCustomer"
       }
@@ -207,7 +207,7 @@
        "method": "GET /customers/{}",
        "project": "golang/orders",
        "fn": "Handler.getCustomer",
-       "addr": "golang/orders:internal/httpapi/httpapi.go:61",
+       "addr": "golang/orders:internal/httpapi/httpapi.go:80",
        "followed": true
       }
      ]
@@ -223,7 +223,7 @@
       {
        "kind": "http",
        "name": "GET /customers/{}",
-       "loc": "golang/orders:internal/httpapi/httpapi.go:61",
+       "loc": "golang/orders:internal/httpapi/httpapi.go:80",
        "code": "GET /customers/{}  (traced at another step)",
        "fn": "Handler.getCustomer"
       }
@@ -234,7 +234,7 @@
        "method": "GET /customers/{}",
        "project": "golang/orders",
        "fn": "Handler.getCustomer",
-       "addr": "golang/orders:internal/httpapi/httpapi.go:61",
+       "addr": "golang/orders:internal/httpapi/httpapi.go:80",
        "followed": true
       }
      ]
@@ -242,13 +242,13 @@
     {
      "kind": "http",
      "name": "GET /customers/{}",
-     "loc": "golang/orders:internal/httpapi/httpapi.go:61",
+     "loc": "golang/orders:internal/httpapi/httpapi.go:80",
      "code": "GET /customers/{}",
      "fn": "Handler.getCustomer",
      "kids": [
       {
        "kind": "seed",
-       "loc": "golang/orders:internal/httpapi/httpapi.go:61",
+       "loc": "golang/orders:internal/httpapi/httpapi.go:80",
        "code": "func (h *Handler) getCustomer(w http.ResponseWriter, r *http.Request) {",
        "before": "// getCustomer serves the HTTP hop pricing makes back into orders.",
        "after": "c, err := h.customers.Lookup(r.PathValue(\"id\"))",
@@ -257,7 +257,7 @@
        "kids": [
         {
          "kind": "transform",
-         "loc": "golang/orders:internal/httpapi/httpapi.go:62",
+         "loc": "golang/orders:internal/httpapi/httpapi.go:81",
          "code": "c, err := h.customers.Lookup(r.PathValue(\"id\"))",
          "before": "func (h *Handler) getCustomer(w http.ResponseWriter, r *http.Request) {",
          "after": "if errors.Is(err, customer.ErrNotFound) {",
@@ -272,7 +272,7 @@
            "after": "s.mu.RLock()",
            "type": "string",
            "fn": "Store.Lookup",
-           "via": "golang/orders:internal/httpapi/httpapi.go:62",
+           "via": "golang/orders:internal/httpapi/httpapi.go:81",
            "kids": [
             {
              "kind": "transform",
@@ -289,7 +289,7 @@
                  "Project": "golang/orders",
                  "File": "internal/httpapi/httpapi.go",
                  "Name": "Handler.getCustomer",
-                 "Line": 61
+                 "Line": 80
                 },
                 "Via": "",
                 "Method": ""
@@ -317,7 +317,7 @@
                "Project": "golang/orders",
                "File": "internal/httpapi/httpapi.go",
                "Name": "Handler.getCustomer",
-               "Line": 61
+               "Line": 80
               },
               "Via": "",
               "Method": ""
@@ -350,7 +350,7 @@
      "method": "GET /customers/{}",
      "project": "golang/orders",
      "fn": "Handler.getCustomer",
-     "addr": "golang/orders:internal/httpapi/httpapi.go:61",
+     "addr": "golang/orders:internal/httpapi/httpapi.go:80",
      "followed": true
     }
    ]

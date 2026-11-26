@@ -57,9 +57,69 @@ func (fakeScheduler) Schedule(_ context.Context, o order.Order) (string, error) 
 	return "s-" + o.ID, nil
 }
 
+// fakePayments declines charges over 10000 cents and records the rest.
+type fakePayments struct{ charged map[string]int64 }
+
+func (p *fakePayments) Charge(_ context.Context, orderID, _ string, cents int64) (string, error) {
+	if cents > 10000 {
+		return "", order.ErrDeclined
+	}
+	if p.charged == nil {
+		p.charged = map[string]int64{}
+	}
+	p.charged["ch-"+orderID] = cents
+	return "ch-" + orderID, nil
+}
+
+func (p *fakePayments) Charged(_ context.Context, id string) (int64, error) {
+	cents, ok := p.charged[id]
+	if !ok {
+		return 0, errors.New("no charge " + id)
+	}
+	return cents, nil
+}
+
+func TestPlaceReleasesWhenChargeDeclined(t *testing.T) {
+	res := &fakeReserver{}
+	svc := order.NewService(customer.NewStore(customer.Seed()), res, fixedPricer(20000), &recordingEvents{}, fakeScheduler{}, &fakePayments{})
+	_, err := svc.Place(context.Background(), api.PlaceOrderRequest{CustomerID: "c1", Items: []api.Item{{SKU: "a", UnitCents: 100, Qty: 1}}})
+	if !errors.Is(err, order.ErrDeclined) {
+		t.Fatalf("err = %v, want ErrDeclined", err)
+	}
+	if len(res.released) != 1 || res.released[0] != "r-1" {
+		t.Fatalf("released = %v, want [r-1]", res.released)
+	}
+}
+
+func TestGet(t *testing.T) {
+	pay := &fakePayments{}
+	svc := order.NewService(customer.NewStore(customer.Seed()), &fakeReserver{}, fixedPricer(1234), &recordingEvents{}, fakeScheduler{}, pay)
+	free := order.NewService(customer.NewStore(customer.Seed()), &fakeReserver{}, fixedPricer(0), &recordingEvents{}, fakeScheduler{}, pay)
+	ctx := context.Background()
+	req := api.PlaceOrderRequest{CustomerID: "c1", Items: []api.Item{{SKU: "a", UnitCents: 100, Qty: 1}}}
+
+	o, err := svc.Place(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st, err := svc.Get(ctx, o.ID); err != nil || st.ChargeID != "ch-"+o.ID || st.ChargedCents != 1234 {
+		t.Fatalf("Get = %+v, %v; want charged 1234", st, err)
+	}
+	fo, err := free.Place(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st, err := free.Get(ctx, fo.ID); err != nil || st.ChargeID != "" || st.ChargedCents != 0 {
+		t.Fatalf("free order: Get = %+v, %v; want no charge", st, err)
+	}
+	if _, err := svc.Get(ctx, "o-404"); !errors.Is(err, order.ErrNotFound) {
+		t.Fatalf("unknown order: err = %v, want ErrNotFound", err)
+	}
+}
+
 func TestPlaceReleasesWhenPricingFails(t *testing.T) {
 	res := &fakeReserver{}
-	svc := order.NewService(customer.NewStore(customer.Seed()), res, failingPricer{}, &recordingEvents{}, fakeScheduler{})
+	svc := order.NewService(customer.NewStore(customer.Seed()), res, failingPricer{}, &recordingEvents{}, fakeScheduler{}, &fakePayments{})
 	_, err := svc.Place(context.Background(), api.PlaceOrderRequest{
 		CustomerID: "c1",
 		Items:      []api.Item{{SKU: "a", UnitCents: 100, Qty: 1}},
@@ -75,7 +135,7 @@ func TestPlaceReleasesWhenPricingFails(t *testing.T) {
 func TestPlace(t *testing.T) {
 	store := customer.NewStore(customer.Seed())
 	events := &recordingEvents{}
-	svc := order.NewService(store, &fakeReserver{}, fixedPricer(1234), events, fakeScheduler{})
+	svc := order.NewService(store, &fakeReserver{}, fixedPricer(1234), events, fakeScheduler{}, &fakePayments{})
 	item := []api.Item{{SKU: "a", UnitCents: 100, Qty: 1}}
 
 	tests := []struct {
@@ -113,7 +173,7 @@ func TestPlace(t *testing.T) {
 }
 
 func TestPlaceSurvivesFailedSchedule(t *testing.T) {
-	svc := order.NewService(customer.NewStore(customer.Seed()), &fakeReserver{}, fixedPricer(9999), &recordingEvents{}, fakeScheduler{})
+	svc := order.NewService(customer.NewStore(customer.Seed()), &fakeReserver{}, fixedPricer(9999), &recordingEvents{}, fakeScheduler{}, &fakePayments{})
 	o, err := svc.Place(context.Background(), api.PlaceOrderRequest{CustomerID: "c1", Items: []api.Item{{SKU: "a", UnitCents: 100, Qty: 1}}})
 	if err != nil || o.ShipmentID != "" {
 		t.Fatalf("Place = %+v, %v; want the order without a shipment", o, err)

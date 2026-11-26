@@ -11,7 +11,7 @@
    "kids": [
     {
      "kind": "arg",
-     "loc": "internal/order/order.go:90",
+     "loc": "internal/order/order.go:109",
      "code": "resID, err := s.reserver.Reserve(ctx, c.ID, req.Items)",
      "before": "}",
      "after": "if err != nil {",
@@ -25,17 +25,17 @@
        "kids": [
         {
          "kind": "store",
-         "loc": "internal/order/order.go:74",
-         "code": "func NewService(customers *customer.Store, reserver Reserver, pricer Pricer, events EventPublisher, scheduler Scheduler) *Service {",
-         "before": "// event publisher and shipment scheduler.",
-         "after": "return \u0026Service{customers: customers, reserver: reserver, pricer: pricer, events: events, scheduler: scheduler, now: time.Now}",
+         "loc": "internal/order/order.go:91",
+         "code": "func NewService(customers *customer.Store, reserver Reserver, pricer Pricer, events EventPublisher, scheduler Scheduler, payments Payments) *Service {",
+         "before": "// event publisher, shipment scheduler and payments.",
+         "after": "return \u0026Service{customers: customers, reserver: reserver, pricer: pricer, events: events, scheduler: scheduler, payments: payments,",
          "type": "order.Reserver",
          "fn": "NewService",
-         "via": "internal/order/order.go:75",
+         "via": "internal/order/order.go:92",
          "kids": [
           {
            "kind": "arg",
-           "loc": "cmd/orders/main.go:89",
+           "loc": "cmd/orders/main.go:92",
            "code": "svc := order.NewService(store,",
            "before": "store := customer.NewStore(customer.Seed())",
            "after": "inventory.New(inventoryv1.NewInventoryServiceClient(inventoryConn)),",
@@ -44,7 +44,7 @@
            "kids": [
             {
              "kind": "convert",
-             "loc": "cmd/orders/main.go:90",
+             "loc": "cmd/orders/main.go:93",
              "code": "inventory.New(inventoryv1.NewInventoryServiceClient(inventoryConn)),",
              "before": "svc := order.NewService(store,",
              "after": "pricer.New(pricingv1.NewPricingServiceClient(pricingConn)),",
@@ -111,7 +111,7 @@
          "Project": "golang/orders",
          "File": "internal/order/order.go",
          "Name": "Service.Place",
-         "Line": 82
+         "Line": 101
         },
         "Via": "",
         "Method": ""

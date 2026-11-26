@@ -2097,7 +2097,7 @@
                                                  "kids": [
                                                   {
                                                    "kind": "store",
-                                                   "loc": "internal/order/order.go:106",
+                                                   "loc": "internal/order/order.go:123",
                                                    "code": "TotalCents:    total,",
                                                    "before": "ReservationID: resID,",
                                                    "after": "Units:         units(req.Items),",
@@ -2120,7 +2120,7 @@
                                                        "Project": "golang/orders",
                                                        "File": "internal/order/order.go",
                                                        "Name": "Service.Place",
-                                                       "Line": 82
+                                                       "Line": 101
                                                       },
                                                       "Via": "",
                                                       "Method": ""
@@ -3179,7 +3179,7 @@
     },
     {
      "kind": "return",
-     "loc": "internal/order/order.go:94",
+     "loc": "internal/order/order.go:113",
      "code": "total, err := s.pricer.Price(ctx, c, req.Items)",
      "before": "}",
      "after": "if err != nil {",
@@ -4834,7 +4834,7 @@
         },
         {
          "kind": "read",
-         "loc": "internal/httpapi/httpapi.go:57",
+         "loc": "internal/httpapi/httpapi.go:61",
          "code": "writeJSON(w, http.StatusCreated, api.PlaceOrderResponse{OrderID: o.ID, TotalCents: o.TotalCents})",
          "before": "}",
          "after": "}",
@@ -4854,7 +4854,7 @@
              "Project": "golang/orders",
              "File": "internal/httpapi/httpapi.go",
              "Name": "Handler.placeOrder",
-             "Line": 38
+             "Line": 39
             },
             "Via": "",
             "Method": ""
@@ -4864,7 +4864,7 @@
              "Project": "golang/orders",
              "File": "internal/order/order.go",
              "Name": "Service.Place",
-             "Line": 82
+             "Line": 101
             },
             "Via": "call",
             "Method": ""
@@ -4883,6 +4883,39 @@
           "Sure": 1,
           "Iface": 1
          }
+        },
+        {
+         "kind": "read",
+         "loc": "internal/httpapi/httpapi.go:75",
+         "code": "writeJSON(w, http.StatusOK, api.OrderStatus{OrderID: st.ID, CustomerID: st.CustomerID, TotalCents: st.TotalCents,",
+         "before": "}",
+         "after": "ChargeID: st.ChargeID, ChargedCents: st.ChargedCents})",
+         "type": "int64",
+         "fn": "Handler.getOrder",
+         "kids": [
+          {
+           "kind": "field",
+           "name": "api.OrderStatus.TotalCents",
+           "type": "int64"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "arg",
+       "loc": "internal/payments/client.go:49",
+       "code": "func (c *Client) Charge(ctx context.Context, orderID, customerID string, cents int64) (string, error) {",
+       "before": "// A declined charge is wrapped in order.ErrDeclined.",
+       "after": "u, err := url.JoinPath(c.base, ChargesPath)",
+       "type": "int64",
+       "fn": "Client.Charge",
+       "via": "internal/order/order.go:128",
+       "kids": [
+        {
+         "kind": "field",
+         "name": "payments.chargeRequest.AmountCents",
+         "type": "int64"
         }
        ]
       }
@@ -4894,7 +4927,7 @@
          "Project": "golang/orders",
          "File": "internal/order/order.go",
          "Name": "Service.Place",
-         "Line": 82
+         "Line": 101
         },
         "Via": "",
         "Method": ""

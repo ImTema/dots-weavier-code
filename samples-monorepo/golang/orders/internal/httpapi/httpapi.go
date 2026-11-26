@@ -32,6 +32,7 @@ func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /orders", h.placeOrder)
 	mux.HandleFunc("GET "+api.CustomerPath+"{id}", h.getCustomer)
+	mux.HandleFunc("GET "+api.OrderPath+"{id}", h.getOrder)
 	return mux
 }
 
@@ -49,12 +50,30 @@ func (h *Handler) placeOrder(w http.ResponseWriter, r *http.Request) {
 	} else if errors.Is(err, order.ErrUnavailable) {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
+	} else if errors.Is(err, order.ErrDeclined) {
+		http.Error(w, err.Error(), http.StatusPaymentRequired)
+		return
 	} else if err != nil {
 		slog.ErrorContext(ctx, "place order", "err", err)
 		http.Error(w, "upstream service unavailable", http.StatusBadGateway)
 		return
 	}
 	writeJSON(w, http.StatusCreated, api.PlaceOrderResponse{OrderID: o.ID, TotalCents: o.TotalCents})
+}
+
+// getOrder returns a placed order with what payments charged for it.
+func (h *Handler) getOrder(w http.ResponseWriter, r *http.Request) {
+	st, err := h.orders.Get(r.Context(), r.PathValue("id"))
+	if errors.Is(err, order.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	} else if err != nil {
+		slog.ErrorContext(r.Context(), "get order", "err", err)
+		http.Error(w, "upstream service unavailable", http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, api.OrderStatus{OrderID: st.ID, CustomerID: st.CustomerID, TotalCents: st.TotalCents,
+		ChargeID: st.ChargeID, ChargedCents: st.ChargedCents})
 }
 
 // getCustomer serves the HTTP hop pricing makes back into orders.

@@ -50,6 +50,8 @@ button:hover{border-color:#6b78d8}
 .node.dim{opacity:.25}.node.hit rect{stroke:#fff!important;stroke-width:2.4}
 .node.sel rect{filter:drop-shadow(0 0 8px #a9b6ff)}
 .edge{fill:none;stroke-width:1.4;opacity:.7}
+.proj rect{fill-opacity:.05;stroke-opacity:.55;stroke-width:1.2;stroke-dasharray:6 4}
+.proj text{font:11px ui-monospace,Menlo,monospace;letter-spacing:.1em;fill-opacity:.8}
 .cap{font:12px ui-monospace,Menlo,monospace;letter-spacing:.2em;fill:#5d6596}
 </style></head>
 <body>
@@ -86,8 +88,8 @@ const cut=(s,n)=>s&&s.length>n?s.slice(0,n-1)+'…':(s||'');
 
 // ---- model: center = seed; origin kids grow left (side -1), uses kids grow right (side 1) ----
 let all=[];
-// Open the first levels; a step with one way on stays open so chains read through.
-function wrap(d,side,depth,parent,j){const n={d,side,depth,parent,path:parent.path.concat(j),open:depth<(D.open||6)||(d.kids||[]).length<=1||isHop(d),kids:[]}; all.push(n);
+// Open the first levels; a step with one way on stays open so chains read through; one with over 15 starts closed.
+function wrap(d,side,depth,parent,j){const nk=(d.kids||[]).length, n={d,side,depth,parent,path:parent.path.concat(j),open:nk<=15&&(depth<(D.open||6)||nk<=1||isHop(d)),kids:[]}; all.push(n);
   n.kids=(d.kids||[]).map((k,j)=>wrap(k,side,depth+1,n,j)); return n;}
 const isHop=d=>/^(grpc|http|pubsub)/.test(d.kind);
 const openHops=d=>(d.hops||[]).filter(h=>!h.followed).length;
@@ -101,9 +103,13 @@ const fromUses=(D.uses||[]).length>0;
 const nOrigin=all.filter(n=>n.side<0).length, nUses=all.filter(n=>n.side>0).length;
 
 // ---- layout: tidy tree per side, leaves stacked, parents centered on their children ----
-function place(n,x,next){n.x=x; const ks=n.open?n.kids:[];
-  if(!ks.length){n.y=next.y; next.y+=ROW; return;}
-  ks.forEach(k=>place(k,x+n.side*COL,next)); n.y=(ks[0].y+ks.at(-1).y)/2;}
+// A step entering another project gets a gap above and below its subtree, room for the project outline and name.
+const GAP=ROW;
+function place(n,x,next){n.x=x; const ks=n.open?n.kids:[], enter=n.parent&&proj(n)!==proj(n.parent);
+  if(enter)next.y+=GAP;
+  if(!ks.length){n.y=next.y; next.y+=ROW;}
+  else{ks.forEach(k=>place(k,x+n.side*COL,next)); n.y=(ks[0].y+ks.at(-1).y)/2;}
+  if(enter)next.y+=GAP;}
 function shift(n,dy){n.y+=dy; if(n.open)n.kids.forEach(k=>shift(k,dy));}
 function layout(){let top=0;
   for(const c of centers){c.x=0;
@@ -119,9 +125,20 @@ const view={x:0,y:0,k:1}; const apply=()=>g.setAttribute('transform',`translate(
 let sel=null, hits=[], hitI=-1;
 function visible(){const out=[]; const walk=n=>{out.push(n); if(n.open)n.kids.forEach(walk);};
   centers.forEach(c=>{out.push(c); c.left.forEach(walk); c.right.forEach(walk);}); return out;}
+// Project of a step: "proj:file:line" names it, home locations are "file:line", fields inherit their parent's.
+function proj(n){const l=(n.d.loc||'').split(':'); return l.length===3?l[0]:l.length===2?home:n.parent?proj(n.parent):home;}
+const PCOL=['#6be4ff','#ffd06b','#6dffc6','#ff9b6b','#b88bff','#c4ff6b','#ff7ad9','#7aa2ff'], pcol={};
+// One outline per connected run of same-project steps, so a call into another service shows as a boundary.
+function outlines(vs){const ps=new Set(vs.map(proj)); if(ps.size<2)return '';
+  const box=new Map(); for(const n of vs){let r=n; while(r.parent&&proj(r.parent)===proj(n))r=r.parent;
+    const b=box.get(r)||{p:proj(n),x0:1e9,y0:1e9,x1:-1e9,y1:-1e9}; box.set(r,b);
+    b.x0=Math.min(b.x0,n.x-NW/2); b.x1=Math.max(b.x1,n.x+NW/2); b.y0=Math.min(b.y0,n.y-NH/2); b.y1=Math.max(b.y1,n.y+NH/2);}
+  let h='', P=14; for(const b of box.values()){const c=pcol[b.p]??=PCOL[Object.keys(pcol).length%PCOL.length];
+    h+=`<g class="proj"><rect x="${b.x0-P}" y="${b.y0-P-12}" width="${b.x1-b.x0+2*P}" height="${b.y1-b.y0+2*P+12}" rx="10" fill="${c}" stroke="${c}"/><text x="${b.x0-P+8}" y="${b.y0-P+1}" fill="${c}">${esc(b.p||'?')}</text></g>`;}
+  return h;}
 function title(n){const d=n.d; return d.kind==='field'?d.name:d.loc;}
 function draw(){layout(); const vs=visible(); const q=document.getElementById('q')?.value.trim().toLowerCase();
-  let h='<text class="cap" x="'+(-COL+NW/2-150)+'" y="-40">◀ ORIGIN</text><text class="cap" x="'+(COL)+'" y="-40">LIFECYCLE ▶</text>';
+  let h='<text class="cap" x="'+(-COL+NW/2-150)+'" y="-40">◀ ORIGIN</text><text class="cap" x="'+(COL)+'" y="-40">LIFECYCLE ▶</text>'+outlines(vs);
   for(const n of vs){const p=n.parent; if(!p)continue;
     const c=KIND[n.d.kind]||'#888';
     // origin edges run child -> parent, lifecycle edges parent -> child
@@ -184,6 +201,7 @@ function calls(){const el=document.getElementById('calls'); if(!sel||!sel.side){
     return hop+`<span class="fn" title="${esc(n.Project+':'+n.File+':'+n.Line)}">${esc(nm)}</span>`;}).join('')
     +` <span class="hint">· ${c.Steps.length-1} hops${c.Iface?` · ${c.Iface} interface (${c.Sure} sure)`:''}</span>`;}
 addEventListener('keydown',e=>{if(e.target.id==='q'){if(e.key==='Enter')search(true); return;}
+  if(e.ctrlKey||e.metaKey||e.altKey)return; // leave copy, paste and other shortcuts to the browser
   if(e.key==='f')fit(); if(e.key==='c')focusView(); if(e.key==='Escape'){sel=null;draw();details();}});
 
 // ---- side panel ----
@@ -214,8 +232,9 @@ function details(){calls(); const el=document.getElementById('det'); if(!sel){el
     (d.fn?`<div class="row">in <b>${esc(d.fn)}</b></div>`:'')+(d.type?`<div class="row">type <b>${esc(d.type)}</b></div>`:'')+
     (d.via?`<div class="row">called at <b>${esc(d.via)}</b></div>`:'')+
     ((d.hops||[]).length&&sel.side>=0?`<div class="row">calls other services:</div>`+d.hops.map((h,k)=>`<div class="row"><span class="k" style="background:${KIND[h.kind]||'#888'}">${esc(h.kind)}</span> ${esc(h.method)} → <b>${esc(h.project)}</b> ${esc(h.fn)} ${h.followed?'<span class="hint">followed</span>':served?`<button class="fh" data-k="${k}">follow ⇢</button>`:''}</div>`).join('')+'<div class="hint" id="fhMsg"></div>':'')+(d.code?`<pre>${d.before?`<span class="ctx"><span class="ln">${ln-1}</span>${esc(d.before)}</span>\n`:''}<span class="ln">${ln}</span><b>${esc(d.code)}</b>${d.after?`\n<span class="ctx"><span class="ln">${ln+1}</span>${esc(d.after)}</span>`:''}</pre>`:'')+
-    (sel.kids.length?`<div class="row">${count(sel)} steps ${sel.side<0?'further back':'further on'}</div>`:'')+
+    (sel.kids.length?`<div class="row">${count(sel)} steps ${sel.side<0?'further back':'further on'} <button id="tg">${sel.open?'collapse':'expand'}</button></div>`:'')+
     '';
+  document.getElementById('tg')?.addEventListener('click',()=>{sel.open=!sel.open; draw(); details();});
   document.getElementById('vf')?.addEventListener('click',()=>viewFile(qualify(d.loc)));
   document.querySelectorAll('#det .fh').forEach(b=>b.onclick=()=>follow({path:sel.path.join('.'),hop:b.dataset.k},sel.path));}
 // Following a hop saves a new run on the server; the page opens it with the step still selected.

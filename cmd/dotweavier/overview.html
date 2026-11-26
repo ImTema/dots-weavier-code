@@ -81,6 +81,12 @@ body.noside #empty{left:0}
 #pp .modline:hover{color:#fff}
 #pp .row.mod{padding-left:26px}
 #pp .sec .tw{display:inline-block;width:12px}
+#loading{position:absolute;left:330px;right:0;top:45%;z-index:2;display:none;justify-content:center;align-items:center;gap:10px;color:#8b93c4;pointer-events:none}
+body.noside #loading{left:0}
+body.loading #loading{display:flex}
+body.loading #empty{display:none!important}
+#loading .spin{width:16px;height:16px;border:2px solid #2b3270;border-top-color:#4c8dff;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 #empty{position:absolute;left:330px;right:0;top:45%;z-index:1;text-align:center;color:#8b93c4;display:none;pointer-events:none}
 .fld{display:flex;align-items:center;gap:6px;border:1px solid #262c5c;background:#0b0e24;border-radius:6px;padding:5px 7px;margin:4px 0;cursor:pointer;overflow:hidden}
 .fld input{flex:1;min-width:0;background:none;border:0;outline:0;color:#fff;font:inherit;padding:0}
@@ -132,6 +138,7 @@ body.noside #empty{left:0}
   <div id="hits"></div>
   <h2>SELECTION</h2><div id="sel" class="muted">click a star or an edge</div>
 </div>
+<div id="loading"><span class="spin"></span><span id="loadingText">loading…</span></div>
 <div id="empty">Nothing in the overview yet.<br>Press <b>Sync</b> on a project in the top-right list to index it and add it here.</div>
 <div id="pp"><h2>PROJECTS <a id="ppAll" title="show every added project matching the filter">all</a><a id="ppNone" title="hide every added project matching the filter">none</a><span id="ppHide" class="fold" title="hide this panel">»</span></h2>
   <div id="ws" class="muted"></div>
@@ -286,6 +293,7 @@ function applyCalls() {
 }
 
 let loadSeq = 0, dataBytes = 0;
+const loading = text => { document.body.classList.toggle('loading', !!text); if (text) $('loadingText').textContent = text; };
 // What this page allocated itself: the scene's buffers and the parsed layout JSON, not the browser's own overhead.
 function pageBytes() {
   const seen = new Set();
@@ -307,6 +315,7 @@ const mb = b => (b / 2**20).toFixed(1) + ' MB';
 async function load(refit) {
   const seq = ++loadSeq;
   $('pp').classList.add('busy');
+  loading('loading…');
   const t0 = performance.now();
   let data, det;
   try {
@@ -315,7 +324,7 @@ async function load(refit) {
     dataBytes = text.length; // ASCII JSON: characters = bytes
     data = JSON.parse(text);
   } finally {
-    if (seq === loadSeq) $('pp').classList.remove('busy');
+    if (seq === loadSeq) { $('pp').classList.remove('busy'); loading(''); }
   }
   if (seq !== loadSeq) return; // a newer toggle already asked for another layout
   detected = det.projects || []; root = det.root; invalid = det.invalid || [];
@@ -443,8 +452,9 @@ function renderWs(active) {
 }
 const chooseWorkspace = ws => fetch('/workspace?dir=' + encodeURIComponent(ws), {method: 'POST', headers: {'X-Dotweavier': '1'}});
 $('ws').onchange = async e => {
+  loading(`loading workspace ${e.target.value}…`);
   const r = await chooseWorkspace(e.target.value);
-  if (!r.ok) return alert(await r.text());
+  if (!r.ok) { loading(''); return alert(await r.text()); }
   localStorage.setItem('dw.ws', e.target.value);
   location.reload(); // another workspace: other projects, node ids and layout
 };
@@ -454,7 +464,11 @@ async function initWorkspace() {
   workspaces = j.workspaces || [];
   let active = j.active;
   const last = localStorage.getItem('dw.ws');
-  if (!active && workspaces.includes(last) && (await chooseWorkspace(last)).ok) active = last;
+  if (!active && workspaces.includes(last)) {
+    loading(`loading workspace ${last}…`);
+    if ((await chooseWorkspace(last)).ok) active = last;
+    loading('');
+  }
   if (active) { loadSets(active); return load(true); }
   renderWs('');
   $('stats').textContent = 'no workspace chosen';

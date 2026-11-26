@@ -173,13 +173,8 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{"active": act, "workspaces": all})
 	})
-	// A custom header forces a CORS preflight this server never answers, so other sites cannot index or delete.
 	action := func(name string, run func(src *domain.OverviewSource, project string) (map[string]any, error)) {
 		mux.HandleFunc("POST /"+name, func(w http.ResponseWriter, r *http.Request) {
-			if r.Header.Get("X-Dotweavier") != "1" {
-				http.Error(w, "missing X-Dotweavier header", http.StatusForbidden)
-				return
-			}
 			src := active(w)
 			if src == nil {
 				return
@@ -213,10 +208,6 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 	})
 	// POST /workspace?dir=DIR makes the registered workspace DIR the active one.
 	mux.HandleFunc("POST /workspace", func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Dotweavier") != "1" {
-			http.Error(w, "missing X-Dotweavier header", http.StatusForbidden)
-			return
-		}
 		dir := r.URL.Query().Get("dir")
 		t0 := time.Now()
 		err := activate(dir)
@@ -259,10 +250,6 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 	})
 	// GET /source?loc=[project:]rel/path[:LINE]: a file for the field page's viewer, header-guarded like the actions.
 	mux.HandleFunc("GET /source", func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Dotweavier") != "1" {
-			http.Error(w, "missing X-Dotweavier header", http.StatusForbidden)
-			return
-		}
 		src := active(w)
 		if src == nil {
 			return
@@ -285,7 +272,19 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		fmt.Printf("opened -> http://%s%s (Ctrl-C stops the server)\n", ln.Addr(), open)
 		openPage(fmt.Sprintf("http://%s%s", ln.Addr(), open))
 	}
-	must(http.Serve(ln, mux))
+	must(http.Serve(ln, guard(mux)))
+}
+
+// guard rejects every POST, and GET /source, that lacks the X-Dotweavier header.
+// A custom header forces a CORS preflight this server never answers, so other sites cannot index, delete or read sources.
+func guard(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if (r.Method == http.MethodPost || r.URL.Path == "/source") && r.Header.Get("X-Dotweavier") != "1" {
+			http.Error(w, "missing X-Dotweavier header", http.StatusForbidden)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 // fieldRoutes serves the field page's runs: list, read, export, trace and follow, each a single call into the domain.
@@ -332,10 +331,6 @@ func fieldRoutes(mux *http.ServeMux, active func(http.ResponseWriter) *domain.Ov
 	})
 	// POST /trace-field/follow?run=RUN&path=I.J.K&hop=N follows hop N of that step, or without path every hop depth=D deep, into a new run.
 	mux.HandleFunc("POST /trace-field/follow", func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Dotweavier") != "1" {
-			reply(w, http.StatusForbidden, map[string]any{"error": "missing X-Dotweavier header"})
-			return
-		}
 		q := r.URL.Query()
 		phase, done := status("follow "+q.Get("run"), true)
 		hop, _ := strconv.Atoi(q.Get("hop"))
@@ -351,10 +346,6 @@ func fieldRoutes(mux *http.ServeMux, active func(http.ResponseWriter) *domain.Ov
 	})
 	// POST /trace-field?addr=ADDR[&include-tests=1][&max-projects=N][&only=origin|uses][&follow=N] traces like the CLI and returns the kept run's name.
 	mux.HandleFunc("POST /trace-field", func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Dotweavier") != "1" { // same CSRF guard as sync and remove
-			reply(w, http.StatusForbidden, map[string]any{"error": "missing X-Dotweavier header"})
-			return
-		}
 		src := active(w)
 		if src == nil {
 			return

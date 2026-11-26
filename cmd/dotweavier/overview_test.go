@@ -32,13 +32,13 @@ func TestFieldRoutes(t *testing.T) {
 	require.NoError(t, err)
 	mux := http.NewServeMux()
 	fieldRoutes(mux, func(http.ResponseWriter) *domain.OverviewSource { return src })
-	do := func(method, url string, guard bool) *httptest.ResponseRecorder {
+	do := func(method, url string, header bool) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, url, nil)
-		if guard {
+		if header {
 			req.Header.Set("X-Dotweavier", "1")
 		}
 		w := httptest.NewRecorder()
-		mux.ServeHTTP(w, req)
+		guard(mux).ServeHTTP(w, req)
 		return w
 	}
 

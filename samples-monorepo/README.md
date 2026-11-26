@@ -137,12 +137,16 @@ library's in-process fake (`pstest`).
 
 ## Tracing with dotweavier
 
-`init` detects every project: the Go ones by `go.mod`, `java/inventory` and
-`java/payments` by `pom.xml` and `kotlin/shipping` by `build.gradle.kts`.
-The project names are their paths, such as `golang/orders`:
+`index` indexes one project folder. `init` is optional: it adds this folder
+to the workspace, so the projects under it are detected (the Go ones by
+`go.mod`, `java/inventory` and `java/payments` by `pom.xml`, `kotlin/shipping`
+by `build.gradle.kts`) and the overview lists them, indexed or not. After
+`init`, project names are paths relative to this folder, such as
+`golang/orders`, as below; without it, each project is named after its own
+folder (`orders::Service.Place`):
 
 ```sh
-dotweavier init samples-monorepo
+dotweavier init samples-monorepo   # optional: detect the projects under samples-monorepo
 for p in golang/orders golang/pricing golang/fulfillment java/inventory java/payments kotlin/shipping; do
   dotweavier index samples-monorepo/$p
 done

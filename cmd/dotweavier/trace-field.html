@@ -56,9 +56,7 @@ button:hover{border-color:#6b78d8}
 <svg id="svg"><defs></defs><g id="g"></g></svg>
 <button id="menuBtn" title="history of field traces">☰</button><div id="hist"></div><div id="viewer"><div class="vh"><span id="vTitle"></span><span id="vMsg" class="hint" style="flex:0 1 auto;margin:0"></span><button id="vClose">close · esc</button></div><pre id="vBody"></pre></div><div id="dock"><div id="calls"></div><div id="side"></div><div id="legend"></div></div>
 <script>
-// The page is static: every run is a data file in ~/.dotweavier/trace-field-history,
-// <time>_<address>.js, which sets window.TRACE; index.js lists the runs (window.HISTORY).
-// ?t=<name> picks one (default: latest). A <script src> works from file://, fetch() of a local file does not.
+// Runs load by <script src>, which works from file:// where fetch() of a local file does not.
 const HIST='../trace-field-history/';
 const traceName=new URLSearchParams(location.search).get('t')||'latest';
 const loadScript=(src,ok,fail)=>{const el=document.createElement('script'); el.src=src; el.onload=ok; el.onerror=fail||(()=>ok()); document.head.appendChild(el);};
@@ -75,8 +73,7 @@ if(window.EXPORTED){document.getElementById('menuBtn').remove(); start(window.TR
 else loadScript(HIST+'index.js',()=>{buildMenu(); loadScript(HIST+encodeURIComponent(traceName)+'.js',()=>start(window.TRACE),noData);});
 function noData(){document.body.insertAdjacentHTML('beforeend',`<div style="position:absolute;inset:40% 0 auto;text-align:center;color:#ff7a7a">no trace data at trace-field-history/${traceName.replace(/[<>&]/g,'')}.js<br><span style="color:#8b93c4">run: dotweavier trace field ADDR --format ui</span></div>`);}
 function start(D){
-// Served by `dotweavier overview` (http), the page can ask the server to run traces;
-// from file:// it can only show them.
+// Served by `dotweavier overview`, the page can run traces; from file:// it only shows them.
 const served=location.protocol.startsWith('http')&&!window.EXPORTED;
 const home=(D.addr.match(/^([^:]+):[^:]+\.(go|java|kt):\d+$/)||[])[1]||'';
 const KIND = {seed:'#ffffff',assign:'#6878b8',convert:'#6be4ff',transform:'#ffd06b',arg:'#7aa2ff',return:'#b88bff',
@@ -143,8 +140,7 @@ function draw(){layout(); const vs=visible(); const q=document.getElementById('q
   svg.querySelector('defs').innerHTML=Object.entries(KIND).map(([k,c])=>`<marker id="${mk(k)}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="${c}"/></marker>`).join('');
   apply();}
 function count(n){return n.kids.reduce((s,k)=>s+1+count(k),0);}
-// focus: fit the origin seed (never the selected box) and up to 2 columns of boxes
-// on each side of it, so the first steps read at a useful size; fit shows everything.
+// focus fits the seed and up to 2 columns each side, so the first steps read at a useful size.
 function focusView(){const a=centers[0]; if(!a)return fit();
   fit(visible().filter(n=>Math.abs(n.x-a.x)<=2*COL+1));}
 function fit(only){const vs=Array.isArray(only)&&only.length?only:visible(); let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
@@ -163,8 +159,7 @@ addEventListener('mousemove',e=>{if(!drag)return; const dx=e.clientX-drag.x,dy=e
 addEventListener('mouseup',e=>{svg.style.cursor='grab'; const was=drag; drag=null; if(!was||was.moved)return;
   const el=e.target.closest?.('.node'); if(!el)return; const n=window._vs[+el.dataset.i];
   if(n.kids.length&&(!n.open||e.altKey))n.open=!n.open; sel=n; draw(); details();}); // click opens and selects; alt-click closes
-// Trackpad: two-finger scroll pans (left/right and up/down), pinch zooms (the browser
-// reports a pinch as wheel + ctrlKey). Cmd+scroll zooms too, for a mouse wheel.
+// Two-finger scroll pans; pinch (wheel + ctrlKey) and Cmd+scroll zoom.
 const zoomAt=(x,y,k)=>{const wx=(x-view.x)/view.k, wy=(y-view.y)/view.k;
   view.k=Math.min(8,Math.max(.05,k)); view.x=x-wx*view.k; view.y=y-wy*view.k; apply();};
 let pinch=null; // Safari pinch: gesture events with an absolute scale, not ctrl+wheel
@@ -180,9 +175,7 @@ function search(step){const q=document.getElementById('q').value.trim().toLowerC
   if(q){all.forEach(n=>{const d={...n.d,kids:0}; if(JSON.stringify(d).toLowerCase().includes(q)){hits.push(n); for(let p=n.parent;p;p=p.parent)p.open=true;}});}
   draw(); document.getElementById('hits').textContent=q?`${hits.length} matches${hits.length?' · enter: next':''}`:'';
   if(step&&hits.length){hitI=(hitI+1)%hits.length; sel=hits[hitI]; draw(); center(sel); details();}}
-// Call path: the best path trace over the indexed graph between the seed's function and the
-// selected step's function (computed by the CLI; either direction, since a value goes down
-// calls as an argument and up as a return). Hops show the edge kind; gRPC and Pub/Sub stand out.
+// Call path between the seed's function and the selected step's, computed by attachCalls.
 function calls(){const el=document.getElementById('calls'); if(!sel||!sel.side){el.style.display='none';return;}
   const c=sel.d.call; el.style.display='block';
   if(!c){el.innerHTML='<span class="hint">no call path in the index for this step (same function as the seed, a struct field, or an unindexed project)</span>';return;}
@@ -225,8 +218,7 @@ function details(){calls(); const el=document.getElementById('det'); if(!sel){el
     '';
   document.getElementById('vf')?.addEventListener('click',()=>viewFile(qualify(d.loc)));
   document.querySelectorAll('#det .fh').forEach(b=>b.onclick=()=>follow({path:sel.path.join('.'),hop:b.dataset.k},sel.path));}
-// Following a hop: the server traces the handler's request in its project, grafts it under
-// the step and saves a new run; the page opens that run with the step selected again.
+// Following a hop saves a new run on the server; the page opens it with the step still selected.
 async function follow(q,keep){const msg=document.getElementById('fhMsg')||document.getElementById('faMsg'); msg.textContent='following…';
   try{const r=await fetch('/trace-field/follow?'+new URLSearchParams({run:traceName,...q}),{method:'POST',headers:{'X-Dotweavier':'1'}}); const j=await r.json();
     if(!r.ok)throw new Error(j.error||r.statusText); location.search='?'+new URLSearchParams({t:j.run,...(keep?{sel:keep.join('.')}:{})});}
@@ -243,9 +235,7 @@ async function viewFile(loc){const v=document.getElementById('viewer'), body=doc
   catch(e){body.textContent=String(e.message||e);}}
 document.getElementById('vClose').onclick=()=>document.getElementById('viewer').classList.remove('open');
 addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('viewer').classList.remove('open');});
-// Served by `dotweavier overview` (http), the page can ask the server to run a trace;
-// from file:// it can only show the command. Step locations of the home project carry
-// no project prefix ("rel.go:LINE"); the server needs the full address.
+// Home-project locations carry no project prefix ("rel.go:LINE"); the server needs the full address.
 function qualify(loc){return home&&loc.split(':').length===2?home+':'+loc:loc;}
 async function traceFrom(addr){const msg=document.getElementById('vMsg'); msg.textContent='tracing '+addr+'…';
   try{const r=await fetch('/trace-field?addr='+encodeURIComponent(addr),{method:'POST',headers:{'X-Dotweavier':'1'}}); const j=await r.json();

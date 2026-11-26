@@ -43,8 +43,7 @@ func main() {
 		usage()
 	}
 	start := time.Now()
-	// Ctrl-C cancels a long index or field trace; indexes are written whole or not at all.
-	// Only those two catch it: every other command keeps Ctrl-C's default exit.
+	// Ctrl-C cancels only index and field trace, which write indexes whole or not at all.
 	cancellable := func() context.Context {
 		ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
 		return ctx
@@ -89,8 +88,7 @@ func warn(ws []string) {
 	}
 }
 
-// dirAndWorkspace parses the optional folder argument (default: the current folder)
-// and --workspace of init and index; flags may come before or after the folder.
+// dirAndWorkspace parses init's and index's optional folder and --workspace, in either order.
 func dirAndWorkspace(cmd string, args []string) (dir, ws string) {
 	fl := flag.NewFlagSet(cmd, flag.ExitOnError)
 	wsFlag := fl.String("workspace", domain.DefaultWorkspace, "workspace name; created if it does not exist")
@@ -369,8 +367,7 @@ type uiPath struct {
 	GRPC  []string `json:"grpc"`
 }
 
-// pathUI renders the union of all paths as one self-contained HTML page: a node or
-// edge shared by several paths appears once and lists every path through it.
+// pathUI renders the union of all paths as one self-contained HTML page, each shared node or edge once.
 func pathUI(paths []domain.Path, a, b string) ([]byte, error) {
 	data := struct {
 		A        string   `json:"a"`
@@ -418,8 +415,7 @@ func pathUI(paths []domain.Path, a, b string) ([]byte, error) {
 	return fill(pathUITemplate, data)
 }
 
-// dotDir is a folder under ~/.dotweavier. Without a home folder it exits rather
-// than fall back to the current folder, which may be a target project.
+// dotDir is a folder under ~/.dotweavier; without a home folder it exits rather than write into a target project.
 func dotDir(name string) string {
 	home, err := os.UserHomeDir()
 	must(err)
@@ -457,8 +453,7 @@ func writeUI(name string, html []byte) string {
 	return out
 }
 
-// openPage opens the static page at path in the default browser; no server runs.
-// A failure only warns: the link is already printed.
+// openPage opens the static page at path in the default browser, only warning on failure: the link is already printed.
 func openPage(path string) {
 	cmd := map[string][]string{"darwin": {"open"}, "windows": {"rundll32", "url.dll,FileProtocolHandler"}}[runtime.GOOS]
 	if cmd == nil {

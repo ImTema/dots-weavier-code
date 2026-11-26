@@ -1,4 +1,3 @@
-// Indexing: finding projects under a workspace and extracting their call graphs.
 package domain
 
 import (
@@ -25,8 +24,7 @@ import (
 
 type project struct{ Name, dir, lang string }
 
-// manifests recognise a project folder by its build file (GLOSSARY: Project),
-// in order of precedence when a folder has several.
+// manifests recognise a project folder by its build file, in order of precedence.
 var manifests = []struct{ file, lang string }{
 	{"go.mod", "go"},
 	{"pom.xml", "jvm"}, {"build.gradle.kts", "jvm"}, {"build.gradle", "jvm"},
@@ -44,8 +42,7 @@ func langOf(dir string) string {
 }
 
 func discover(ws string) ([]project, error) {
-	// Absolute, because loaded packages report absolute file names: a relative project
-	// dir makes filepath.Rel fail and leaves nodes without a file (path:LINE never resolves).
+	// Absolute: loaded packages report absolute file names, and a relative dir makes filepath.Rel fail.
 	ws, err := filepath.Abs(ws)
 	if err != nil {
 		return nil, err
@@ -84,8 +81,7 @@ func constIn(pkg *types.Package, name string) string {
 	return ""
 }
 
-// clientMethod recognises a call on a generated gRPC client interface (XClient)
-// by the X_Method_FullMethodName const next to it; works on type info alone.
+// clientMethod recognises a call on a generated gRPC client (XClient) by the X_Method_FullMethodName const beside it.
 func clientMethod(c *ssa.CallCommon) string {
 	n, ok := types.Unalias(c.Value.Type()).(*types.Named)
 	if !ok || !strings.HasSuffix(n.Obj().Name(), "Client") {
@@ -122,9 +118,7 @@ type loadStats struct {
 	warnings                                             []string // one line each, e.g. an SSA build panic
 }
 
-// extract loads one project and adds its functions, call edges, gRPC client calls
-// and gRPC handlers to g. Only the project's own packages get bodies; dependencies
-// come from export data (type info only), which is the analysis boundary of ticket 10.
+// extract loads one project and adds its functions, call edges, gRPC client calls and handlers to g.
 func extract(ctx context.Context, g *graph, p project, tests bool) (st loadStats, err error) {
 	if p.lang == "jvm" {
 		return extractJVM(g, p)
@@ -174,11 +168,7 @@ func extract(ctx context.Context, g *graph, p project, tests bool) (st loadStats
 
 	chaG := cha.CallGraph(prog)
 	vtaG := vta.CallGraph(fns, chaG)
-	// Before the synthetic nodes go: a dependency's functions come from export
-	// data and count as synthetic, so deleting them drops these targets.
-	// An interface call VTA resolves to a dependency's type (an engine built by
-	// another project) is a library call; CHA-only targets are not: small
-	// interfaces like io.Writer match half of every dependency.
+	// Library calls, collected before synthetic nodes are deleted with dependency functions (ADR 0008).
 	type libTarget struct {
 		site ssa.CallInstruction
 		from *ssa.Function
@@ -249,8 +239,7 @@ func extract(ctx context.Context, g *graph, p project, tests bool) (st loadStats
 			case c.IsInvoke():
 				g.link(from, nodeOf(callee), guess, "")
 				linked[e.Site] = true
-				// Function-value calls take VTA targets only: CHA links every
-				// same-signature function there, which is pure noise.
+				// Function-value calls take VTA targets only (ADR 0008).
 			}
 		}
 	}
@@ -279,8 +268,7 @@ func extract(ctx context.Context, g *graph, p project, tests bool) (st loadStats
 		for _, b := range f.Blocks {
 			for _, in := range b.Instrs {
 				if mc, ok := in.(*ssa.MakeClosure); ok {
-					// A closure passed to a dependency (errgroup.Go, retry.Do, ...) is
-					// called outside the boundary; assume it runs.
+					// A closure passed to a dependency (errgroup.Go, retry.Do) is called outside the boundary; assume it runs.
 					if fn := mc.Fn.(*ssa.Function); keep(fn) {
 						g.link(from, nodeOf(fn), guess, "")
 					}
@@ -349,12 +337,7 @@ func extract(ctx context.Context, g *graph, p project, tests bool) (st loadStats
 	return st, nil
 }
 
-// loadSSA loads one project and builds SSA for its own packages. Only they get
-// bodies; dependencies come from export data (type info only), which is the
-// analysis boundary of ticket 10.
-//
-// fset may be shared between loads so positions from several projects stay distinct;
-// nil gives the load its own.
+// loadSSA builds SSA bodies for p's own packages only, dependencies from export data; a shared fset keeps several loads' positions distinct.
 func loadSSA(ctx context.Context, p project, tests bool, st *loadStats, fset *token.FileSet) (*ssa.Program, map[*types.Package]bool, error) {
 	t0 := time.Now()
 	cfg := &packages.Config{
@@ -378,8 +361,7 @@ func loadSSA(ctx context.Context, p project, tests bool, st *loadStats, fset *to
 	st.pkgs = len(pkgs)
 	st.load = time.Since(t0)
 
-	// Like ssautil.Packages, but ill-typed packages are kept: messy targets often
-	// have a broken import or two, and dropping the package loses every path through it.
+	// Like ssautil.Packages, but keeping ill-typed packages (ADR 0010).
 	if len(pkgs) == 0 {
 		return nil, nil, fmt.Errorf("no packages")
 	}
@@ -445,10 +427,7 @@ func isTestFunc(prog *ssa.Program, f *ssa.Function) bool {
 		})
 }
 
-// stubBroken empties, in memory only, the bodies of functions and drops the
-// package-level initializers that use an invalid type (e.g. from an unresolvable
-// import), because the SSA builder panics on them. Stubbed functions stay as
-// nodes but lose their outgoing calls.
+// stubBroken empties in memory the functions and initializers that use an invalid type, which panic the SSA builder (ADR 0010).
 func stubBroken(pk *packages.Package) (n int) {
 	invalid := func(root ast.Node) (bad bool) {
 		ast.Inspect(root, func(x ast.Node) bool {
@@ -466,8 +445,7 @@ func stubBroken(pk *packages.Package) (n int) {
 		})
 		return bad
 	}
-	// ssa.CreatePackage dereferences Defs[name] for every declared name; go/types
-	// leaves it nil for some broken decls (e.g. redeclarations), so drop those.
+	// ssa.CreatePackage dereferences Defs[name], which go/types leaves nil for some broken decls such as redeclarations.
 	undefined := func(id *ast.Ident) bool { return pk.TypesInfo.Defs[id] == nil }
 	for _, f := range pk.Syntax {
 		f.Decls = slices.DeleteFunc(f.Decls, func(d ast.Decl) bool {

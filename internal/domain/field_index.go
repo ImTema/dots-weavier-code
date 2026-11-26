@@ -42,8 +42,7 @@ func newTracker(fset *token.FileSet, tests bool, modules []string) *tracker {
 	return t
 }
 
-// keep reports project functions with bodies, including synthetic wrappers of
-// project methods (a value-receiver method called through a pointer or interface).
+// keep reports project functions with bodies, including synthetic wrappers of project methods.
 func (t *tracker) keep(f *ssa.Function) bool {
 	if f == nil || len(f.Blocks) == 0 {
 		return false
@@ -100,8 +99,7 @@ func (t *tracker) add(prog *ssa.Program, own map[*types.Package]bool) {
 			}
 		}
 	}
-	// VTA targets; an interface call VTA cannot resolve (the implementation is wired
-	// where VTA does not see it) takes every CHA target, as trace path's iface:guess.
+	// VTA targets, or every CHA target where VTA resolves none, as trace path's iface:guess (ADR 0005).
 	chaG := cha.CallGraph(prog)
 	link := func(site ssa.CallInstruction, f *ssa.Function) {
 		if t.keep(f) && !slices.Contains(t.callees[site], f) {
@@ -164,15 +162,13 @@ func (t *tracker) readOf(v ssa.Value) (fieldKey, bool) {
 	return "", false
 }
 
-// byPos orders by file and offset, which stays stable whatever order projects
-// load into the shared FileSet.
+// byPos orders by file and offset, which stays stable whatever order projects load into the shared FileSet.
 func (t *tracker) byPos(a, b token.Pos) int {
 	pa, pb := t.fset.Position(a), t.fset.Position(b)
 	return cmp.Or(cmp.Compare(pa.Filename, pb.Filename), cmp.Compare(pa.Offset, pb.Offset))
 }
 
-// getter recognises x.GetF() outside the project on a struct with field F (protobuf
-// getters): it reads x.F, which is how a gRPC server reads what a client wrote.
+// getter recognises a protobuf getter x.GetF() outside the project as a read of x.F.
 func (t *tracker) getter(c *ssa.CallCommon) (fieldKey, *types.Var, bool) {
 	f := c.StaticCallee()
 	if f == nil || t.keep(f) || !strings.HasPrefix(f.Name(), "Get") || f.Signature.Recv() == nil || len(c.Args) != 1 {
@@ -194,10 +190,7 @@ func (t *tracker) getter(c *ssa.CallCommon) (fieldKey, *types.Var, bool) {
 	return "", nil, false
 }
 
-// fieldOf names the field selected from a struct or pointer to struct. Only named
-// structs declared in the projects are shared locations (ok); a field of a library
-// struct (uuid.NullUUID.UUID, ...) or an anonymous one stays part of its object,
-// otherwise every UUID in a project would meet in uuid.NullUUID.UUID.
+// fieldOf names the field selected from a struct or pointer to struct; ok only for a shared location (ADR 0009).
 func (t *tracker) fieldOf(typ types.Type, i int) (k fieldKey, v *types.Var, ok bool) {
 	if p, ok := typ.Underlying().(*types.Pointer); ok {
 		typ = p.Elem()

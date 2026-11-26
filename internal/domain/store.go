@@ -1,4 +1,3 @@
-// Storage: one SQLite file per project under ~/.dotweavier (ADR 0004).
 package domain
 
 import (
@@ -14,20 +13,14 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// stored is one project's index: its own nodes, edges, gRPC client calls and
-// handlers. Projects are joined on gRPC method names only at trace time, so
-// re-indexing one project never touches another's file.
+// stored is one project's index: its nodes, edges, gRPC client calls and handlers, joined with other projects only at trace time.
 type stored struct {
 	Project, Dir string
 	Built        time.Time
 	Graph        graph
 }
 
-// One SQLite file per project folder (ADR 0004), shared by every workspace that
-// contains the folder. trace still loads whole graphs into memory; the tables
-// just make them queryable without dotweavier.
-// Without a home folder there is nowhere to keep state: never fall back to a
-// relative path, which would write inside whatever folder dotweavier runs in.
+// dotweavierDir holds one SQLite file per project folder (ADR 0004); without a home folder it fails rather than write into the current folder.
 func dotweavierDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -66,8 +59,7 @@ CREATE INDEX edges_src ON edges(src);
 CREATE INDEX nodes_name ON nodes(name);
 `
 
-// save writes a fresh database next to the old one and renames it over, so a
-// crash never leaves a half-written index.
+// save writes a fresh database next to the old one and renames it over, so a crash never leaves a half-written index.
 func save(s *stored) error {
 	path, err := storePath(s.Dir)
 	if err != nil {
@@ -248,10 +240,7 @@ func readMeta(path string) (project, dir string, built time.Time, err error) {
 // DefaultWorkspace is the workspace used when none is named.
 const DefaultWorkspace = "default"
 
-// The workspace registry. A workspace is a name with one or more registered
-// folders; its projects are the ones detected under them. A project folder has
-// one index, shared by every workspace that contains it; each workspace names
-// the project by its path relative to the deepest of its folders containing it.
+// registrySchema maps each workspace name to its folders; the projects detected under them share one index per folder across workspaces.
 const registrySchema = `CREATE TABLE IF NOT EXISTS workspace_folders (
 	workspace TEXT NOT NULL, dir TEXT NOT NULL, registered TEXT NOT NULL, PRIMARY KEY (workspace, dir))`
 
@@ -278,8 +267,7 @@ func openRegistry() (*sql.DB, error) {
 	return db, nil
 }
 
-// migrateRegistry moves the folders of the old registry, where each workspace was
-// one folder, into the default workspace.
+// migrateRegistry moves the folders of the old one-folder-per-workspace registry into the default workspace.
 func migrateRegistry(db *sql.DB) error {
 	var n int
 	if err := db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'workspaces'`).Scan(&n); err != nil || n == 0 {
@@ -322,8 +310,7 @@ func registryList(query string, args ...any) ([]string, error) {
 	return out, rows.Err()
 }
 
-// workspaceFolders is the registered folders of workspace ws (DefaultWorkspace for
-// ""), or an error if it has none.
+// workspaceFolders is the registered folders of workspace ws (DefaultWorkspace for ""), or an error if it has none.
 func workspaceFolders(ws string) (string, []string, error) {
 	if ws == "" {
 		ws = DefaultWorkspace
@@ -363,8 +350,7 @@ func deepest(folders []string, dir string) string {
 	return best
 }
 
-// projectsIn detects the projects under folders, each named relative to the
-// deepest folder that contains it. Two projects with one name are an error.
+// projectsIn detects the projects under folders, each named from the deepest folder containing it; a duplicate name is an error.
 func projectsIn(folders []string) ([]project, error) {
 	var out []project
 	at := map[string]string{}
@@ -387,8 +373,7 @@ func projectsIn(folders []string) ([]project, error) {
 	return out, nil
 }
 
-// indexesIn maps the index file of every project folder inside folders to the
-// project's name: its path relative to the deepest folder that contains it.
+// indexesIn maps the index file of every project folder inside folders to the project's name, as projectsIn names it.
 func indexesIn(folders []string) (map[string]string, error) {
 	stores, err := storesDir()
 	if err != nil {
@@ -415,9 +400,7 @@ func indexesIn(folders []string) (map[string]string, error) {
 	return out, nil
 }
 
-// loadIndexes merges the index of every project inside folders (absolute) into
-// one graph, each project named as indexesIn names it; unreadable indexes are
-// skipped, with a warning each.
+// loadIndexes merges the index of every project inside the absolute folders into one graph, skipping each unreadable one with a warning.
 func loadIndexes(folders []string, progress func(string)) (*graph, map[string]bool, []string, error) {
 	files, err := indexesIn(folders)
 	if err != nil {

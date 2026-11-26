@@ -1,17 +1,3 @@
-// `dotweavier trace field`: the full lifecycle of one value, as two trees.
-//
-//   - origin: where the value comes from, back to literals, parsing, other projects'
-//     gRPC clients, ...; each line flows into the one above it.
-//   - lifecycle: every local it is copied into, every conversion and transformation,
-//     every struct field it is stored in and every place that field is read back;
-//     each line flows into the ones below it.
-//
-// The analysis is field-based taint propagation over SSA, run live (no index). A
-// struct field is one location for all objects of the type, keyed by package path,
-// type and field name, so a protobuf field written by a gRPC client in one project is
-// the same location its server reads in another. Projects that import a reached
-// field's package are loaded until nothing new is reached. That over-approximates by
-// design: the trees show where the value may come from and go, not where it must.
 package domain
 
 import (
@@ -119,8 +105,7 @@ func (t *tracker) seeds(prog *ssa.Program, file string, line int) []ssa.Value {
 	return out
 }
 
-// importers maps each import path to the projects whose non-test code imports it.
-// Nested projects are scanned on their own, not as part of the outer one.
+// importers maps each import path to the projects whose non-test code imports it, nested projects scanned on their own.
 func importers(projects []project) map[string][]project {
 	roots := map[string]bool{}
 	for _, p := range projects {
@@ -159,9 +144,7 @@ func importers(projects []project) map[string][]project {
 	return out
 }
 
-// traceField runs both walks from file:line in seedProject, loading further projects that
-// import a reached field's package, up to maxProjects in total. A non-nil seedOK
-// keeps only the line's values it accepts as seeds.
+// traceField runs both walks from file:line (ADR 0009), loading up to maxProjects; a non-nil seedOK filters the seeds.
 func traceField(ctx context.Context, projects []project, seedProject project, file string, line int, tests bool, maxProjects int, seedOK func(ssa.Value) bool, progress func(string)) (*tracker, error) {
 	var modules []string
 	moduleOf := map[string]string{} // project name -> module path
@@ -176,8 +159,7 @@ func traceField(ctx context.Context, projects []project, seedProject project, fi
 	t := newTracker(token.NewFileSet(), tests, modules)
 	t.seedOK = seedOK
 	loaded := map[string]bool{seedProject.Name: true}
-	// Loads run one after another: concurrent loads measured slower (12.1s vs 11.4s),
-	// go list contends on the go command's locks and is mostly system time.
+	// Sequential: concurrent loads measured slower (12.1s vs 11.4s), go list contends on the go command's locks.
 	loadAll := func(ps []project) []*ssa.Program {
 		progs := make([]*ssa.Program, len(ps))
 		for i, p := range ps {
@@ -223,8 +205,7 @@ func traceField(ctx context.Context, projects []project, seedProject project, fi
 		t.seed(s, s, read, s.Pos(), s.Pos())
 	}
 
-	// Fields of packages shared with other projects (protobuf messages, SDKs) are
-	// followed into the projects that import them, until no new project is reached.
+	// Fields of shared packages (protobuf messages, SDKs) are followed into the projects importing them.
 	var imps map[string][]project
 	asked := map[string]bool{}
 	for {
@@ -244,8 +225,7 @@ func traceField(ctx context.Context, projects []project, seedProject project, fi
 					imps = <-impsC
 				}
 				for _, p := range imps[f.pkg()] {
-					// The module declaring the package (generated protobuf, SDK types)
-					// only defines it; its getters are already read as fields.
+					// The module declaring the package only defines it; its getters are already read as fields.
 					m := moduleOf[p.Name]
 					if m != "" && (f.pkg() == m || strings.HasPrefix(f.pkg(), m+"/")) {
 						continue

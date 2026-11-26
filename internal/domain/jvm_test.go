@@ -8,8 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestExtractJVM indexes the Java and Kotlin samples and checks the hops that
-// samples/README.md lists for them.
+// TestExtractJVM checks the hops samples/README.md lists for the Java and Kotlin samples.
 func TestExtractJVM(t *testing.T) {
 	g := &graph{ids: map[string]int32{}, Impls: map[string][]int32{}}
 	for _, p := range []project{
@@ -52,9 +51,7 @@ func TestExtractJVM(t *testing.T) {
 	assert.True(t, found, "no http hop from OrdersCustomerDirectory.find to Handler.getCustomer; calls = %v", g.Calls)
 }
 
-// TestTraceJVMField traces values through the Java and Kotlin samples: into a
-// resolved call's parameter, into a record or data class field, and back from
-// a field to where it is stored.
+// TestTraceJVMField traces Java and Kotlin values into a call's parameter, into a record field, and back to a field's store.
 func TestTraceJVMField(t *testing.T) {
 	flat := func(r *FieldTrace) []string {
 		var out []string

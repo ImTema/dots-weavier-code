@@ -1,5 +1,3 @@
-// `dotweavier overview` serves a 3D galaxy of every indexed function on localhost. three.js 0.187.0 is vendored
-// under overview_assets (MIT, see LICENSE-three).
 package main
 
 import (
@@ -23,6 +21,8 @@ import (
 //go:embed overview.html
 var overviewPage []byte
 
+// three.js 0.187.0, MIT (LICENSE-three).
+//
 //go:embed overview_assets
 var overviewAssets embed.FS
 
@@ -41,9 +41,7 @@ func runOverview(args []string) {
 	serveOverview(*addr, *ws, *maxNodes, "")
 }
 
-// serveOverview serves the overview and the trace pages on addr until killed, over
-// workspace ws ("": the only registered one, else the page asks). With open set
-// (a path like /ui/trace-field.html?t=RUN), it opens that page in the browser.
+// serveOverview serves the overview and trace pages of ws ("": the page asks unless only one is registered) on addr, opening open if set.
 func serveOverview(addr, ws string, maxNodes int, open string) {
 	// Listen before loading the workspace: a running overview is reused, not loaded twice.
 	ln, err := net.Listen("tcp", addr) // loopback by default: the page exposes source names
@@ -142,7 +140,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{"paths": paths, "exhausted": exhausted, "ms": ms})
 	})
-	// Projects detected under the project folder, with whether and when each was indexed.
+	// Projects of the active workspace, with whether and when each was indexed.
 	mux.HandleFunc("GET /projects", func(w http.ResponseWriter, _ *http.Request) {
 		src := active(w)
 		if src == nil {
@@ -175,8 +173,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{"active": act, "workspaces": all})
 	})
-	// A custom header forces a CORS preflight, which this server never answers,
-	// so other sites open in the browser cannot trigger indexing or delete indexes.
+	// A custom header forces a CORS preflight this server never answers, so other sites cannot index or delete.
 	action := func(name string, run func(src *domain.OverviewSource, project string) (map[string]any, error)) {
 		mux.HandleFunc("POST /"+name, func(w http.ResponseWriter, r *http.Request) {
 			if r.Header.Get("X-Dotweavier") != "1" {
@@ -199,8 +196,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 			json.NewEncoder(w).Encode(res)
 		})
 	}
-	// POST /sync?project=NAME syncs the project and the projects nested in it;
-	// each is re-indexed only if it changed.
+	// POST /sync?project=NAME re-indexes the changed ones of the project and the projects nested in it.
 	action("sync", func(src *domain.OverviewSource, p string) (map[string]any, error) {
 		res, err := src.Sync(p)
 		return map[string]any{"results": res}, err
@@ -232,11 +228,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.Handle("GET /overview_assets/", http.FileServerFS(overviewAssets))
-	// Field trace page, served so it can continue a trace: GET /ui/trace-field.html?t=RUN
-	// (what `trace field --format ui` opens), GET /trace-field-history/RUN.js, and
-	// POST /trace-field?addr=ADDR, which traces like the CLI, saves the run and returns its name.
-	// Trace path page for two symbol addresses, traced like `dotweavier trace path --format ui`
-	// over the active workspace: GET /ui/trace-path.html?a=ADDR&b=ADDR. Opened from a weaved path.
+	// GET /ui/trace-path.html?a=ADDR&b=ADDR: paths over the active workspace, opened from a weaved path.
 	mux.HandleFunc("GET /ui/trace-path.html", func(w http.ResponseWriter, r *http.Request) {
 		src := active(w)
 		if src == nil {
@@ -260,6 +252,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(html)
 	})
+	// GET /ui/trace-field.html?t=RUN: what `trace field --format ui` opens; served so the page can continue a trace.
 	mux.HandleFunc("GET /ui/trace-field.html", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write([]byte(fieldUITemplate))
@@ -267,8 +260,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 	hist, err := domain.FieldHistoryDir()
 	must(err)
 	mux.Handle("GET /trace-field-history/", http.StripPrefix("/trace-field-history/", http.FileServer(http.Dir(hist))))
-	// GET /source?loc=[project:]rel/path[:LINE]: a whole file of an indexed project, for the
-	// field page's viewer. The header guard keeps other sites from reading it (no CORS reply).
+	// GET /source?loc=[project:]rel/path[:LINE]: a file for the field page's viewer, header-guarded like the actions.
 	mux.HandleFunc("GET /source", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("X-Dotweavier") != "1" {
 			http.Error(w, "missing X-Dotweavier header", http.StatusForbidden)
@@ -292,10 +284,6 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		}
 		json.NewEncoder(w).Encode(f)
 	})
-	// POST /trace-field/follow?run=RUN&path=I.J.K&hop=N follows hop N of the lifecycle step at
-	// path (indexes from the run's uses down through kids) into its handler's project.
-	// Without path it follows every hop, depth=D services deep. Either way the result is
-	// saved as a new run, whose name it returns.
 	// GET /trace-field/export?run=RUN: the run as one self-contained HTML file, for download.
 	mux.HandleFunc("GET /trace-field/export", func(w http.ResponseWriter, r *http.Request) {
 		tr, open, err := domain.LoadFieldRun(r.URL.Query().Get("run"))
@@ -312,6 +300,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		w.Header().Set("Content-Disposition", `attachment; filename="trace-field_`+domain.AddrFileName(tr.Addr)+`.html"`)
 		w.Write(page)
 	})
+	// POST /trace-field/follow?run=RUN&path=I.J.K&hop=N follows hop N of that step, or without path every hop depth=D deep, into a new run.
 	mux.HandleFunc("POST /trace-field/follow", func(w http.ResponseWriter, r *http.Request) {
 		reply := func(code int, v map[string]any) {
 			w.Header().Set("Content-Type", "application/json")
@@ -335,6 +324,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		}
 		reply(http.StatusOK, map[string]any{"run": name})
 	})
+	// POST /trace-field?addr=ADDR traces like the CLI and returns the saved run's name.
 	mux.HandleFunc("POST /trace-field", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("X-Dotweavier") != "1" { // same CSRF guard as sync and remove
 			http.Error(w, "missing X-Dotweavier header", http.StatusForbidden)
@@ -381,9 +371,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 	must(http.Serve(ln, mux))
 }
 
-// reuseOverview opens the page open on the overview already serving addr, after
-// making ws its active workspace if ws is set. It reports false when what holds
-// addr is not a dotweavier overview, or it cannot switch to ws.
+// reuseOverview opens open on the overview already serving addr, switching it to ws if set; false if that fails.
 func reuseOverview(addr, ws, open string) bool {
 	c := &http.Client{Timeout: 3 * time.Second}
 	resp, err := c.Get("http://" + addr + "/workspaces")

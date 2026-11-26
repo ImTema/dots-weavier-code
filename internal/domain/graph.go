@@ -1,4 +1,3 @@
-// The call graph: nodes, edges and the joins between projects.
 package domain
 
 import (
@@ -19,8 +18,7 @@ const (
 	libHop                  // static call into a dependency joined to its function in another indexed project (lib.go)
 )
 
-// link reports whether k joins two ends by a contract (method, route, topic)
-// rather than by a call, which is what makes a hop between projects.
+// link reports whether k joins two projects by a contract (method, route, topic) rather than a call.
 func (k kind) link() bool { return k >= grpcHop }
 
 func (k kind) String() string {
@@ -88,8 +86,7 @@ func (g *graph) external(name string) int32 {
 	return g.add("external|"+name, node{Name: "external: " + name})
 }
 
-// join turns gRPC client calls and pubsub publishes into hops to every indexed
-// handler of the method, topic or message type.
+// join turns client calls and publishes into hops to every indexed handler of their method, route, topic or type.
 func (g *graph) join() {
 	for _, c := range g.Calls {
 		k := grpcHop

@@ -9,9 +9,7 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
-// A Hop is a call from a step's function into another project, taken from the
-// index: gRPC, HTTP or Pub/Sub. Following it continues the field trace in the
-// handler, seeded at the request the handler receives.
+// A Hop is an indexed gRPC, HTTP or Pub/Sub call from a step's function into another project's handler.
 type Hop struct {
 	Kind     string `json:"kind"`               // grpc, http, pubsub, pubsub:guess
 	Method   string `json:"method"`             // full gRPC method, "GET /customers/{}", topic
@@ -125,8 +123,7 @@ func (run *fieldRun) followHop(ctx context.Context, path []int, k int) error {
 	return nil
 }
 
-// hopStep is the step a followed hop adds under its caller: the handler, with the
-// request's trace below it.
+// hopStep is the handler step a followed hop adds under its caller, the request's trace below it.
 func hopStep(h *Hop, kids []*FieldStep) *FieldStep {
 	return &FieldStep{Kind: h.Kind, Name: h.Method, Loc: h.Addr, Code: h.Method, Fn: h.Fn, Kids: kids}
 }

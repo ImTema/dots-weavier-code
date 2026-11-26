@@ -14,8 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// isolate gives the test its own HOME (so its own ~/.dotweavier) while keeping
-// Go's caches, or packages re-downloads every module into a temp dir.
+// isolate gives the test its own HOME, keeping Go's caches so packages does not re-download every module.
 func isolate(t *testing.T) {
 	t.Helper()
 	out, err := exec.Command("go", "env", "GOPATH", "GOMODCACHE", "GOCACHE").Output()
@@ -105,8 +104,7 @@ func TestFieldTraceReturnsWarnings(t *testing.T) {
 	assert.True(t, hasPrefix(r.Warnings, "loaded fieldcases: pkgs="), "warnings %q", r.Warnings)
 }
 
-// A field reached in a shared package would load the projects importing it; past
-// MaxProjects they are named in a warning instead.
+// Projects importing a reached shared package past MaxProjects are named in a warning instead of loaded.
 func TestFieldTraceWarnsAboutProjectsNotLoaded(t *testing.T) {
 	isolate(t)
 	r, err := TraceField(t.Context(), FieldQuery{Dir: "../../samples/golang", MaxProjects: 1}, "orders:internal/pricer/pricer.go:23")
@@ -136,8 +134,7 @@ func TestPathTraceWarnsAboutUnreadableIndex(t *testing.T) {
 	assert.Equal(t, 1, r.Indexes, "want a's index only")
 }
 
-// Without a home folder dotweavier has nowhere to keep state: it fails instead of
-// writing .dotweavier into the folder it runs in.
+// Without a home folder dotweavier fails instead of writing .dotweavier into the folder it runs in.
 func TestNoHomeFolderIsAnError(t *testing.T) {
 	isolate(t)
 	t.Setenv("HOME", "")

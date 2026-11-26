@@ -10,16 +10,7 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
-// Pubsub hops (ticket .scratch/gofacon-mvp/issues/06). Ends reuse graph.Calls and
-// graph.Impls with these key prefixes, so they are stored and joined like gRPC.
-//
-//   - topic key, sure hop: the topic is bound where the *pubsub.Publisher or the
-//     subscription is made, never at Publish/Receive, so it is followed through
-//     the struct field that holds the client.
-//   - type key, guess hop: the proto type marshalled next to Publish and the one
-//     unmarshalled by a subscriber project. The same type can travel on several
-//     topics, so a type match alone is only a guess.
-//
+// Pub/Sub key prefixes in graph.Calls and graph.Impls (ADR 0011).
 // shortcut: only cloud.google.com/go/pubsub/v2 with constant names; upgrade with
 // recognisers for pkg/pubsub (Topic/Subscription wiring, typed SDK handlers)
 // and config-sourced topics.
@@ -46,8 +37,7 @@ func calleeName(c *ssa.CallCommon) string {
 	return ""
 }
 
-// strVal resolves a string constant, or fmt.Sprintf over constants with "*" for
-// unknown arguments (e.g. "projects/%s/topics/%s" with a runtime project ID).
+// strVal resolves a string constant, or fmt.Sprintf over constants with "*" for unknown arguments.
 func strVal(v ssa.Value) (string, bool) {
 	if k, ok := v.(*ssa.Const); ok && k.Value != nil && k.Value.Kind() == constant.String {
 		return constant.StringVal(k.Value), true
@@ -89,8 +79,7 @@ func fieldOf(fa *ssa.FieldAddr) *types.Var {
 	return fa.X.Type().Underlying().(*types.Pointer).Elem().Underlying().(*types.Struct).Field(fa.Field)
 }
 
-// protoType names the Go type behind a proto.Message argument; the Go import
-// path identifies it across projects because both ends import the same package.
+// protoType names the Go type behind a proto.Message argument by import path, which both ends of a hop share.
 func protoType(v ssa.Value) string {
 	mi, ok := v.(*ssa.MakeInterface)
 	if !ok {

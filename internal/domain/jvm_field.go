@@ -1,17 +1,3 @@
-// Field traces for Java and Kotlin: the same two trees as the Go trace (field.go),
-// read from tree-sitter syntax instead of SSA (ADR 0007: no build, no classpath).
-//
-// Keys are expressions, locals and parameters (by name, one flat scope per
-// function as the extractor has), function results and fields. A field is one
-// location for every object of its type, keyed pkg.Type.field, the same as Go.
-// Calls follow what the JVM extractor resolved; a call it did not resolve
-// derives its result from its receiver or its one data argument. With no types,
-// values that only describe the datum are dropped by shape: comparisons and
-// predicate calls (isBlank, equals, ...).
-//
-// ponytail: one project only, and returns flow to every caller (no call-site
-// matching); follow shared fields into other projects and match calls as the Go
-// walk does once traces need it.
 package domain
 
 import (
@@ -81,8 +67,7 @@ var (
 	jvmMutators = []string{"add", "addAll", "put", "putAll", "putIfAbsent", "merge", "set", "offer", "push", "append", "addFirst", "addLast", "compute"}
 )
 
-// jseeds finds the values computed on line in fn: locals defined there,
-// parameters declared there, fields stored there and results returned there.
+// jseeds finds the locals, parameters, fields and results computed on line in fn.
 func (t *jtrace) jseeds(fn *jvmFunc, ln int) {
 	type seed struct {
 		fwd, back    any
@@ -127,8 +112,7 @@ func (t *jtrace) jseeds(fn *jvmFunc, ln int) {
 	}
 }
 
-// fieldSeeds seeds the fields declared on line of file: Java fields and record
-// components, Kotlin properties and primary constructor properties.
+// fieldSeeds seeds the fields, record components and Kotlin properties declared on line of file.
 func (t *jtrace) fieldSeeds(rel string, ln int) {
 	for _, tys := range t.jp.types {
 		for _, ty := range tys {

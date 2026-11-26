@@ -2,7 +2,9 @@
 package domain
 
 import (
+	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -74,11 +76,17 @@ func Index(ctx context.Context, o IndexOptions) error {
 	return nil
 }
 
+// ErrNotProject is IndexProject's and PlanIndex's error for a folder with no manifest.
+var ErrNotProject = errors.New("not a project")
+
 // InitWorkspace registers folder dir in workspace ws, creating ws, and returns the projects under dir without indexing them.
-func InitWorkspace(dir, ws string) ([]string, error) {
-	if ws == "" {
-		ws = DefaultWorkspace
-	}
+func InitWorkspace(dir, ws string) ([]string, error) { return initWorkspace(dir, ws, false) }
+
+// PlanInit is InitWorkspace without writing: the projects under dir as if dir were registered in ws.
+func PlanInit(dir, ws string) ([]string, error) { return initWorkspace(dir, ws, true) }
+
+func initWorkspace(dir, ws string, dryRun bool) ([]string, error) {
+	ws = cmp.Or(ws, DefaultWorkspace)
 	dir, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, err
@@ -86,18 +94,23 @@ func InitWorkspace(dir, ws string) ([]string, error) {
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 		return nil, fmt.Errorf("%s is not a folder", dir)
 	}
-	if err := register(ws, dir); err != nil {
-		return nil, err
-	}
-	return projectsUnder(ws, dir)
-}
-
-// projectsUnder lists the projects of workspace ws whose folder is dir or inside it.
-func projectsUnder(ws, dir string) ([]string, error) {
-	_, fs, err := workspaceFolders(ws)
+	fs, err := folders(ws)
 	if err != nil {
 		return nil, err
 	}
+	if !slices.Contains(fs, dir) {
+		if !dryRun {
+			if err := register(ws, dir); err != nil {
+				return nil, err
+			}
+		}
+		fs = append(fs, dir)
+	}
+	return projectsUnder(fs, dir)
+}
+
+// projectsUnder lists the projects under folders fs whose folder is dir or inside it.
+func projectsUnder(fs []string, dir string) ([]string, error) {
 	ps, err := projectsIn(fs)
 	var names []string
 	for _, p := range ps {
@@ -110,30 +123,39 @@ func projectsUnder(ws, dir string) ([]string, error) {
 
 // IndexProject indexes the project in dir with its modules into ws, first registering dir's parent folder if no folder of ws contains dir.
 func IndexProject(ctx context.Context, dir, ws string, progress func(IndexResult)) error {
-	if ws == "" {
-		ws = DefaultWorkspace
-	}
-	dir, err := filepath.Abs(dir)
+	ws = cmp.Or(ws, DefaultWorkspace)
+	reg, names, err := PlanIndex(dir, ws)
 	if err != nil {
 		return err
 	}
-	if langOf(dir) == "" {
-		return fmt.Errorf("%s is not a project: it has no go.mod, pom.xml, build.gradle(.kts) or settings.gradle(.kts)", dir)
-	}
-	fs, err := folders(ws)
-	if err != nil {
-		return err
-	}
-	if deepest(fs, dir) == "" {
-		if err := register(ws, filepath.Dir(dir)); err != nil {
+	if reg != "" {
+		if err := register(ws, reg); err != nil {
 			return err
 		}
 	}
-	names, err := projectsUnder(ws, dir)
-	if err != nil {
-		return err
-	}
 	return Index(ctx, IndexOptions{Workspace: ws, Names: names, Progress: progress})
+}
+
+// PlanIndex is IndexProject without writing: the folder it would register in ws ("" for none) and the projects it would index.
+func PlanIndex(dir, ws string) (folder string, names []string, err error) {
+	ws = cmp.Or(ws, DefaultWorkspace)
+	dir, err = filepath.Abs(dir)
+	if err != nil {
+		return "", nil, err
+	}
+	if langOf(dir) == "" {
+		return "", nil, fmt.Errorf("%s is %w: it has no go.mod, pom.xml, build.gradle(.kts) or settings.gradle(.kts)", dir, ErrNotProject)
+	}
+	fs, err := folders(ws)
+	if err != nil {
+		return "", nil, err
+	}
+	if deepest(fs, dir) == "" {
+		folder = filepath.Dir(dir)
+		fs = append(fs, folder)
+	}
+	names, err = projectsUnder(fs, dir)
+	return folder, names, err
 }
 
 func (st loadStats) String() string {

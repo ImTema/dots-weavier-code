@@ -36,7 +36,10 @@ A workspace is a name for a set of projects. `index` uses the `default` workspac
 dotweavier init ~/code              # add ~/code to the default workspace; its projects are detected, not indexed
 dotweavier index ~/code/orders      # index one project and its modules into the default workspace
 dotweavier index ~/work/billing --workspace work   # into the workspace "work", created on first use
+dotweavier init ~/code --index      # add ~/code and index every project detected under it
 ```
+
+`--dry-run` on `init` or `index` prints the folder it would add and the projects it would detect or index, and writes nothing. Given a folder that holds projects but is not one, `index` fails and hints at `init DIR --index`.
 
 If no folder of the workspace contains the project, `index` adds the project's parent folder to the workspace. A project has one index, shared by every workspace that contains it. Re-run `index` after the source changes, or press Sync in the overview.
 

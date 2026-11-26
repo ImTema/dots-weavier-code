@@ -117,3 +117,27 @@ func TestRegistryMigratesFolderWorkspaces(t *testing.T) {
 	fs, _ := folders(DefaultWorkspace)
 	assert.Equal(t, []string{"/w/one", "/w/two"}, fs)
 }
+
+// A dry run reports what init and index would do and writes nothing.
+func TestPlanWritesNothing(t *testing.T) {
+	isolate(t)
+	ws := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(ws, "svc/a"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(ws, "svc/a/go.mod"), []byte("module a\n\ngo 1.22\n"), 0o644))
+
+	_, _, err := PlanIndex(filepath.Join(ws, "svc"), "")
+	assert.ErrorIs(t, err, ErrNotProject)
+	folder, names, err := PlanIndex(filepath.Join(ws, "svc/a"), "")
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(ws, "svc"), folder)
+	assert.Equal(t, []string{"a"}, names)
+	names, err = PlanInit(ws, "")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"svc/a"}, names)
+
+	all, err := Workspaces()
+	require.NoError(t, err)
+	assert.Empty(t, all, "want no workspace registered")
+	files, _ := filepath.Glob(filepath.Join(mustStoresDir(t), "*.db"))
+	assert.Empty(t, files, "want no index written")
+}

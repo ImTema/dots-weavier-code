@@ -1,8 +1,8 @@
 // The dotweavier CLI: parses flags, calls internal/domain and renders its
 // results as text or as a self-contained HTML page.
 //
-//	dotweavier init [DIR] [--workspace NAME]
-//	dotweavier index [DIR] [--workspace NAME]
+//	dotweavier init [DIR] [--workspace NAME] [--index] [--dry-run]
+//	dotweavier index [DIR] [--workspace NAME] [--dry-run]
 //	dotweavier trace path -A <addr> -B <addr> [--workspace NAME] [--max-paths 10] [--include-tests]
 //	dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--only origin|uses] [--depth N] [--include-tests] [--format text|ui|html] [--verbose]
 //
@@ -14,6 +14,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -31,8 +32,8 @@ import (
 )
 
 const usageText = `usage:
-  dotweavier init [DIR] [--workspace NAME]    add DIR (default: current folder) to workspace NAME (default: default); its projects are detected, not indexed
-  dotweavier index [DIR] [--workspace NAME]   index the project in DIR (default: current folder) and its modules into workspace NAME (default: default)
+  dotweavier init [DIR] [--workspace NAME] [--index] [--dry-run]   add DIR (default: current folder) to workspace NAME (default: default); its projects are detected, and indexed with --index
+  dotweavier index [DIR] [--workspace NAME] [--dry-run]   index the project in DIR (default: current folder) and its modules into workspace NAME (default: default)
   dotweavier overview [--addr ADDR] [--workspace NAME] [--max-nodes N]   serve the overview and trace pages (default ADDR 127.0.0.1:7357)
   dotweavier trace path -A <addr> -B <addr> [--workspace NAME] [--max-paths N] [--include-tests] [--format text|ui|html] [--verbose]
   dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--project DIR] [--only origin|uses] [--depth N] [--include-tests] [--max-projects N] [--follow N] [--format text|ui|html] [--verbose]
@@ -58,14 +59,14 @@ func main() {
 		return
 	}
 	start := time.Now()
-	// Ctrl-C cancels index, path trace and field trace; index and field trace write indexes whole or not at all.
+	// Ctrl-C cancels init --index, index, path trace and field trace; index and field trace write indexes whole or not at all.
 	cancellable := func() context.Context {
 		ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
 		return ctx
 	}
 	switch os.Args[1] {
 	case "init":
-		runInit(os.Args[2:])
+		runInit(cancellable(), os.Args[2:])
 	case "index":
 		runIndex(cancellable(), os.Args[2:])
 	case "overview":
@@ -107,9 +108,8 @@ func warn(ws []string) {
 	}
 }
 
-// dirAndWorkspace parses init's and index's optional folder and --workspace, in either order.
-func dirAndWorkspace(cmd string, args []string) (dir, ws string) {
-	fl := flag.NewFlagSet(cmd, flag.ExitOnError)
+// dirAndWorkspace parses fl's flags plus --workspace and an optional folder, in any order.
+func dirAndWorkspace(fl *flag.FlagSet, args []string) (dir, ws string) {
 	wsFlag := fl.String("workspace", domain.DefaultWorkspace, "workspace name; created if it does not exist")
 	var pos []string
 	for {
@@ -130,27 +130,76 @@ func dirAndWorkspace(cmd string, args []string) (dir, ws string) {
 	return "", ""
 }
 
-func runInit(args []string) {
-	dir, ws := dirAndWorkspace("init", args)
-	names, err := domain.InitWorkspace(dir, ws)
+func runInit(ctx context.Context, args []string) {
+	fl := flag.NewFlagSet("init", flag.ExitOnError)
+	dryRun := fl.Bool("dry-run", false, "list the projects that would be detected; write nothing")
+	index := fl.Bool("index", false, "also index every detected project")
+	dir, ws := dirAndWorkspace(fl, args)
+	initWorkspace := domain.InitWorkspace
+	if *dryRun {
+		initWorkspace = domain.PlanInit
+	}
+	names, err := initWorkspace(dir, ws)
 	must(err)
-	fmt.Printf("workspace %s: %d projects detected; index each with: dotweavier index DIR --workspace %s\n", ws, len(names), ws)
+	switch {
+	case *dryRun && *index:
+		fmt.Printf("dry run: workspace %s: %d projects would be detected and indexed\n", ws, len(names))
+	case *dryRun:
+		fmt.Printf("dry run: workspace %s: %d projects would be detected\n", ws, len(names))
+	case *index:
+		fmt.Printf("workspace %s: %d projects detected; indexing them\n", ws, len(names))
+	default:
+		fmt.Printf("workspace %s: %d projects detected; index each with: dotweavier index DIR --workspace %s\n", ws, len(names), ws)
+	}
 	for _, n := range names {
 		fmt.Println("  " + n)
+	}
+	if *index && !*dryRun && len(names) > 0 {
+		must(domain.Index(ctx, domain.IndexOptions{Workspace: ws, Names: names, Progress: printIndexed}))
 	}
 }
 
 func runIndex(ctx context.Context, args []string) {
-	dir, ws := dirAndWorkspace("index", args)
-	must(domain.IndexProject(ctx, dir, ws, func(r domain.IndexResult) {
-		warn(r.Warnings)
-		if r.Err != nil {
-			fmt.Fprintf(os.Stderr, "index %s: %v\n", r.Project, r.Err)
-			return
+	fl := flag.NewFlagSet("index", flag.ExitOnError)
+	dryRun := fl.Bool("dry-run", false, "list the projects that would be indexed; write nothing")
+	dir, ws := dirAndWorkspace(fl, args)
+	if *dryRun {
+		folder, names, err := domain.PlanIndex(dir, ws)
+		mustIndex(err, dir, ws)
+		if folder != "" {
+			fmt.Printf("dry run: would add %s to workspace %s\n", folder, ws)
 		}
-		fmt.Fprintf(os.Stderr, "indexed %-28s %s\n", r.Project, r.Stats)
-	}))
+		for _, n := range names {
+			fmt.Printf("dry run: would index %s\n", n)
+		}
+		return
+	}
+	mustIndex(domain.IndexProject(ctx, dir, ws, printIndexed), dir, ws)
 	fmt.Fprintf(os.Stderr, "workspace %s\n", ws)
+}
+
+// mustIndex is must, plus a hint to init a folder of projects that index was given instead of one project.
+func mustIndex(err error, dir, ws string) {
+	if fi, statErr := os.Stat(dir); errors.Is(err, domain.ErrNotProject) && statErr == nil && fi.IsDir() {
+		wsArg := ""
+		if ws != domain.DefaultWorkspace {
+			wsArg = " --workspace " + ws
+		}
+		fmt.Fprintln(os.Stderr, "dotweavier:", err)
+		fmt.Fprintf(os.Stderr, "hint: to index every project under it, run: dotweavier init %s --index%s\n", dir, wsArg)
+		os.Exit(1)
+	}
+	must(err)
+}
+
+// printIndexed reports one project's indexing to stderr.
+func printIndexed(r domain.IndexResult) {
+	warn(r.Warnings)
+	if r.Err != nil {
+		fmt.Fprintf(os.Stderr, "index %s: %v\n", r.Project, r.Err)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "indexed %-28s %s\n", r.Project, r.Stats)
 }
 
 func runTrace(ctx context.Context, args []string) {

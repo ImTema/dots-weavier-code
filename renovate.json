@@ -1,0 +1,6 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "ignorePaths": ["**/testdata/**", "**/node_modules/**"],
+  "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"]
+}

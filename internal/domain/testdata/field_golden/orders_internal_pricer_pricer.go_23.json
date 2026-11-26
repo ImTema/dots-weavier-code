@@ -454,7 +454,16 @@
                                "before": "}",
                                "after": "if resp.StatusCode != http.StatusOK {",
                                "type": "*io.ReadCloser",
-                               "fn": "Client.Rate"
+                               "fn": "Client.Rate",
+                               "hops": [
+                                {
+                                 "kind": "http",
+                                 "method": "GET /rates",
+                                 "project": "kotlin/shipping",
+                                 "fn": "Application.shippingModule",
+                                 "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
+                                }
+                               ]
                               },
                               {
                                "kind": "container",
@@ -463,7 +472,16 @@
                                "before": "defer resp.Body.Close()",
                                "after": "return \"\", 0, fmt.Errorf(\"get rate: unexpected status %s\", resp.Status)",
                                "type": "*int",
-                               "fn": "Client.Rate"
+                               "fn": "Client.Rate",
+                               "hops": [
+                                {
+                                 "kind": "http",
+                                 "method": "GET /rates",
+                                 "project": "kotlin/shipping",
+                                 "fn": "Application.shippingModule",
+                                 "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
+                                }
+                               ]
                               },
                               {
                                "kind": "container",
@@ -472,7 +490,16 @@
                                "before": "if resp.StatusCode != http.StatusOK {",
                                "after": "}",
                                "type": "*string",
-                               "fn": "Client.Rate"
+                               "fn": "Client.Rate",
+                               "hops": [
+                                {
+                                 "kind": "http",
+                                 "method": "GET /rates",
+                                 "project": "kotlin/shipping",
+                                 "fn": "Application.shippingModule",
+                                 "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
+                                }
+                               ]
                               },
                               {
                                "kind": "container",
@@ -481,13 +508,58 @@
                                "before": "var r rate",
                                "after": "return \"\", 0, fmt.Errorf(\"decode rate: %w\", err)",
                                "type": "*io.ReadCloser",
-                               "fn": "Client.Rate"
+                               "fn": "Client.Rate",
+                               "hops": [
+                                {
+                                 "kind": "http",
+                                 "method": "GET /rates",
+                                 "project": "kotlin/shipping",
+                                 "fn": "Application.shippingModule",
+                                 "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
+                                }
+                               ]
+                              }
+                             ],
+                             "hops": [
+                              {
+                               "kind": "http",
+                               "method": "GET /rates",
+                               "project": "kotlin/shipping",
+                               "fn": "Application.shippingModule",
+                               "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
                               }
                              ]
                             }
+                           ],
+                           "hops": [
+                            {
+                             "kind": "http",
+                             "method": "GET /rates",
+                             "project": "kotlin/shipping",
+                             "fn": "Application.shippingModule",
+                             "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
+                            }
                            ]
                           }
+                         ],
+                         "hops": [
+                          {
+                           "kind": "http",
+                           "method": "GET /rates",
+                           "project": "kotlin/shipping",
+                           "fn": "Application.shippingModule",
+                           "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
+                          }
                          ]
+                        }
+                       ],
+                       "hops": [
+                        {
+                         "kind": "http",
+                         "method": "GET /rates",
+                         "project": "kotlin/shipping",
+                         "fn": "Application.shippingModule",
+                         "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
                         }
                        ]
                       }
@@ -1246,7 +1318,16 @@
                         ],
                         "Sure": 1,
                         "Iface": 1
-                       }
+                       },
+                       "hops": [
+                        {
+                         "kind": "http",
+                         "method": "GET /rates",
+                         "project": "kotlin/shipping",
+                         "fn": "Application.shippingModule",
+                         "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
+                        }
+                       ]
                       },
                       {
                        "kind": "container",
@@ -1290,7 +1371,16 @@
                         ],
                         "Sure": 1,
                         "Iface": 1
-                       }
+                       },
+                       "hops": [
+                        {
+                         "kind": "http",
+                         "method": "GET /rates",
+                         "project": "kotlin/shipping",
+                         "fn": "Application.shippingModule",
+                         "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
+                        }
+                       ]
                       },
                       {
                        "kind": "container",
@@ -1335,7 +1425,16 @@
                         ],
                         "Sure": 1,
                         "Iface": 1
-                       }
+                       },
+                       "hops": [
+                        {
+                         "kind": "http",
+                         "method": "GET /rates",
+                         "project": "kotlin/shipping",
+                         "fn": "Application.shippingModule",
+                         "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
+                        }
+                       ]
                       },
                       {
                        "kind": "container",
@@ -1380,7 +1479,16 @@
                         ],
                         "Sure": 1,
                         "Iface": 1
-                       }
+                       },
+                       "hops": [
+                        {
+                         "kind": "http",
+                         "method": "GET /rates",
+                         "project": "kotlin/shipping",
+                         "fn": "Application.shippingModule",
+                         "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
+                        }
+                       ]
                       }
                      ],
                      "call": {
@@ -1418,7 +1526,16 @@
                       ],
                       "Sure": 1,
                       "Iface": 1
-                     }
+                     },
+                     "hops": [
+                      {
+                       "kind": "http",
+                       "method": "GET /rates",
+                       "project": "kotlin/shipping",
+                       "fn": "Application.shippingModule",
+                       "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
+                      }
+                     ]
                     }
                    ],
                    "call": {
@@ -1456,7 +1573,16 @@
                     ],
                     "Sure": 1,
                     "Iface": 1
-                   }
+                   },
+                   "hops": [
+                    {
+                     "kind": "http",
+                     "method": "GET /rates",
+                     "project": "kotlin/shipping",
+                     "fn": "Application.shippingModule",
+                     "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
+                    }
+                   ]
                   }
                  ],
                  "call": {
@@ -1494,7 +1620,16 @@
                   ],
                   "Sure": 1,
                   "Iface": 1
-                 }
+                 },
+                 "hops": [
+                  {
+                   "kind": "http",
+                   "method": "GET /rates",
+                   "project": "kotlin/shipping",
+                   "fn": "Application.shippingModule",
+                   "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
+                  }
+                 ]
                 }
                ],
                "call": {
@@ -1532,7 +1667,16 @@
                 ],
                 "Sure": 1,
                 "Iface": 1
-               }
+               },
+               "hops": [
+                {
+                 "kind": "http",
+                 "method": "GET /rates",
+                 "project": "kotlin/shipping",
+                 "fn": "Application.shippingModule",
+                 "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
+                }
+               ]
               }
              ],
              "call": {
@@ -1570,7 +1714,16 @@
               ],
               "Sure": 1,
               "Iface": 1
-             }
+             },
+             "hops": [
+              {
+               "kind": "http",
+               "method": "GET /rates",
+               "project": "kotlin/shipping",
+               "fn": "Application.shippingModule",
+               "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
+              }
+             ]
             }
            ],
            "call": {
@@ -1608,7 +1761,16 @@
             ],
             "Sure": 1,
             "Iface": 1
-           }
+           },
+           "hops": [
+            {
+             "kind": "http",
+             "method": "GET /rates",
+             "project": "kotlin/shipping",
+             "fn": "Application.shippingModule",
+             "addr": "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:31"
+            }
+           ]
           }
          ],
          "call": {

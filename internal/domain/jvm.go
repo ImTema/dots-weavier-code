@@ -552,6 +552,7 @@ func (jp *jvmProject) calls(fn *jvmFunc) {
 					jp.linkMember(fn, n, name, "<init>", arity)
 				} else {
 					jp.linkLocal(fn, n, name, arity)
+					jp.ktorRoute(fn, n, name, suffix)
 				}
 			case callee.Type() == "navigation_expression":
 				if sfx := childOf(callee, "navigation_suffix"); sfx != nil {

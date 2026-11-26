@@ -12,6 +12,7 @@ edge golang/fulfillment:internal/pricing/client_test.go:TestTax -lib example.com
 edge golang/fulfillment:internal/pricing/client_test.go:fakePricing.Quote -lib (*example.com/samples/pricing/api/pricing/v1.Item).GetUnitCents-> golang/pricing:api/pricing/v1/pricing.pb.go:Item.GetUnitCents
 edge golang/fulfillment:internal/pricing/client_test.go:fakePricing.Quote -lib (*example.com/samples/pricing/api/pricing/v1.QuoteRequest).GetItems-> golang/pricing:api/pricing/v1/pricing.pb.go:QuoteRequest.GetItems
 edge golang/fulfillment:internal/pricing/client_test.go:fakePricing.Quote -lib (*example.com/samples/pricing/api/pricing/v1.QuoteRequest).GetRegion-> golang/pricing:api/pricing/v1/pricing.pb.go:QuoteRequest.GetRegion
+edge golang/fulfillment:internal/shipping/client.go:Client.Rate -http GET /rates-> kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:Application.shippingModule
 edge golang/orders:cmd/orders/main.go:run -lib example.com/samples/fulfillment/api/fulfillment/v1.NewFulfillmentServiceClient-> golang/fulfillment:api/fulfillment/v1/fulfillment_grpc.pb.go:NewFulfillmentServiceClient
 edge golang/orders:cmd/orders/main.go:run -lib example.com/samples/pricing/api/pricing/v1.NewPricingServiceClient-> golang/pricing:api/pricing/v1/pricing_grpc.pb.go:NewPricingServiceClient
 edge golang/orders:internal/events/publisher.go:Publisher.OrderPlaced -pubsub topic order-placed-> golang/fulfillment:internal/events/subscriber.go:Subscriber.Run$1
@@ -33,4 +34,5 @@ edge golang/pricing:api/pricing/v1/pricing_grpc.pb.go:pricingServiceClient.Quote
 edge golang/pricing:internal/customers/client.go:Client.Tier -http GET /customers/{}-> golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer
 edge golang/pricing:internal/events/subscriber.go:Subscriber.Handle -lib (*example.com/samples/orders/api/events/v1.OrderPlaced).GetCustomerId-> golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetCustomerId
 edge golang/pricing:internal/events/subscriber.go:Subscriber.Handle -lib (*example.com/samples/orders/api/events/v1.OrderPlaced).GetOrderId-> golang/orders:api/events/v1/events.pb.go:OrderPlaced.GetOrderId
+edge golang/pricing:internal/shipping/client.go:Client.Rate -http GET /rates-> kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:Application.shippingModule
 edge kotlin/shipping:src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:OrdersCustomerDirectory.find -http GET /customers/{}-> golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer

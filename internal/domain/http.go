@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"go/types"
 	"regexp"
+	"slices"
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
@@ -84,16 +85,48 @@ var ktorVerbs = map[string]string{"get": "GET", "post": "POST", "put": "PUT", "d
 // ktorRequest records a Ktor client request (client.get("…/customers/$id")) as an HTTP call on its path alone.
 func (jp *jvmProject) ktorRequest(fn *jvmFunc, recv, name string, suffix *sitter.Node) {
 	verb, ok := ktorVerbs[name]
-	if !ok || recv != "HttpClient" || suffix == nil {
+	if !ok || recv != "HttpClient" {
 		return
+	}
+	if key := httpRoute(verb, ktorPath(fn, suffix)); key != "" {
+		jp.g.Calls = append(jp.g.Calls, grpcCall{fn.id, key, "HttpClient." + name})
+	}
+}
+
+// ktorRoute registers a Ktor server route (get("/rates") { … }) as served by fn, the function its lambda is folded into.
+// ponytail: route("/prefix") { get(...) } nesting is not read; add it when a target nests routes.
+func (jp *jvmProject) ktorRoute(fn *jvmFunc, call *sitter.Node, name string, suffix *sitter.Node) {
+	verb, ok := ktorVerbs[name]
+	if !ok || suffix == nil {
+		return
+	}
+	// The trailing lambda sits on an outer call: (call_expression (call_expression get (args)) (call_suffix lambda)).
+	lambda := childOf(suffix, "annotated_lambda")
+	if p := call.Parent(); lambda == nil && p != nil && p.Type() == "call_expression" {
+		if ps := childOf(p, "call_suffix"); ps != nil {
+			lambda = childOf(ps, "annotated_lambda")
+		}
+	}
+	if lambda == nil {
+		return
+	}
+	if key := httpRoute(verb, ktorPath(fn, suffix)); key != "" && !slices.Contains(jp.g.Impls[key], fn.id) {
+		jp.g.Impls[key] = append(jp.g.Impls[key], fn.id)
+	}
+}
+
+// ktorPath is the path of a call's first argument when it is a string literal, interpolations as {} and a leading base URL dropped; "" otherwise.
+func ktorPath(fn *jvmFunc, suffix *sitter.Node) string {
+	if suffix == nil {
+		return ""
 	}
 	va := childOf(suffix, "value_arguments")
 	if va == nil || va.NamedChildCount() == 0 {
-		return
+		return ""
 	}
 	lit := va.NamedChild(0).NamedChild(0)
 	if lit == nil || lit.Type() != "string_literal" {
-		return
+		return ""
 	}
 	var b strings.Builder
 	for _, part := range children(lit) {
@@ -112,9 +145,7 @@ func (jp *jvmProject) ktorRequest(fn *jvmFunc, recv, name string, suffix *sitter
 	if q := strings.IndexAny(url, "?#"); q >= 0 {
 		url = url[:q]
 	}
-	if key := httpRoute(verb, url); key != "" {
-		jp.g.Calls = append(jp.g.Calls, grpcCall{fn.id, key, "HttpClient." + name})
-	}
+	return url
 }
 
 // goRequest is the route key of a net/http client request (http.NewRequest, http.Get, Client.Post, ...) with a constant method, or "".

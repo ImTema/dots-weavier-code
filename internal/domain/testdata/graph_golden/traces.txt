@@ -42,6 +42,11 @@ kotlin/shipping:src/main/kotlin/com/example/shipping/rates/ShippingRates.kt:Ship
 == golang/pricing::Server.Quote -> golang/orders::Handler.getCustomer tests=false
 A=golang/pricing:internal/server/server.go:Server.Quote:43 B=golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer:61 exhausted=true
 golang/pricing:internal/server/server.go:Server.Quote -iface:sure-> golang/pricing:internal/customers/client.go:Client.Tier -http GET /customers/{}-> golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer  (1/1 sure)
+golang/pricing:internal/server/server.go:Server.Quote -iface:sure-> golang/pricing:internal/shipping/client.go:Client.Rate -http GET /rates-> kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:Application.shippingModule -call-> kotlin/shipping:src/main/kotlin/com/example/shipping/rates/ShippingRates.kt:ShippingRates.quote -iface:guess-> kotlin/shipping:src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:OrdersCustomerDirectory.find -http GET /customers/{}-> golang/orders:internal/httpapi/httpapi.go:Handler.getCustomer  (1/2 sure)
+
+== golang/pricing::Server.Quote -> kotlin/shipping::ShippingRates.quote tests=false
+A=golang/pricing:internal/server/server.go:Server.Quote:43 B=kotlin/shipping:src/main/kotlin/com/example/shipping/rates/ShippingRates.kt:ShippingRates.quote:9 exhausted=true
+golang/pricing:internal/server/server.go:Server.Quote -iface:sure-> golang/pricing:internal/shipping/client.go:Client.Rate -http GET /rates-> kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:Application.shippingModule -call-> kotlin/shipping:src/main/kotlin/com/example/shipping/rates/ShippingRates.kt:ShippingRates.quote  (1/1 sure)
 
 == golang/orders::Handler.placeOrder -> golang/pricing::TierRule.Discount tests=true
 A=golang/orders:internal/httpapi/httpapi.go:Handler.placeOrder:38 B=golang/pricing:internal/discount/discount.go:TierRule.Discount:13 exhausted=true

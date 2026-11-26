@@ -6,6 +6,7 @@ edge kotlin/shipping:src/main/kotlin/com/example/shipping/rates/ShippingRates.kt
 edge kotlin/shipping:src/test/kotlin/com/example/shipping/http/RoutesTest.kt:RoutesTest.rates -call -> kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:Application.shippingModule
 edge kotlin/shipping:src/test/kotlin/com/example/shipping/rates/RateCalculatorTest.kt:RateCalculatorTest.rates -call -> kotlin/shipping:src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:RateCalculator.cents
 edge kotlin/shipping:src/test/kotlin/com/example/shipping/rates/RateCalculatorTest.kt:RateCalculatorTest.rejectsNonPositiveUnits -call -> kotlin/shipping:src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:RateCalculator.cents
+impl http GET /rates <- kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:Application.shippingModule
 node kotlin/shipping:src/main/kotlin/com/example/shipping/Application.kt:main 16-36 test=false
 node kotlin/shipping:src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:OrdersCustomerDirectory.find 26-38 test=false
 node kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:Application.shippingModule 31-54 test=false

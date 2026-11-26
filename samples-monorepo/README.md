@@ -146,10 +146,10 @@ dotweavier trace path -A golang/orders::Service.Place -B java/inventory::StockLe
 The gRPC call into `inventory` reaches the Java handler: the JVM extractor
 reads `inventory.proto` and finds `InventoryGrpcService` by its supertype.
 HTTP hops join a client request to the route serving its method and path.
-Ktor clients, Go `net/http` clients and Go `net/http` routes are read so far,
-so `GET /customers/{id}` from `shipping` and from `pricing` reaches `orders`,
-while `GET /rates` (Ktor routes are not read) and the calls from `inventory`
-still end at their clients:
+Ktor and Go `net/http` clients and routes are read so far, so
+`GET /customers/{id}` from `shipping` and from `pricing` reaches `orders`,
+`GET /rates` from `pricing` and `fulfillment` reaches `shipping`, while the
+calls from `inventory` still end at their clients:
 
 ```sh
 dotweavier trace path -A kotlin/shipping::ShippingRates.quote -B golang/orders::Handler.getCustomer
@@ -158,6 +158,9 @@ dotweavier trace path -A kotlin/shipping::ShippingRates.quote -B golang/orders::
 dotweavier trace path -A golang/pricing::Server.Quote -B golang/orders::Handler.getCustomer
 # 1. Server.Quote -iface:sure-> Client.Tier
 #    -http GET /customers/{}-> Handler.getCustomer  (1/1 sure)
+dotweavier trace path -A golang/pricing::Server.Quote -B kotlin/shipping::ShippingRates.quote
+# 1. Server.Quote -iface:sure-> Client.Rate
+#    -http GET /rates-> Application.shippingModule -call-> ShippingRates.quote  (1/1 sure)
 ```
 
 dotweavier does not link Pub/Sub yet either: a trace from

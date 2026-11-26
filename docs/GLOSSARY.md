@@ -7,7 +7,7 @@ dotweavier is a CLI that indexes many code projects into one typed graph and tra
 ### Sources
 
 **Workspace**:
-A name that keeps a set of projects apart from others, by the user's preference. A workspace has one or more registered folders, and its projects are the ones detected under them. `index` uses the `default` workspace unless `--workspace NAME` is given, and creates the workspace if it does not exist. A project's name is its path relative to the deepest folder of the workspace that contains it, so `golang/orders` for a workspace with the folder `samples`.
+A name that keeps a set of projects apart from others, by the user's preference. A workspace has one or more registered folders, and its projects are the ones detected under them. `index` uses the `default` workspace unless `--workspace NAME` is given, and creates the workspace if it does not exist. A project's name is its path relative to the deepest folder of the workspace that contains it, so `golang/orders` for a workspace with the folder `samples-monorepo`.
 _Avoid_: project folder, root, monorepo
 
 **Project**:

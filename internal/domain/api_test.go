@@ -131,7 +131,7 @@ func TestFieldTraceReturnsWarnings(t *testing.T) {
 // Projects importing a reached shared package past MaxProjects are named in a warning instead of loaded.
 func TestFieldTraceWarnsAboutProjectsNotLoaded(t *testing.T) {
 	isolate(t)
-	r, err := TraceField(t.Context(), FieldQuery{Dir: "../../samples/golang", MaxProjects: 1}, "orders:internal/pricer/pricer.go:23")
+	r, err := TraceField(t.Context(), FieldQuery{Dir: "../../samples-monorepo/golang", MaxProjects: 1}, "orders:internal/pricer/pricer.go:23")
 	require.NoError(t, err)
 	assert.True(t, hasPrefix(r.Warnings, "not loaded (--max-projects 1): "), "warnings %q", r.Warnings)
 }

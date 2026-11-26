@@ -87,7 +87,7 @@ topic order-placed, subscription pricing-order-placed   [pricing]
 ## Layout
 
 ```
-samples/golang/
+samples-monorepo/golang/
 ├── orders/
 │   ├── api/                  HTTP contract, imported by pricing
 │   ├── api/events/v1/        event contract: events.proto, generated code, topic name
@@ -153,10 +153,10 @@ Orders needs Java inventory, pricing needs Kotlin shipping, and both need
 Pub/Sub, so start everything as `../README.md` shows. The Go ones:
 
 ```sh
-cd samples/golang/tools/pubsub-emulator && go run .
+cd samples-monorepo/golang/tools/pubsub-emulator && go run .
 export PUBSUB_EMULATOR_HOST=localhost:8085   # in each shell below
-cd samples/golang/pricing && go run ./cmd/pricing
-cd samples/golang/orders && go run ./cmd/orders
+cd samples-monorepo/golang/pricing && go run ./cmd/pricing
+cd samples-monorepo/golang/orders && go run ./cmd/orders
 ```
 
 Orders creates the topic at startup. Pricing creates its subscription and, if
@@ -199,8 +199,8 @@ Both services stop cleanly on Ctrl-C or SIGTERM.
 ## Testing
 
 ```sh
-cd samples/golang/orders && go test ./...
-cd samples/golang/pricing && go test ./...
+cd samples-monorepo/golang/orders && go test ./...
+cd samples-monorepo/golang/pricing && go test ./...
 ```
 
 The tests are table-driven and need no running services: `order.Place` with a
@@ -216,7 +216,7 @@ and leaves them out of traces unless `--include-tests` is given.
 From the repository root:
 
 ```sh
-dotweavier index --workspace samples/golang
+dotweavier index --workspace samples-monorepo/golang
 
 # Across projects: gRPC hop plus two sure interface hops.
 dotweavier trace path -A orders::Handler.placeOrder -B pricing::TierRule.Discount
@@ -261,9 +261,9 @@ proto, put `buf`, `protoc-gen-go` and `protoc-gen-go-grpc` on `PATH` and run
 `buf generate`:
 
 ```sh
-cd samples/golang/pricing && buf generate   # pricing.proto
-cd samples/golang/orders && buf generate    # api/events/v1/events.proto
-cd samples/golang/orders && buf generate --template buf.gen.inventory.yaml   # ../java/inventory/.../inventory.proto
+cd samples-monorepo/golang/pricing && buf generate   # pricing.proto
+cd samples-monorepo/golang/orders && buf generate    # api/events/v1/events.proto
+cd samples-monorepo/golang/orders && buf generate --template buf.gen.inventory.yaml   # ../java/inventory/.../inventory.proto
 ```
 
 ## Known issue

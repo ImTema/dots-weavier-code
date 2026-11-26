@@ -12,11 +12,11 @@ import (
 // project, where projects carry the names their indexes have.
 func TestTraceFieldFromProjectFolderFindsHops(t *testing.T) {
 	isolate(t)
-	_, err := InitWorkspace("../../samples", "")
+	_, err := InitWorkspace("../../samples-monorepo", "")
 	require.NoError(t, err)
 	require.NoError(t, Index(t.Context(), IndexOptions{Names: []string{"golang/orders", "golang/pricing"}}))
 
-	r, err := TraceField(t.Context(), FieldQuery{Dir: "../../samples/golang/orders"}, "internal/pricer/pricer.go:23")
+	r, err := TraceField(t.Context(), FieldQuery{Dir: "../../samples-monorepo/golang/orders"}, "internal/pricer/pricer.go:23")
 	require.NoError(t, err)
 	assert.Equal(t, "golang/orders:internal/pricer/pricer.go:23", r.Addr, "want the address as the workspace folder names it")
 	assert.Contains(t, hopsIn(r.Uses), "grpc /pricing.v1.PricingService/Quote -> golang/pricing", "warnings %q", r.Warnings)

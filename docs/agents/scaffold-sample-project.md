@@ -1,11 +1,11 @@
 # Scaffolding a sample project
 
-`samples/` holds small services in several languages that call each other. They
+`samples-monorepo/` holds small services in several languages that call each other. They
 are a **known target** for dotweavier: every hop is documented, so a trace can
 be checked against what the code really does. A new sample joins that
 domain as one more service in the language the user picks.
 
-`samples/README.md` is the single source of truth for the current services,
+`samples-monorepo/README.md` is the single source of truth for the current services,
 ports and hops. Read it first; this file covers only what it does not.
 
 ## Steps
@@ -14,7 +14,7 @@ ports and hops. Read it first; this file covers only what it does not.
 
 Take the language (and framework, if the user names one) from the user's
 request; if the request names none, ask. Then pick a domain role that fits the
-order flow in `samples/README.md` and list the hops the new service adds.
+order flow in `samples-monorepo/README.md` and list the hops the new service adds.
 
 Done when you have written down, for every hop: protocol (gRPC, HTTP or Pub/Sub),
 caller symbol, callee symbol, and which project owns the contract. The list
@@ -44,7 +44,7 @@ Done when every hop from step 1 points at a contract file that exists.
 
 ### 3. Scaffold the service
 
-Under `samples/<language>/<service>/`, with the layout the other samples use:
+Under `samples-monorepo/<language>/<service>/`, with the layout the other samples use:
 
 - one entry point that reads configuration from flags or environment
   variables with working local defaults, sets timeouts on every client and
@@ -81,8 +81,8 @@ customer tier and one request per new failure mode. Check the numbers
 against the rules in the READMEs. Then index and trace:
 
 ```sh
-dotweavier init samples
-dotweavier index samples/<language>/<service>   # once per service
+dotweavier init samples-monorepo
+dotweavier index samples-monorepo/<language>/<service>   # once per service
 dotweavier trace path -A <caller> -B <callee>
 ```
 
@@ -95,7 +95,7 @@ every new Go interface hop shows up in a trace with the expected `sure` or
 
 ### 6. Update the docs
 
-Update `samples/README.md` (services table, edge list, hop table, run and test
+Update `samples-monorepo/README.md` (services table, edge list, hop table, run and test
 commands, response codes) and the README of every project you changed. Write
 the expected trace output into the READMEs only as it was printed in step 5.
 
@@ -111,7 +111,7 @@ Done when each README command has been run and printed what the README says.
   `context.Context` is a guess (`notify.Notifier` is the sample of that).
 - **Generated Go code is committed.** A Go consumer of a non-Go proto keeps a
   `buf.gen.yaml` whose `inputs` points at the owner's proto directory
-  (`samples/golang/orders/buf.gen.yaml`). Generate with `buf`,
+  (`samples-monorepo/golang/orders/buf.gen.yaml`). Generate with `buf`,
   `protoc-gen-go` and `protoc-gen-go-grpc` on `PATH`; `go install` all three
   into a temporary `GOBIN` if they are missing.
 - **JVM projects build for JDK 25**: Java with Maven (`maven.compiler.release`),
@@ -121,8 +121,8 @@ Done when each README command has been run and printed what the README says.
 - **Quarkus gRPC** runs on its own port (`quarkus.grpc.server.use-separate-server=true`),
   and Quarkus also opens an HTTP port; inventory takes `8092`. A gRPC handler
   that makes a blocking call is annotated `@Blocking`.
-- **Pub/Sub runs locally** against `samples/golang/tools/pubsub-emulator`
+- **Pub/Sub runs locally** against `samples-monorepo/golang/tools/pubsub-emulator`
   through `PUBSUB_EMULATOR_HOST=localhost:8085`, which the Go client honours.
   For a client in another language, check its emulator docs; some need the
   endpoint set in code. Go tests use `pstest` in process.
-- **Ports.** Take the next free port and record it in `samples/README.md`.
+- **Ports.** Take the next free port and record it in `samples-monorepo/README.md`.

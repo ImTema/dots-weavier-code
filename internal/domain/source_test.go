@@ -9,7 +9,7 @@ import (
 
 func TestSourceReadsProjectFilesOnly(t *testing.T) {
 	isolate(t)
-	_, err := InitWorkspace("../../samples", "s")
+	_, err := InitWorkspace("../../samples-monorepo", "s")
 	require.NoError(t, err)
 	f, err := Source("s", "golang/orders:internal/httpapi/httpapi.go:45")
 	require.NoError(t, err)

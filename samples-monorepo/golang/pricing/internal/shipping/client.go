@@ -21,7 +21,7 @@ func NewClient(base string, hc *http.Client) *Client {
 	return &Client{base: base, http: hc}
 }
 
-// rate is the JSON body of GET /rates, served by samples/kotlin/shipping.
+// rate is the JSON body of GET /rates, served by samples-monorepo/kotlin/shipping.
 type rate struct {
 	CustomerID string `json:"customer_id"`
 	Region     string `json:"region"`

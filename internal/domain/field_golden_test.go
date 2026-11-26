@@ -18,7 +18,7 @@ var update = flag.Bool("update", false, "rewrite golden files under testdata/")
 // TestTraceFieldGolden pins Go, Java and Kotlin field trace runs: both trees, plus call paths, hops and follow grafts for the indexed samples; -update rewrites it.
 func TestTraceFieldGolden(t *testing.T) {
 	isolate(t)
-	_, err := InitWorkspace("../../samples", "")
+	_, err := InitWorkspace("../../samples-monorepo", "")
 	require.NoError(t, err)
 	require.NoError(t, Index(t.Context(), IndexOptions{Progress: func(r IndexResult) {
 		assert.NoError(t, r.Err, "index %s", r.Project)
@@ -35,13 +35,13 @@ func TestTraceFieldGolden(t *testing.T) {
 		{"testdata", "fieldcases:main.go:42"},
 		{"testdata", "fieldcases:main.go:80"},
 		{"testdata", "fieldcases:main.go:81"},
-		{"../../samples/golang", "orders:internal/pricer/pricer.go:23"},
-		{"../../samples/golang", "orders:internal/pricer/pricer.go:34"},
-		{"../../samples/golang", "pricing:internal/server/server.go:47"},
-		{"../../samples", "java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:21"},
-		{"../../samples", "java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:24"},
-		{"../../samples", "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:47"},
-		{"../../samples", "kotlin/shipping:src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:13"},
+		{"../../samples-monorepo/golang", "orders:internal/pricer/pricer.go:23"},
+		{"../../samples-monorepo/golang", "orders:internal/pricer/pricer.go:34"},
+		{"../../samples-monorepo/golang", "pricing:internal/server/server.go:47"},
+		{"../../samples-monorepo", "java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:21"},
+		{"../../samples-monorepo", "java/inventory:src/main/java/com/example/inventory/reservation/ReservationService.java:24"},
+		{"../../samples-monorepo", "kotlin/shipping:src/main/kotlin/com/example/shipping/http/Routes.kt:47"},
+		{"../../samples-monorepo", "kotlin/shipping:src/main/kotlin/com/example/shipping/rates/RateCalculator.kt:13"},
 		{"testdata", "jvmcases/java:src/main/java/cases/Cases.java:9"},
 		{"testdata", "jvmcases/java:src/main/java/cases/Cases.java:12"},
 		{"testdata", "jvmcases/java:src/main/java/cases/Cases.java:23"},
@@ -66,10 +66,10 @@ func TestTraceFieldGolden(t *testing.T) {
 	// Hops followed: gRPC Go to Go, gRPC Go to Java, Pub/Sub Go to Go, HTTP
 	// Kotlin to Go (into a handler registered as a method value).
 	cases = append(cases,
-		fieldCase{"../../samples/golang", "orders:internal/pricer/pricer.go:23", 2},
-		fieldCase{"../../samples", "golang/orders:internal/inventory/client.go:26", 1},
-		fieldCase{"../../samples", "golang/orders:internal/events/publisher.go:44", 1},
-		fieldCase{"../../samples", "kotlin/shipping:src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:26", 1},
+		fieldCase{"../../samples-monorepo/golang", "orders:internal/pricer/pricer.go:23", 2},
+		fieldCase{"../../samples-monorepo", "golang/orders:internal/inventory/client.go:26", 1},
+		fieldCase{"../../samples-monorepo", "golang/orders:internal/events/publisher.go:44", 1},
+		fieldCase{"../../samples-monorepo", "kotlin/shipping:src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:26", 1},
 	)
 	for _, c := range cases {
 		name := strings.NewReplacer("/", "_", ":", "_").Replace(c.addr)

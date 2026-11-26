@@ -20,4 +20,4 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 ### Sample projects
 
-Adding a sample service under `samples/` in any language: follow `docs/agents/scaffold-sample-project.md`.
+Adding a sample service under `samples-monorepo/` in any language: follow `docs/agents/scaffold-sample-project.md`.

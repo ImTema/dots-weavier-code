@@ -62,10 +62,10 @@ func TestLegacyFieldRunLoads(t *testing.T) {
 // reads back with the hop followed, the options kept, and no handler traced twice.
 func TestFollowFieldRun(t *testing.T) {
 	isolate(t)
-	_, err := InitWorkspace("../../samples", "")
+	_, err := InitWorkspace("../../samples-monorepo", "")
 	require.NoError(t, err)
 	require.NoError(t, Index(t.Context(), IndexOptions{Names: []string{"golang/orders", "golang/pricing"}}))
-	r, err := TraceField(t.Context(), FieldQuery{Dir: "../../samples", MaxProjects: 2, Keep: true}, "golang/orders:internal/pricer/pricer.go:23")
+	r, err := TraceField(t.Context(), FieldQuery{Dir: "../../samples-monorepo", MaxProjects: 2, Keep: true}, "golang/orders:internal/pricer/pricer.go:23")
 	require.NoError(t, err)
 
 	path := hopPath(r.Uses, nil)
@@ -91,10 +91,10 @@ func TestFollowFieldRun(t *testing.T) {
 // A run traced with --only origin still follows its lifecycle hops.
 func TestFollowRunTracedWithOnlyOrigin(t *testing.T) {
 	isolate(t)
-	_, err := InitWorkspace("../../samples", "")
+	_, err := InitWorkspace("../../samples-monorepo", "")
 	require.NoError(t, err)
 	require.NoError(t, Index(t.Context(), IndexOptions{Names: []string{"golang/orders", "golang/pricing"}}))
-	r, err := TraceField(t.Context(), FieldQuery{Dir: "../../samples", MaxProjects: 2, Only: "origin", Keep: true}, "golang/orders:internal/pricer/pricer.go:23")
+	r, err := TraceField(t.Context(), FieldQuery{Dir: "../../samples-monorepo", MaxProjects: 2, Only: "origin", Keep: true}, "golang/orders:internal/pricer/pricer.go:23")
 	require.NoError(t, err)
 	next, _, err := FollowFieldRun(t.Context(), FollowQuery{Run: r.Name})
 	require.NoError(t, err)
@@ -156,10 +156,10 @@ func tracedHandlers(ss []*FieldStep) map[string]int {
 // though other steps reach it: here three steps call GET /customers/{}.
 func TestFollowDoesNotRetraceHandler(t *testing.T) {
 	isolate(t)
-	_, err := InitWorkspace("../../samples", "")
+	_, err := InitWorkspace("../../samples-monorepo", "")
 	require.NoError(t, err)
 	require.NoError(t, Index(t.Context(), IndexOptions{Names: []string{"kotlin/shipping", "golang/orders"}}))
-	r, err := TraceField(t.Context(), FieldQuery{Dir: "../../samples", Keep: true}, "kotlin/shipping:src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:26")
+	r, err := TraceField(t.Context(), FieldQuery{Dir: "../../samples-monorepo", Keep: true}, "kotlin/shipping:src/main/kotlin/com/example/shipping/customers/CustomerDirectory.kt:26")
 	require.NoError(t, err)
 	path := hopPath(r.Uses, nil)
 	require.NotNil(t, path, "no hop in %v", hopsIn(r.Uses))

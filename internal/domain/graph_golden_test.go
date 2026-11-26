@@ -12,15 +12,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestGraphGolden pins what extract stores, join adds and trace ranks over samples/, nodes by name; -update rewrites it.
+// TestGraphGolden pins what extract stores, join adds and trace ranks over samples-monorepo/, nodes by name; -update rewrites it.
 func TestGraphGolden(t *testing.T) {
 	isolate(t)
-	_, err := InitWorkspace("../../samples", "")
+	_, err := InitWorkspace("../../samples-monorepo", "")
 	require.NoError(t, err)
 	require.NoError(t, Index(t.Context(), IndexOptions{Progress: func(r IndexResult) {
 		assert.NoError(t, r.Err, "index %s", r.Project)
 	}}))
-	ws, err := filepath.Abs("../../samples")
+	ws, err := filepath.Abs("../../samples-monorepo")
 	require.NoError(t, err)
 	files, err := filepath.Glob(filepath.Join(mustStoresDir(t), "*.db"))
 	require.NoError(t, err)

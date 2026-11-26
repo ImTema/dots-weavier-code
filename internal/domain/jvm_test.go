@@ -8,12 +8,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestExtractJVM checks the hops samples/README.md lists for the Java and Kotlin samples.
+// TestExtractJVM checks the hops samples-monorepo/README.md lists for the Java and Kotlin samples.
 func TestExtractJVM(t *testing.T) {
 	g := &graph{ids: map[string]int32{}, Impls: map[string][]int32{}}
 	for _, p := range []project{
-		{"java/inventory", filepath.Join("..", "..", "samples", "java", "inventory"), "jvm"},
-		{"kotlin/shipping", filepath.Join("..", "..", "samples", "kotlin", "shipping"), "jvm"},
+		{"java/inventory", filepath.Join("..", "..", "samples-monorepo", "java", "inventory"), "jvm"},
+		{"kotlin/shipping", filepath.Join("..", "..", "samples-monorepo", "kotlin", "shipping"), "jvm"},
 	} {
 		_, err := extract(t.Context(), g, p, true)
 		require.NoError(t, err)
@@ -90,7 +90,7 @@ func TestTraceJVMField(t *testing.T) {
 			"uses return src/main/kotlin/com/example/shipping/rates/ShippingRates.kt:14",
 		}},
 	} {
-		dir, err := filepath.Abs(filepath.Join("..", "..", "samples", c.dir))
+		dir, err := filepath.Abs(filepath.Join("..", "..", "samples-monorepo", c.dir))
 		require.NoError(t, err)
 		r, _, err := traceJVMField(t.Context(), project{c.dir, dir, "jvm"}, filepath.Join(dir, c.file), c.line, 1, false)
 		require.NoError(t, err)
@@ -100,7 +100,7 @@ func TestTraceJVMField(t *testing.T) {
 
 // A hop lands on a handler's first annotation: one parse finds the signature below it.
 func TestTraceJVMFieldSkipsAnnotations(t *testing.T) {
-	dir, err := filepath.Abs("../../samples/java/inventory")
+	dir, err := filepath.Abs("../../samples-monorepo/java/inventory")
 	require.NoError(t, err)
 	file := filepath.Join(dir, "src/main/java/com/example/inventory/grpc/InventoryGrpcService.java")
 	p := project{"java/inventory", dir, "jvm"}

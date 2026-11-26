@@ -30,18 +30,32 @@ import (
 	"dotweavier/internal/domain"
 )
 
-func usage() {
-	fmt.Fprintln(os.Stderr, `usage:
+const usageText = `usage:
   dotweavier init [DIR] [--workspace NAME]    add DIR (default: current folder) to workspace NAME (default: default); its projects are detected, not indexed
   dotweavier index [DIR] [--workspace NAME]   index the project in DIR (default: current folder) and its modules into workspace NAME (default: default)
+  dotweavier overview [--addr ADDR] [--workspace NAME] [--max-nodes N]   serve the overview and trace pages (default ADDR 127.0.0.1:7357)
   dotweavier trace path -A <addr> -B <addr> [--workspace NAME] [--max-paths N] [--include-tests] [--format text|ui|html] [--verbose]
-  dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--project DIR] [--only origin|uses] [--depth N] [--include-tests] [--max-projects N] [--follow N] [--format text|ui|html] [--verbose]`)
+  dotweavier trace field [project:]rel/path.{go,java,kt}:LINE [--project DIR] [--only origin|uses] [--depth N] [--include-tests] [--max-projects N] [--follow N] [--format text|ui|html] [--verbose]
+  dotweavier help                             show this help; also -h, --help
+  dotweavier <command> -h                     show the flags of one command`
+
+func usage() {
+	fmt.Fprintln(os.Stderr, usageText)
 	os.Exit(2)
+}
+
+// isHelp reports whether arg asks for help.
+func isHelp(arg string) bool {
+	return arg == "-h" || arg == "--help" || arg == "help"
 }
 
 func main() {
 	if len(os.Args) < 2 {
 		usage()
+	}
+	if isHelp(os.Args[1]) {
+		fmt.Println(usageText)
+		return
 	}
 	start := time.Now()
 	// Ctrl-C cancels only index and field trace, which write indexes whole or not at all.
@@ -59,6 +73,10 @@ func main() {
 	case "trace":
 		if len(os.Args) < 3 {
 			usage()
+		}
+		if isHelp(os.Args[2]) {
+			fmt.Println(usageText)
+			return
 		}
 		switch os.Args[2] {
 		case "path":

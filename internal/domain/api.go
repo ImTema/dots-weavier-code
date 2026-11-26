@@ -203,7 +203,8 @@ type PathQuery struct {
 }
 
 // TracePath finds up to maxPaths call paths a->b, each address project::Type.Method, [project:]rel/path.go:Type.Method or [project:]rel/path.go:LINE, located in q.Workspace.
-func TracePath(q PathQuery) (*PathTrace, error) {
+// ctx stops it between phases and during the search; a cancelled trace returns ctx.Err().
+func TracePath(ctx context.Context, q PathQuery) (*PathTrace, error) {
 	a, b, maxPaths, tests := q.A, q.B, q.MaxPaths, q.IncludeTests
 	ws, fs, err := workspaceFolders(q.Workspace)
 	if err != nil {
@@ -223,6 +224,9 @@ func TracePath(q PathQuery) (*PathTrace, error) {
 	addrA, addrB := addrs[0], addrs[1]
 	g, loaded, warnings, err := loadIndexes(fs, q.Progress)
 	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	for _, p := range []string{addrA.Project, addrB.Project} {
@@ -257,7 +261,10 @@ func TracePath(q PathQuery) (*PathTrace, error) {
 	}
 	r.A, r.B = g.node(na), g.node(nb)
 	report(q.Progress, "searching paths")
-	states, exhausted := g.trace(na, nb, maxPaths)
+	states, exhausted := g.trace(ctx, na, nb, maxPaths)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	r.Exhausted = exhausted
 	for _, s := range states {
 		r.Paths = append(r.Paths, g.path(s))

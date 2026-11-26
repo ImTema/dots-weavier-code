@@ -3,6 +3,7 @@ package domain
 import (
 	"cmp"
 	"container/heap"
+	"context"
 	"fmt"
 	"slices"
 	"strconv"
@@ -142,7 +143,8 @@ const (
 )
 
 // trace returns up to k simple paths a->b in rank order, by A* with the exact (guesses, hops) distance to b as heuristic.
-func (g *graph) trace(a, b int32, k int) (paths []*state, exhausted bool) {
+// Cancelling ctx stops the search early, returning the paths found so far, not exhausted.
+func (g *graph) trace(ctx context.Context, a, b int32, k int) (paths []*state, exhausted bool) {
 	rev := make([][]edge, len(g.Nodes))
 	for from, es := range g.Out {
 		for _, e := range es {
@@ -169,7 +171,7 @@ func (g *graph) trace(a, b int32, k int) (paths []*state, exhausted bool) {
 	}
 	q = &pq{{n: a, f: h[a]}}
 	for pops := 0; q.Len() > 0; pops++ {
-		if pops == popLimit {
+		if pops == popLimit || pops%4096 == 0 && ctx.Err() != nil {
 			return paths, false
 		}
 		s := heap.Pop(q).(*state)

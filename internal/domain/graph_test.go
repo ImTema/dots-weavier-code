@@ -19,7 +19,7 @@ func TestTraceRanksFewerGuessesFirst(t *testing.T) {
 	g.link(z, b, grpcHop, "/s.S/M")
 	g.link(b, a, direct, "") // cycle must not produce non-simple paths
 
-	paths, exhausted := g.trace(a, b, 10)
+	paths, exhausted := g.trace(t.Context(), a, b, 10)
 	assert.True(t, exhausted)
 	assert.Equal(t, []string{
 		"p:f.go:A -call-> p:f.go:Z -grpc /s.S/M-> p:f.go:B",
@@ -75,7 +75,7 @@ func TestJoinPubsub(t *testing.T) {
 	g.Impls[typeKey+"M"] = []int32{dec}
 	g.join()
 
-	paths, _ := g.trace(pub, dec, 10)
+	paths, _ := g.trace(t.Context(), pub, dec, 10)
 	assert.Equal(t, []string{
 		"a:f.go:Pub -pubsub topic t-> b:f.go:Run$1 -call-> b:f.go:Handle",
 		"a:f.go:Pub -pubsub:guess type M-> b:f.go:Handle",

@@ -227,7 +227,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		}
 		a, b := r.URL.Query().Get("a"), r.URL.Query().Get("b")
 		phase, done := status("trace path "+a+" -> "+b, true)
-		res, err := domain.TracePath(domain.PathQuery{Workspace: src.Workspace(), A: a, B: b, MaxPaths: 10, Progress: phase})
+		res, err := domain.TracePath(r.Context(), domain.PathQuery{Workspace: src.Workspace(), A: a, B: b, MaxPaths: 10, Progress: phase})
 		if err != nil {
 			done("err=%v", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)

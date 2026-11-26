@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -54,7 +55,7 @@ func TestGraphGolden(t *testing.T) {
 		{"golang/orders:internal/pricer/pricer.go:23", "golang/pricing::TierRule.Discount", false},
 	} {
 		fmt.Fprintf(&b, "== %s -> %s tests=%v\n", c.a, c.b, c.tests)
-		r, err := TracePath(PathQuery{A: c.a, B: c.b, MaxPaths: 10, IncludeTests: c.tests})
+		r, err := TracePath(t.Context(), PathQuery{A: c.a, B: c.b, MaxPaths: 10, IncludeTests: c.tests})
 		if err != nil {
 			fmt.Fprintf(&b, "error: %v\n\n", err)
 			continue
@@ -66,6 +67,11 @@ func TestGraphGolden(t *testing.T) {
 		b.WriteString("\n")
 	}
 	golden(t, "traces.txt", b.String())
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err = TracePath(ctx, PathQuery{A: "golang/orders::Service.Place", B: "golang/orders::SMS.Notify", MaxPaths: 10})
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 // dumpGraph writes g as sorted lines; hopsOnly keeps just the edges join adds.

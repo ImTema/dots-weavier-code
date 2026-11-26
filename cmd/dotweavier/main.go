@@ -58,7 +58,7 @@ func main() {
 		return
 	}
 	start := time.Now()
-	// Ctrl-C cancels only index and field trace, which write indexes whole or not at all.
+	// Ctrl-C cancels index, path trace and field trace; index and field trace write indexes whole or not at all.
 	cancellable := func() context.Context {
 		ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
 		return ctx
@@ -80,7 +80,7 @@ func main() {
 		}
 		switch os.Args[2] {
 		case "path":
-			runTrace(os.Args[3:])
+			runTrace(cancellable(), os.Args[3:])
 		case "field":
 			runTraceField(cancellable(), os.Args[3:])
 		default:
@@ -153,7 +153,7 @@ func runIndex(ctx context.Context, args []string) {
 	fmt.Fprintf(os.Stderr, "workspace %s\n", ws)
 }
 
-func runTrace(args []string) {
+func runTrace(ctx context.Context, args []string) {
 	fl := flag.NewFlagSet("trace", flag.ExitOnError)
 	wsFlag := fl.String("workspace", domain.DefaultWorkspace, "workspace to trace in")
 	aFlag := fl.String("A", "", "start symbol address")
@@ -166,7 +166,7 @@ func runTrace(args []string) {
 	v := *verbose || *format != "text"
 
 	phase, done := status("trace path", v)
-	r, err := domain.TracePath(domain.PathQuery{Workspace: *wsFlag, A: *aFlag, B: *bFlag, MaxPaths: *maxPaths, IncludeTests: *tests, Progress: phase})
+	r, err := domain.TracePath(ctx, domain.PathQuery{Workspace: *wsFlag, A: *aFlag, B: *bFlag, MaxPaths: *maxPaths, IncludeTests: *tests, Progress: phase})
 	if err != nil {
 		done("err=%v", err)
 	}

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 )
@@ -34,7 +35,7 @@ func (run *fieldRun) attach(r *FieldTrace, seedAt address) {
 		}
 		var p *Path
 		for _, ab := range [][2]int32{{seed, n}, {n, seed}} {
-			if s, _ := g.trace(ab[0], ab[1], 1); len(s) > 0 {
+			if s, _ := g.trace(context.Background(), ab[0], ab[1], 1); len(s) > 0 {
 				x := g.path(s[0])
 				p = &x
 				break

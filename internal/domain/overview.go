@@ -675,7 +675,7 @@ func (src *OverviewSource) Paths(a, b int32, k int, show map[string]bool, limit 
 			}
 		}
 	}
-	states, exhausted := f.trace(a, b, k)
+	states, exhausted := f.trace(context.Background(), a, b, k)
 	for _, st := range states {
 		var r OverviewPath
 		for s := st; s != nil; s = s.parent {

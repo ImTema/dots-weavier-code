@@ -150,7 +150,7 @@ func TestPathTraceWarnsAboutUnreadableIndex(t *testing.T) {
 	_, err = db.Exec(`DROP TABLE nodes`) // meta still names b's folder
 	require.NoError(t, err)
 	db.Close()
-	r, err := TracePath(PathQuery{A: "a::A", B: "a::A", MaxPaths: 1})
+	r, err := TracePath(t.Context(), PathQuery{A: "a::A", B: "a::A", MaxPaths: 1})
 	require.NoError(t, err)
 	if assert.Len(t, r.Warnings, 1) {
 		assert.True(t, strings.HasPrefix(r.Warnings[0], "skip index "+mustStorePath(t, b)+": "), "warnings %q, want b's index skipped", r.Warnings)

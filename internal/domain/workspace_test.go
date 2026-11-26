@@ -33,7 +33,7 @@ func TestWorkspaceRegistryAndInvalid(t *testing.T) {
 	noop := func(IndexResult) {}
 
 	assert.Error(t, IndexProject(ctx, filepath.Join(ws, "svc"), "", noop), "indexing a folder without a manifest")
-	_, err := TracePath(PathQuery{A: "a::A", B: "a::A", MaxPaths: 1})
+	_, err := TracePath(t.Context(), PathQuery{A: "a::A", B: "a::A", MaxPaths: 1})
 	assert.Error(t, err, "tracing in a workspace that does not exist")
 	var indexed []string
 	require.NoError(t, IndexProject(ctx, filepath.Join(ws, "svc/a"), "", func(r IndexResult) {

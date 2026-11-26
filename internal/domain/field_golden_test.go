@@ -15,11 +15,7 @@ import (
 
 var update = flag.Bool("update", false, "rewrite golden files under testdata/")
 
-// TestTraceFieldGolden pins field trace runs of Go, Java and Kotlin, so refactors
-// of field*.go and jvm_field.go can be checked byte for byte: both trees, and for
-// the samples, which are indexed first, the call paths, the hops and, with
-// follow, the traces grafted behind them. Run with -update after an intended
-// change.
+// TestTraceFieldGolden pins Go, Java and Kotlin field trace runs: both trees, plus call paths, hops and follow grafts for the indexed samples; -update rewrites it.
 func TestTraceFieldGolden(t *testing.T) {
 	isolate(t)
 	_, err := InitWorkspace("../../samples", "")

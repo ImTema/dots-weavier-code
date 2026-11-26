@@ -112,8 +112,7 @@ type fnode struct {
 	kids []*fnode
 }
 
-// tree folds a walk's keys into source lines: keys on the same line, or joining
-// one, share its node.
+// tree folds a walk's keys into source lines; keys on the same line, or joining one, share its node.
 func (e *ftrace) tree(w *fwalk) []*fnode {
 	places := make(map[tkey]fplace, len(w.order))
 	next := map[tkey][]tkey{}

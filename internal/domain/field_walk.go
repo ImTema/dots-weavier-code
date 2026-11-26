@@ -232,8 +232,7 @@ func (t *tracker) line(pos token.Pos) srcLine {
 
 func qual(pkg *types.Package) string { return pkg.Name() }
 
-// overwrites lists stores into f of values in neither tree: places where the
-// tracked value is replaced, e.g. `if app.ResultID == nil { app.ResultID = NewResultID() }`.
+// overwrites lists stores into f of values in neither tree, where the tracked value is replaced.
 func (t *tracker) overwrites(f fieldKey) []srcLine {
 	var out []srcLine
 	for st := range t.stores(f) {

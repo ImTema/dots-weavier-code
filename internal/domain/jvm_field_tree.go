@@ -3,8 +3,7 @@ package domain
 import "path/filepath"
 
 // place shows a field as Type.field and every other key at the line it flowed at.
-// A plain read of a variable that leads nowhere (x == null, x.isBlank()) only
-// describes the value; the Go walk drops those by their bool type.
+// A read that leads nowhere (x == null, x.isBlank()) only describes the value, as Go's bool drop.
 func (t *jtrace) place(w *fwalk, k tkey) fplace {
 	h := w.hits[k]
 	if f, ok := k.(jfield); ok {

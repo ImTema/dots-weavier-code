@@ -19,7 +19,7 @@ func TestTraceFieldLifecycle(t *testing.T) {
 	r, err := domain.TraceField(t.Context(), domain.FieldQuery{Dir: ws, MaxProjects: 1}, "fieldproj:main.go:16") // func convert(raw string)
 	require.NoError(t, err)
 	var b bytes.Buffer
-	lifecycle(&b, r, 0, "")
+	lifecycle(&b, &r.FieldTrace, 0, "")
 	got := b.String()
 	for _, w := range []string{
 		"└─ [arg] main.go:44  req, _ := convert(\"42\")  : string",
@@ -98,9 +98,11 @@ func TestLifecycleOnlyAndDepth(t *testing.T) {
 
 // An exported page carries its run inline, without the local folder.
 func TestExportFieldLeavesOutFolder(t *testing.T) {
-	r := &domain.FieldTrace{Addr: "golang/orders:a.go:3", Dir: "/work/samples", Warnings: []string{"loaded golang/orders"}}
+	r := &domain.FieldRun{Addr: "golang/orders:a.go:3", FieldQuery: domain.FieldQuery{Dir: "/work/samples"},
+		FieldTrace: domain.FieldTrace{Warnings: []string{"loaded golang/orders"}}}
 	page, err := exportField(r, 4)
 	require.NoError(t, err)
+	assert.Contains(t, string(page), "window.OPEN = 4")
 	assert.NotContains(t, string(page), r.Dir)
 	assert.Contains(t, string(page), r.Addr)
 	assert.Contains(t, string(page), "window.EXPORTED = true")

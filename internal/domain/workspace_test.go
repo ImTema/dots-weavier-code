@@ -77,28 +77,6 @@ func TestWorkspaceRegistryAndInvalid(t *testing.T) {
 	_, loaded, _, _ := loadIndexes([]string{filepath.Join(ws, "other"), svc}, nil)
 	assert.True(t, loaded["a"] && loaded["b"], "default loads %v, want a and b", loaded)
 
-	// A field address resolves from any folder through the registered folders;
-	// the innermost registered folder wins.
-	// The run traces the registered folder holding the project, named as there.
-	elsewhere := t.TempDir()
-	dir, addr, err := runFolder(elsewhere, "b.go:3")
-	assert.NoError(t, err)
-	assert.Equal(t, filepath.Join(ws, "other"), dir)
-	assert.Equal(t, "b:b.go:3", addr)
-	dir, _, err = runFolder(elsewhere, "api/api.go:3")
-	assert.NoError(t, err)
-	assert.Equal(t, svc, dir, "want svc, inside the team folder")
-	dir, addr, err = runFolder(svc, "a.go:3")
-	assert.NoError(t, err)
-	assert.Equal(t, svc, dir, "the given folder has the file")
-	assert.Equal(t, "a:a.go:3", addr)
-	dir, addr, err = runFolder(filepath.Join(svc, "a"), "a.go:3")
-	assert.NoError(t, err)
-	assert.Equal(t, svc, dir, "inside a project: want the registered folder holding it")
-	assert.Equal(t, "a:a.go:3", addr)
-	_, _, err = runFolder(elsewhere, "nope.go:3")
-	assert.ErrorContains(t, err, "no project has nope.go")
-
 	// Two folders of one workspace may not produce one project name.
 	require.NoError(t, IndexProject(ctx, filepath.Join(ws, "x/c"), "clash", noop))
 	assert.ErrorContains(t, IndexProject(ctx, filepath.Join(ws, "y/c"), "clash", noop), `two projects named "c"`)
@@ -114,27 +92,6 @@ func TestWorkspaceRegistryAndInvalid(t *testing.T) {
 	require.NoError(t, err)
 	inv, _ = src.Invalid()
 	assert.Equal(t, []string{"gone"}, inv)
-	dir, err = src.FolderOf("b:b.go:3")
-	assert.NoError(t, err)
-	assert.Equal(t, filepath.Join(ws, "other"), dir)
-	dir, err = src.FolderOf("b.go:3")
-	assert.NoError(t, err, "an unprefixed address resolves by its file")
-	assert.Equal(t, filepath.Join(ws, "other"), dir)
-	// FolderOf resolves as a field trace does, so the server traces where the CLI would.
-	for _, a := range []string{"b:b.go:3", "api/api.go:3", "a:a.go:3"} {
-		want, _, err := runFolder(elsewhere, a)
-		require.NoError(t, err, a)
-		dir, err = src.FolderOf(a)
-		assert.NoError(t, err, a)
-		assert.Equal(t, want, dir, a)
-	}
-	_, err = src.FolderOf("b:nope.go:3")
-	assert.ErrorContains(t, err, "no project has b:nope.go in workspace")
-	name, err := WorkspaceOf(filepath.Join(svc, "a"))
-	assert.NoError(t, err)
-	assert.Equal(t, DefaultWorkspace, name)
-	name, _ = WorkspaceOf(elsewhere)
-	assert.Empty(t, name)
 	removed, err := src.RemoveInvalid()
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"gone"}, removed)

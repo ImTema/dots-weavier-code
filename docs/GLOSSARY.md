@@ -65,7 +65,7 @@ A node that comes from test code. In Go, that means `_test.go` files and configu
 ### Querying
 
 **Symbol address**:
-How a user names a node on the command line: `project::Type.Method`, or `project:relative/path.go:Type.Method`. A line form, `project:relative/path.go:LINE`, names the innermost function whose declaration contains that line.
+How a user names a node on the command line: `project::Type.Method`, or `project:relative/path.go:Type.Method`. A line form, `project:relative/path.go:LINE`, names the innermost function whose declaration contains that line. Without `project:`, the path is relative to a project of the workspace, or absolute; it must name one file.
 _Avoid_: selector, locator
 
 **Trace**:
@@ -74,6 +74,10 @@ A query for the directed paths from symbol A to symbol B (`dotweavier trace path
 **Field trace**:
 A query for the full lifecycle of one value (`dotweavier trace field [project:]relative/path.{go,java,kt}:LINE`), printed as two trees: its origin (where it comes from) and its uses (every variable, conversion, struct field, call and return it may flow into). `--only origin|uses` prints one of them; both are still computed, because each walk feeds the other. A field of a struct declared in any loaded project stands for that field in every object of the type, across projects, so a protobuf field written by a client in one project meets its server's reads in another. The trees show where the value may come from and go, not where it must. Unlike a trace, it analyses projects live and needs no index. A Java or Kotlin field trace stays inside its own project.
 _Avoid_: variable trace, taint trace
+
+**Field trace run**:
+One field trace with the options it ran with (`--only`, `--include-tests`, `--max-projects`) and the folder it traced. A run keeps both trees even under `--only`, so its hops can be followed later. A kept run is stored in `~/.dotweavier` under a name, its run ID; following a kept run keeps a new one.
+_Avoid_: saved trace, history entry
 
 **Seed**:
 The value computed at the line a field trace starts from, shown as `[seed]` in its trees. The project that contains that line is the seed's project.

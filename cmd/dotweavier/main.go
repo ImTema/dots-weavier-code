@@ -23,6 +23,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -184,7 +185,8 @@ func runTrace(args []string) {
 
 func runTraceField(ctx context.Context, args []string) {
 	fl := flag.NewFlagSet("trace field", flag.ExitOnError)
-	ws := fl.String("project", defaultProjectDir(), "folder the address is looked up in, before the registered workspace folders; the trace runs over the registered folder holding its project")
+	ws := fl.String("project", defaultProjectDir(), "folder the address is looked up in, before the workspace's folders; the trace runs over the workspace folder holding its project")
+	wsName := fl.String("workspace", domain.DefaultWorkspace, "workspace the address is looked up in, and the overview of --format ui opens")
 	only := fl.String("only", "", "origin or uses: show that tree alone (both walks still run, each feeds the other)")
 	depth := fl.Int("depth", 0, "text: print at most N levels of each tree (0: 100); ui: levels open at first (0: 6)")
 	tests := fl.Bool("include-tests", false, "include test code (_test.go, mock/fake packages)")
@@ -205,38 +207,24 @@ func runTraceField(ctx context.Context, args []string) {
 	if len(pos) != 1 {
 		usage()
 	}
-	if *only != "" && *only != "origin" && *only != "uses" {
-		must(fmt.Errorf("--only %q, want origin or uses", *only))
-	}
 	v := *verbose || *format != "text"
 	phase, done := status("trace field "+pos[0], v)
-	r, err := domain.TraceField(ctx, domain.FieldQuery{Dir: *ws, IncludeTests: *tests, MaxProjects: *maxProjects, Follow: *follow, Progress: phase}, pos[0])
+	r, err := domain.TraceField(ctx, domain.FieldQuery{Workspace: *wsName, Dir: *ws, IncludeTests: *tests, MaxProjects: *maxProjects, Only: *only,
+		Follow: *follow, Keep: *format == "ui", Progress: phase}, pos[0])
 	if err != nil {
 		done("err=%v", err)
 	}
 	must(err)
 	done("origin=%d uses=%d", len(r.Origin), len(r.Uses))
 	warn(r.Warnings)
-	// Both walks always run: each feeds the other (the uses walk loads projects the
-	// origin walk continues in, overwrites need the origin), so --only drops a tree
-	// afterwards rather than skipping its walk. A saved run without one tree shows
-	// as --only on the field page.
-	switch *only {
-	case "origin":
-		r.Uses = nil
-	case "uses":
-		r.Origin = nil
-	}
 	switch *format {
 	case "ui":
-		name, err := domain.SaveFieldRun(r, *depth)
-		must(err)
-		dir, err := domain.FieldHistoryDir()
-		must(err)
-		fmt.Fprintf(os.Stderr, "saved %s\n", filepath.Join(dir, name+".js"))
-		wsName, err := domain.WorkspaceOf(r.Dir)
-		must(err)
-		serveOverview(overviewAddr, wsName, overviewMaxNodes, "/ui/trace-field.html?t="+url.QueryEscape(name))
+		fmt.Fprintf(os.Stderr, "kept run %s\n", r.Name)
+		q := url.Values{"t": {r.Name}}
+		if *depth > 0 {
+			q.Set("open", strconv.Itoa(*depth))
+		}
+		serveOverview(overviewAddr, *wsName, overviewMaxNodes, "/ui/trace-field.html?"+q.Encode())
 	case "html":
 		html, err := exportField(r, *depth)
 		must(err)
@@ -248,7 +236,7 @@ func runTraceField(ctx context.Context, args []string) {
 		if d == 0 {
 			d = 100
 		}
-		if n := lifecycle(os.Stdout, r, d, *only); v {
+		if n := lifecycle(os.Stdout, &r.FieldTrace, d, r.Only); v {
 			fmt.Fprintf(os.Stderr, "%d steps\n", n)
 		}
 	}
@@ -426,19 +414,19 @@ func dotDir(name string) string {
 	return filepath.Join(home, ".dotweavier", name)
 }
 
-// exportField is the field page with one run inlined: a single file that opens
-// anywhere, without the history folder or a server. It cannot be continued, so
-// it leaves out the run's local folder and warnings.
-func exportField(r *domain.FieldTrace, open int) ([]byte, error) {
+// exportField is the field page with one run inlined, open levels open (0: the
+// page's default): a single file that opens anywhere, without a server. It
+// cannot be continued, so it leaves out the run's local folder and warnings.
+func exportField(r *domain.FieldRun, open int) ([]byte, error) {
 	view := *r
 	view.Dir, view.Warnings = "", nil
-	data, err := domain.FieldRunScript(&view, open)
+	js, err := json.Marshal(view) // escapes <, > and &, so it is safe inside <script>
 	if err != nil {
 		return nil, err
 	}
 	page := fieldUITemplate
 	i := strings.Index(page, "<script>")
-	return []byte(page[:i] + "<script>" + string(data) + "window.EXPORTED = true;</script>\n" + page[i:]), nil
+	return []byte(page[:i] + fmt.Sprintf("<script>window.TRACE = %s; window.OPEN = %d; window.EXPORTED = true;</script>\n", js, open) + page[i:]), nil
 }
 
 func fill(template string, data any) ([]byte, error) {

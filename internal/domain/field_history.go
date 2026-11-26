@@ -1,5 +1,5 @@
-// Field trace history: every run is kept in ~/.dotweavier/trace-field-history, so
-// any interface can list, reopen and continue it.
+// Field trace history: every kept run is a JSON file in ~/.dotweavier/trace-field-history,
+// so any interface can list, reopen and continue it.
 
 package domain
 
@@ -11,167 +11,166 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 )
 
-// A run file is a script that sets window.TRACE, so a static page can load it
-// with <script src> from file://, where fetch() of a local file fails.
-const tracePrefix = "window.TRACE = "
+// Runs saved before runs were plain JSON are scripts that set window.TRACE; they still load.
+const legacyPrefix = "window.TRACE = "
 
-// savedRun is a run file: the run, whole so it can be continued, and the levels
-// a page opens at first.
-type savedRun struct {
-	Addr         string       `json:"addr"`
-	Open         int          `json:"open,omitempty"`
-	Origin       []*FieldStep `json:"origin"`
-	Uses         []*FieldStep `json:"uses"`
-	Warnings     []string     `json:"warnings,omitempty"`
-	Dir          string       `json:"dir,omitempty"` // empty in runs saved before runs kept their folder
-	IncludeTests bool         `json:"includeTests,omitempty"`
-	MaxProjects  int          `json:"maxProjects,omitempty"`
-}
+// runTime is the layout of the time a run's name starts with.
+const runTime = "20060102-150405.000"
 
-// FieldHistoryDir is the folder that holds the saved runs: <name>.js for each,
-// latest.js, and index.js (window.HISTORY, newest first).
-func FieldHistoryDir() (string, error) {
+// historyDir is the folder that holds the kept runs, <name>.json each.
+func historyDir() (string, error) {
 	d, err := dotweavierDir()
 	return filepath.Join(d, "trace-field-history"), err
 }
 
-// FieldRunScript is run r as a run file has it, with open the levels a page opens
-// at first (0: the page's default).
-func FieldRunScript(r *FieldTrace, open int) ([]byte, error) {
-	js, err := json.Marshal(savedRun{r.Addr, open, r.Origin, r.Uses, r.Warnings, r.Dir, r.IncludeTests, r.MaxProjects}) // escapes <, > and &, so it is safe inside a script
+// saveRun keeps r in the history under a new name, <time>_<address>, which it sets in r.
+// ponytail: history is never pruned; add a cap when the folder grows large.
+func saveRun(r *FieldRun) error {
+	dir, err := historyDir()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	// Milliseconds keep runs apart: a follow often saves within the second of its trace.
+	r.Name = time.Now().Format(runTime) + "_" + AddrFileName(r.Addr)
+	js, err := json.Marshal(r)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, r.Name+".json"), js, 0o644)
+}
+
+// FieldRunInfo is one kept run, as FieldRuns lists it.
+type FieldRunInfo struct {
+	Name string    `json:"name"`
+	Addr string    `json:"addr"`
+	At   time.Time `json:"at"`
+}
+
+// FieldRuns lists the kept runs, newest first.
+// ponytail: reads every run file for its address; keep an index file if listing gets slow.
+func FieldRuns() ([]FieldRunInfo, error) {
+	dir, err := historyDir()
 	if err != nil {
 		return nil, err
 	}
-	return append(append([]byte(tracePrefix), js...), ";\n"...), nil
-}
-
-// SaveFieldRun keeps run r in the history as <time>_<address>.js and as latest.js,
-// and rewrites index.js. It returns the run's name.
-// ponytail: history is never pruned; add a cap when the folder grows large.
-func SaveFieldRun(r *FieldTrace, open int) (string, error) {
-	data, err := FieldRunScript(r, open)
-	if err != nil {
-		return "", err
+	var files []string
+	for _, ext := range []string{".json", ".js"} {
+		fs, _ := filepath.Glob(filepath.Join(dir, "*_*"+ext))
+		files = append(files, fs...)
 	}
-	dir, err := FieldHistoryDir()
-	if err != nil {
-		return "", err
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-	// Milliseconds keep runs apart: a follow often saves within the second of its trace.
-	name := time.Now().Format("20060102-150405.000") + "_" + AddrFileName(r.Addr)
-	for _, f := range []string{name + ".js", "latest.js"} {
-		if err := os.WriteFile(filepath.Join(dir, f), data, 0o644); err != nil {
-			return "", err
-		}
-	}
-
-	type run struct {
-		Name string `json:"name"`
-		Addr string `json:"addr"`
-		At   string `json:"at"`
-	}
-	var runs []run
-	files, _ := filepath.Glob(filepath.Join(dir, "*_*.js"))
-	for i := len(files) - 1; i >= 0; i-- { // names start with the time, so sorted means oldest first
-		n := strings.TrimSuffix(filepath.Base(files[i]), ".js")
+	var runs []FieldRunInfo
+	for _, f := range files {
+		n := strings.TrimSuffix(strings.TrimSuffix(filepath.Base(f), ".json"), ".js")
 		at, _, _ := strings.Cut(n, "_")
-		t, err := time.ParseInLocation("20060102-150405.000", at, time.Local)
+		t, err := time.ParseInLocation(runTime, at, time.Local)
 		if err != nil { // runs saved before milliseconds were added
 			t, err = time.ParseInLocation("20060102-150405", at, time.Local)
 		}
 		if err != nil {
 			continue
 		}
-		var head struct{ Addr string } // the real address; the file name is a mangled copy
-		if b, err := os.ReadFile(files[i]); err == nil {
-			_ = json.Unmarshal(scriptJSON(b), &head)
+		var head struct{ Addr string } // the real address; the name has a mangled copy
+		if b, err := os.ReadFile(f); err == nil {
+			_ = json.Unmarshal(runJSON(b), &head)
 		}
-		runs = append(runs, run{n, head.Addr, t.Format("2006-01-02 15:04:05")})
+		runs = append(runs, FieldRunInfo{n, head.Addr, t})
 	}
-	js, err := json.Marshal(runs)
-	if err != nil {
-		return "", err
-	}
-	return name, os.WriteFile(filepath.Join(dir, "index.js"), append(append([]byte("window.HISTORY = "), js...), ";\n"...), 0o644)
+	slices.SortFunc(runs, func(a, b FieldRunInfo) int { return b.At.Compare(a.At) })
+	return runs, nil
 }
 
-// LoadFieldRun reads run name back from the history, with the levels its page
-// opens. A run saved before runs kept their folder gets the registered folder
-// that has its seed's file.
-func LoadFieldRun(name string) (*FieldTrace, int, error) {
-	if name == "" || filepath.Base(name) != name || strings.ContainsAny(name, `/\`) {
-		return nil, 0, fmt.Errorf("bad run %q", name)
+// LoadFieldRun reads run name back from the history; "" is the newest run. A
+// run saved before runs kept their folder gets the registered folder that has
+// its seed's file, and one saved before runs kept Only gets it from the tree
+// it left out.
+func LoadFieldRun(name string) (*FieldRun, error) {
+	if name == "" {
+		runs, err := FieldRuns()
+		if err != nil {
+			return nil, err
+		}
+		if len(runs) == 0 {
+			return nil, errors.New("no field trace run kept yet")
+		}
+		name = runs[0].Name
 	}
-	dir, err := FieldHistoryDir()
+	if filepath.Base(name) != name || strings.ContainsAny(name, `/\`) || name == "." || name == ".." {
+		return nil, fmt.Errorf("bad run %q", name)
+	}
+	dir, err := historyDir()
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	b, err := os.ReadFile(filepath.Join(dir, name+".js"))
+	b, err := os.ReadFile(filepath.Join(dir, name+".json"))
+	if errors.Is(err, os.ErrNotExist) {
+		b, err = os.ReadFile(filepath.Join(dir, name+".js"))
+	}
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	var f savedRun
-	if err := json.Unmarshal(scriptJSON(b), &f); err != nil {
-		return nil, 0, err
+	r := &FieldRun{}
+	if err := json.Unmarshal(runJSON(b), r); err != nil {
+		return nil, err
 	}
-	r := &FieldTrace{Addr: f.Addr, Origin: f.Origin, Uses: f.Uses, Warnings: f.Warnings, Dir: f.Dir,
-		IncludeTests: f.IncludeTests, MaxProjects: f.MaxProjects}
+	r.Name = name
+	if r.Only == "" && len(r.Uses) == 0 { // old runs dropped the tree --only left out
+		r.Only = "origin"
+	} else if r.Only == "" && len(r.Origin) == 0 {
+		r.Only = "uses"
+	}
 	if r.Dir == "" {
-		a, lang, err := fieldAddr(r.Addr)
-		if err != nil {
-			return nil, 0, err
-		}
-		fs, err := registryList(`SELECT DISTINCT dir FROM workspace_folders`)
-		if err != nil {
-			return nil, 0, err
-		}
-		if r.Dir, err = folderWithFile(fs, a, lang); err != nil {
-			return nil, 0, err
+		if r.Dir, err = legacyRunFolder(r.Addr); err != nil {
+			return nil, err
 		}
 	}
-	return r, f.Open, nil
+	return r, nil
 }
 
-// scriptJSON is the JSON in a run file.
-func scriptJSON(b []byte) []byte {
-	return bytes.TrimSuffix(bytes.TrimSpace(bytes.TrimPrefix(b, []byte(tracePrefix))), []byte(";"))
+// runJSON is the JSON in a run file, of either format.
+func runJSON(b []byte) []byte {
+	return bytes.TrimSuffix(bytes.TrimSpace(bytes.TrimPrefix(b, []byte(legacyPrefix))), []byte(";"))
 }
 
-// FollowQuery is what FollowFieldRun follows in a saved run.
+// FollowQuery is what FollowFieldRun follows in a kept run.
 type FollowQuery struct {
-	Run      string       // the saved run's name
+	Run      string       // the kept run's name
 	Step     string       // "I.J.K": the lifecycle step at r.Uses[I].Kids[J].Kids[K]; "" follows every hop
 	Hop      int          // with Step: the step's hop to follow
 	Depth    int          // without Step: services deep; 0: 1
 	Progress func(string) // optional: told each phase as it starts
 }
 
-// FollowFieldRun continues a saved run: it follows one hop of a step, or every
-// hop Depth services deep (at most 10 hops), and saves the result as a new run,
-// whose name it returns with the warnings the follow added. Following every
-// hop fails only when none could be followed; the hops that failed are warnings.
-func FollowFieldRun(ctx context.Context, q FollowQuery) (name string, warnings []string, err error) {
-	r, open, err := LoadFieldRun(q.Run)
+// FollowFieldRun continues a kept run with the options it ran with: it follows
+// one hop of a step, or every hop Depth services deep (at most maxFollow hops),
+// and keeps the result as a new run, which it returns with the warnings the
+// follow added. A handler already traced in the run is not traced again.
+// Following every hop fails when none could be followed; the hops that failed
+// are warnings.
+func FollowFieldRun(ctx context.Context, q FollowQuery) (*FieldRun, []string, error) {
+	r, err := LoadFieldRun(q.Run)
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 	seen := len(r.Warnings)
-	run, err := continueRun(r, q.Progress)
-	if err != nil {
-		return "", nil, err
-	}
+	opts := r.FieldQuery
+	opts.Progress = q.Progress
+	run := &fieldRun{r: &r.FieldTrace, q: opts}
 	if q.Step == "" {
 		n, errs := run.followHops(ctx, max(q.Depth, 1))
 		if n == 0 && len(errs) > 0 {
-			return "", r.Warnings[seen:], errs[0]
+			return nil, r.Warnings[seen:], errs[0]
+		}
+		if n == 0 {
+			return nil, nil, errors.New("no hop left to follow")
 		}
 		for _, e := range errs {
 			r.Warnings = append(r.Warnings, "hop not followed: "+e.Error())
@@ -181,16 +180,15 @@ func FollowFieldRun(ctx context.Context, q FollowQuery) (name string, warnings [
 		for _, p := range strings.Split(q.Step, ".") {
 			i, err := strconv.Atoi(p)
 			if err != nil {
-				return "", nil, fmt.Errorf("bad step %q", q.Step)
+				return nil, nil, fmt.Errorf("bad step %q", q.Step)
 			}
 			path = append(path, i)
 		}
 		if err := run.followHop(ctx, path, q.Hop); err != nil {
-			return "", r.Warnings[seen:], err
+			return nil, r.Warnings[seen:], err
 		}
 	}
-	name, err = SaveFieldRun(r, open)
-	return name, r.Warnings[seen:], err
+	return r, r.Warnings[seen:], saveRun(r)
 }
 
 // AddrFileName turns an address into a file name: golang/orders:a/b.go:45 -> golang_orders_a_b.go_45.
@@ -201,12 +199,4 @@ func AddrFileName(addr string) string {
 		}
 		return '_'
 	}, addr)
-}
-
-// continueRun picks up run r, as TraceField returned it, to follow more hops.
-func continueRun(r *FieldTrace, progress func(string)) (*fieldRun, error) {
-	if r.Dir == "" {
-		return nil, errors.New("the run has no folder to follow hops in")
-	}
-	return &fieldRun{r: r, q: FieldQuery{Dir: r.Dir, IncludeTests: r.IncludeTests, MaxProjects: r.MaxProjects, Progress: progress}}, nil
 }

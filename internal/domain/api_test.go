@@ -117,7 +117,7 @@ func TestBuildTaggedOnlyModuleIndexesEmpty(t *testing.T) {
 // A field trace reports what it skipped in its result and prints nothing.
 func TestFieldTraceReturnsWarnings(t *testing.T) {
 	isolate(t) // no index: the seed has no call paths
-	var r *FieldTrace
+	var r *FieldRun
 	var err error
 	out := stderrOf(t, func() {
 		r, err = TraceField(t.Context(), FieldQuery{Dir: "testdata"}, "fieldcases:main.go:26")

@@ -56,10 +56,6 @@ func TestParseAddr(t *testing.T) {
 		_, err := parseAddr(bad)
 		assert.ErrorContains(t, err, "bad address", "%q", bad)
 	}
-	for _, bad := range []string{"nope", "a.go:12", "billing:a.go"} {
-		_, err := symbolAddr(bad)
-		assert.ErrorContains(t, err, "bad address", "trace path end %q", bad)
-	}
 	for _, bad := range []string{"p:a.go", "p:a.txt:3", "p::F"} {
 		_, _, err := fieldAddr(bad)
 		assert.ErrorContains(t, err, "bad address", "field seed %q", bad)

@@ -2,7 +2,7 @@
 
 dotweavier will have more than one interface: the CLI now, a UI later. Both must retrieve the same information, so indexing, storage and both traces live in `internal/domain`, and each interface lives under `cmd/` and only parses input and renders output.
 
-- `domain` exports a small API: `Index`, `TracePath` and `TraceField`. They take a context where they run long, a query struct of addresses and options, and return plain result types (`PathTrace`, `Path`, `Node`, `FieldTrace`, `FieldStep`) that carry no analysis internals such as SSA values or graph node numbers.
+- `domain` exports a small API: `Index`, `TracePath` and `TraceField` (with the field trace runs it keeps, ADR 0012). They take a context where they run long, a query struct of addresses and options, and return plain result types (`PathTrace`, `Path`, `Node`, `FieldTrace`, `FieldStep`) that carry no analysis internals such as SSA values or graph node numbers.
 - Results are presentation-neutral. Text trees, HTML pages and their templates belong to the interface that renders them. `cmd/dotweavier` renders text and HTML; a UI renders its own.
 - Interfaces never reach into domain internals. If an interface needs something new, the domain API grows to provide it.
 

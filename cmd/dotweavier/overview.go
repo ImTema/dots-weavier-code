@@ -257,9 +257,6 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write([]byte(fieldUITemplate))
 	})
-	hist, err := domain.FieldHistoryDir()
-	must(err)
-	mux.Handle("GET /trace-field-history/", http.StripPrefix("/trace-field-history/", http.FileServer(http.Dir(hist))))
 	// GET /source?loc=[project:]rel/path[:LINE]: a file for the field page's viewer, header-guarded like the actions.
 	mux.HandleFunc("GET /source", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("X-Dotweavier") != "1" {
@@ -271,11 +268,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 			return
 		}
 		loc := r.URL.Query().Get("loc")
-		dir, err := src.FolderOf(loc)
-		var f *domain.SourceFile
-		if err == nil {
-			f, err = domain.Source(dir, loc)
-		}
+		f, err := domain.Source(src.Workspace(), loc)
 		w.Header().Set("Content-Type", "application/json")
 		if err != nil {
 			w.WriteHeader(http.StatusUnprocessableEntity)
@@ -284,83 +277,7 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		}
 		json.NewEncoder(w).Encode(f)
 	})
-	// GET /trace-field/export?run=RUN: the run as one self-contained HTML file, for download.
-	mux.HandleFunc("GET /trace-field/export", func(w http.ResponseWriter, r *http.Request) {
-		tr, open, err := domain.LoadFieldRun(r.URL.Query().Get("run"))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-			return
-		}
-		page, err := exportField(tr, open)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Content-Disposition", `attachment; filename="trace-field_`+domain.AddrFileName(tr.Addr)+`.html"`)
-		w.Write(page)
-	})
-	// POST /trace-field/follow?run=RUN&path=I.J.K&hop=N follows hop N of that step, or without path every hop depth=D deep, into a new run.
-	mux.HandleFunc("POST /trace-field/follow", func(w http.ResponseWriter, r *http.Request) {
-		reply := func(code int, v map[string]any) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(code)
-			json.NewEncoder(w).Encode(v)
-		}
-		if r.Header.Get("X-Dotweavier") != "1" {
-			reply(http.StatusForbidden, map[string]any{"error": "missing X-Dotweavier header"})
-			return
-		}
-		q := r.URL.Query()
-		phase, done := status("follow "+q.Get("run"), true)
-		hop, _ := strconv.Atoi(q.Get("hop"))
-		depth, _ := strconv.Atoi(q.Get("depth"))
-		name, warns, err := domain.FollowFieldRun(r.Context(), domain.FollowQuery{Run: q.Get("run"), Step: q.Get("path"), Hop: hop, Depth: depth, Progress: phase})
-		warn(warns)
-		done("path=%s hop=%s: run=%s err=%v", q.Get("path"), q.Get("hop"), name, err)
-		if err != nil {
-			reply(http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
-			return
-		}
-		reply(http.StatusOK, map[string]any{"run": name})
-	})
-	// POST /trace-field?addr=ADDR traces like the CLI and returns the saved run's name.
-	mux.HandleFunc("POST /trace-field", func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Dotweavier") != "1" { // same CSRF guard as sync and remove
-			http.Error(w, "missing X-Dotweavier header", http.StatusForbidden)
-			return
-		}
-		src := active(w)
-		if src == nil {
-			return
-		}
-		a := r.URL.Query().Get("addr")
-		phase, done := status("trace field "+a, true)
-		reply := func(code int, v map[string]any) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(code)
-			json.NewEncoder(w).Encode(v)
-		}
-		var tr *domain.FieldTrace
-		dir, err := src.FolderOf(a)
-		if err == nil {
-			follow, _ := strconv.Atoi(r.URL.Query().Get("follow")) // a hop that fails stays unfollowed
-			tr, err = domain.TraceField(r.Context(), domain.FieldQuery{Dir: dir, Follow: follow, Progress: phase}, a)
-		}
-		var name string
-		var origin, uses int
-		if err == nil {
-			warn(tr.Warnings)
-			origin, uses = len(tr.Origin), len(tr.Uses)
-			name, err = domain.SaveFieldRun(tr, 0)
-		}
-		done("origin=%d uses=%d run=%s err=%v", origin, uses, name, err)
-		if err != nil {
-			reply(http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
-			return
-		}
-		reply(http.StatusOK, map[string]any{"run": name})
-	})
+	fieldRoutes(mux, active)
 
 	fmt.Printf("overview -> http://%s/\n", ln.Addr())
 	fmt.Printf("field traces -> http://%s/ui/trace-field.html\n", ln.Addr())
@@ -369,6 +286,95 @@ func serveOverview(addr, ws string, maxNodes int, open string) {
 		openPage(fmt.Sprintf("http://%s%s", ln.Addr(), open))
 	}
 	must(http.Serve(ln, mux))
+}
+
+// fieldRoutes serves the field page's runs: list, read, export, trace and follow, each a single call into the domain.
+func fieldRoutes(mux *http.ServeMux, active func(http.ResponseWriter) *domain.OverviewSource) {
+	reply := func(w http.ResponseWriter, code int, v any) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		json.NewEncoder(w).Encode(v)
+	}
+	// GET /trace-field/runs: the kept runs, newest first.
+	mux.HandleFunc("GET /trace-field/runs", func(w http.ResponseWriter, _ *http.Request) {
+		runs, err := domain.FieldRuns()
+		if err != nil {
+			reply(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			return
+		}
+		reply(w, http.StatusOK, runs)
+	})
+	// GET /trace-field/run?run=RUN: one kept run; without run, the newest.
+	mux.HandleFunc("GET /trace-field/run", func(w http.ResponseWriter, r *http.Request) {
+		run, err := domain.LoadFieldRun(r.URL.Query().Get("run"))
+		if err != nil {
+			reply(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+			return
+		}
+		reply(w, http.StatusOK, run)
+	})
+	// GET /trace-field/export?run=RUN&open=N: the run as one self-contained HTML file, for download.
+	mux.HandleFunc("GET /trace-field/export", func(w http.ResponseWriter, r *http.Request) {
+		run, err := domain.LoadFieldRun(r.URL.Query().Get("run"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+			return
+		}
+		open, _ := strconv.Atoi(r.URL.Query().Get("open"))
+		page, err := exportField(run, open)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="trace-field_`+domain.AddrFileName(run.Addr)+`.html"`)
+		w.Write(page)
+	})
+	// POST /trace-field/follow?run=RUN&path=I.J.K&hop=N follows hop N of that step, or without path every hop depth=D deep, into a new run.
+	mux.HandleFunc("POST /trace-field/follow", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Dotweavier") != "1" {
+			reply(w, http.StatusForbidden, map[string]any{"error": "missing X-Dotweavier header"})
+			return
+		}
+		q := r.URL.Query()
+		phase, done := status("follow "+q.Get("run"), true)
+		hop, _ := strconv.Atoi(q.Get("hop"))
+		depth, _ := strconv.Atoi(q.Get("depth"))
+		run, warns, err := domain.FollowFieldRun(r.Context(), domain.FollowQuery{Run: q.Get("run"), Step: q.Get("path"), Hop: hop, Depth: depth, Progress: phase})
+		warn(warns)
+		done("path=%s hop=%s: err=%v", q.Get("path"), q.Get("hop"), err)
+		if err != nil {
+			reply(w, http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
+			return
+		}
+		reply(w, http.StatusOK, map[string]any{"run": run.Name})
+	})
+	// POST /trace-field?addr=ADDR[&include-tests=1][&max-projects=N][&only=origin|uses][&follow=N] traces like the CLI and returns the kept run's name.
+	mux.HandleFunc("POST /trace-field", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Dotweavier") != "1" { // same CSRF guard as sync and remove
+			reply(w, http.StatusForbidden, map[string]any{"error": "missing X-Dotweavier header"})
+			return
+		}
+		src := active(w)
+		if src == nil {
+			return
+		}
+		q := r.URL.Query()
+		a := q.Get("addr")
+		phase, done := status("trace field "+a, true)
+		maxProjects, _ := strconv.Atoi(q.Get("max-projects"))
+		follow, _ := strconv.Atoi(q.Get("follow")) // a hop that fails stays unfollowed
+		run, err := domain.TraceField(r.Context(), domain.FieldQuery{Workspace: src.Workspace(), IncludeTests: q.Get("include-tests") == "1",
+			MaxProjects: maxProjects, Only: q.Get("only"), Follow: follow, Keep: true, Progress: phase}, a)
+		if err != nil {
+			done("err=%v", err)
+			reply(w, http.StatusUnprocessableEntity, map[string]any{"error": err.Error()})
+			return
+		}
+		warn(run.Warnings)
+		done("origin=%d uses=%d run=%s", len(run.Origin), len(run.Uses), run.Name)
+		reply(w, http.StatusOK, map[string]any{"run": run.Name})
+	})
 }
 
 // reuseOverview opens open on the overview already serving addr, switching it to ws if set; false if that fails.

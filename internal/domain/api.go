@@ -2,9 +2,7 @@
 package domain
 
 import (
-	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -204,21 +202,25 @@ type PathQuery struct {
 	Progress     func(string) // optional: told each phase as it starts
 }
 
-// TracePath finds up to maxPaths call paths a->b, each address project::Type.Method, project:rel/path.go:Type.Method or project:rel/path.go:LINE.
+// TracePath finds up to maxPaths call paths a->b, each address project::Type.Method, [project:]rel/path.go:Type.Method or [project:]rel/path.go:LINE, located in q.Workspace.
 func TracePath(q PathQuery) (*PathTrace, error) {
 	a, b, maxPaths, tests := q.A, q.B, q.MaxPaths, q.IncludeTests
 	ws, fs, err := workspaceFolders(q.Workspace)
 	if err != nil {
 		return nil, err
 	}
-	addrA, err := symbolAddr(a)
-	if err != nil {
-		return nil, err
+	l := locator{ws: ws}
+	var addrs [2]address
+	for i, s := range []string{a, b} {
+		sp, err := l.locate("", s)
+		if err != nil {
+			return nil, err
+		}
+		if addrs[i] = sp.Addr; sp.Addr.Name == "" && sp.Addr.Line == 0 {
+			return nil, fmt.Errorf("bad address %q, want project::Type.Method, [project:]rel/path:Type.Method or [project:]rel/path:LINE", s)
+		}
 	}
-	addrB, err := symbolAddr(b)
-	if err != nil {
-		return nil, err
-	}
+	addrA, addrB := addrs[0], addrs[1]
 	g, loaded, warnings, err := loadIndexes(fs, q.Progress)
 	if err != nil {
 		return nil, err
@@ -304,28 +306,32 @@ type FieldStep struct {
 	Hops   []Hop        `json:"hops,omitempty"` // calls from this step's function into other projects
 }
 
-// FieldTrace is a field trace run: the two trees, and what it ran with, so
-// FollowFieldRun can continue it later from a saved copy.
+// FieldTrace is the two trees of a field trace.
 type FieldTrace struct {
-	Origin       []*FieldStep // where the value comes from; each step flows into its parent
-	Uses         []*FieldStep // where it goes; each step flows into its kids
-	Warnings     []string     `json:",omitempty"` // one line each: projects loaded, skipped or not loaded, call paths skipped, hops not followed
-	Addr         string       `json:",omitempty"` // the seed, as project:rel/path:LINE in Dir
-	Dir          string       `json:",omitempty"` // absolute folder the run traces; hops are followed in it too
-	IncludeTests bool         `json:",omitempty"`
-	MaxProjects  int          `json:",omitempty"`
+	Origin   []*FieldStep // where the value comes from; each step flows into its parent
+	Uses     []*FieldStep // where it goes; each step flows into its kids
+	Warnings []string     `json:",omitempty"` // one line each: projects loaded, skipped or not loaded, call paths skipped, hops not followed
 }
 
-// FieldQuery is what TraceField traces.
+// FieldQuery is what TraceField traces, and what a run keeps of how it ran.
 type FieldQuery struct {
-	// Folder the address resolves in, else the registered workspace folder whose
-	// projects have it. The run traces the registered folder that holds the
-	// seed's project, where projects have the names their indexes have.
-	Dir          string
-	IncludeTests bool
-	MaxProjects  int          // load at most this many projects when following shared fields; 0: 10
-	Follow       int          // follow hops this many services deep, at most maxFollow hops; 0: none
-	Progress     func(string) // optional: told each phase as it starts
+	Workspace    string       `json:",omitempty"` // workspace the address resolves in when Dir does not have it; DefaultWorkspace for ""
+	Dir          string       `json:",omitempty"` // query: folder the address resolves in first; run: the deepest Workspace folder holding the seed's project, else Dir
+	IncludeTests bool         `json:",omitempty"`
+	MaxProjects  int          `json:",omitempty"` // load at most this many projects when following shared fields; 0: 10
+	Only         string       `json:",omitempty"` // "origin" or "uses": show that tree alone; both walks still run, as each feeds the other
+	Follow       int          `json:"-"`          // follow hops this many services deep, at most maxFollow hops; 0: none
+	Keep         bool         `json:"-"`          // keep the run in the history, under FieldRun.Name
+	Progress     func(string) `json:"-"`          // optional: told each phase as it starts
+}
+
+// FieldRun is a field trace run: its trees whole, whatever Only says, and what
+// it ran with, so FollowFieldRun can continue it.
+type FieldRun struct {
+	Name string `json:",omitempty"` // its ID in the history; "" if not kept
+	Addr string `json:",omitempty"` // the seed, as project:rel/path:LINE in Dir
+	FieldQuery
+	FieldTrace
 }
 
 // report tells progress, if any, that phase starts.
@@ -342,160 +348,47 @@ func (q FieldQuery) maxProjects() int {
 	return q.MaxProjects
 }
 
-// symbolAddr parses a trace path end: a project and a symbol or line.
-func symbolAddr(s string) (address, error) {
-	a, err := parseAddr(s)
-	if err != nil || a.Project == "" || a.Name == "" && a.Line == 0 {
-		return address{}, fmt.Errorf("bad address %q, want project::Type.Method, project:rel/path:Type.Method or project:rel/path:LINE", s)
-	}
-	return a, nil
-}
-
 // langOfExt is the language of a source file by its extension, "" if unknown.
 func langOfExt(file string) string {
 	return map[string]string{".go": "go", ".java": "jvm", ".kt": "jvm"}[filepath.Ext(file)]
 }
 
-// langProjects is the projects under dir written in lang; every project for "".
-func langProjects(dir, lang string) ([]project, error) {
-	ps, err := discover(dir)
-	return slices.DeleteFunc(ps, func(p project) bool { return lang != "" && p.lang != lang }), err
-}
-
-// runFolder resolves addr from folder dir: it returns the folder a run traces
-// and addr as named there. addr resolves in dir when one of its projects has the
-// file, else in the one registered folder whose projects have it, so an address
-// from an indexed project traces from any current folder. The run traces the
-// deepest registered folder holding the seed's project, whose projects are named
-// as their indexes name them; outside every registered folder, the folder addr
-// resolved in.
-func runFolder(dir, addr string) (string, string, error) {
-	a, lang, err := fieldAddr(addr)
-	if err != nil {
-		return "", "", err
-	}
-	if dir, err = filepath.Abs(dir); err != nil {
-		return "", "", err
-	}
-	fs, err := registryList(`SELECT DISTINCT dir FROM workspace_folders`)
-	if err != nil {
-		return "", "", err
-	}
-	ps, err := langProjects(dir, lang)
-	if err != nil {
-		return "", "", err
-	}
-	p, file, miss := resolveFile(ps, a)
-	if miss != nil {
-		f, err := folderWithFile(fs, a, lang)
-		if errors.Is(err, errNoProject) {
-			return "", "", miss
-		}
-		if err != nil {
-			return "", "", err
-		}
-		if ps, err = langProjects(f, lang); err != nil {
-			return "", "", err
-		}
-		if p, file, err = resolveFile(ps, a); err != nil {
-			return "", "", err
-		}
-		dir = f
-	}
-	if top := deepest(fs, p.dir); top != "" {
-		dir = top
-	}
-	name, err := filepath.Rel(dir, p.dir)
-	if err != nil {
-		return "", "", err
-	}
-	rel, err := filepath.Rel(p.dir, file)
-	if err != nil {
-		return "", "", err
-	}
-	return dir, address{Project: filepath.ToSlash(name), File: filepath.ToSlash(rel), Line: a.Line}.String(), nil
-}
-
-// folderWithFile is the innermost of folders whose projects in lang ("": any) have the file a names.
-func folderWithFile(folders []string, a address, lang string) (string, error) {
-	folders = slices.Clone(folders)
-	slices.SortFunc(folders, func(a, b string) int { return cmp.Compare(len(b), len(a)) })
-	found := map[string]bool{} // absolute files already found
-	var hits []string
-	for _, f := range folders {
-		ps, err := langProjects(f, lang)
-		if err != nil {
-			continue // a registered folder that was moved or deleted
-		}
-		_, abs, err := resolveFile(ps, a)
-		if err != nil {
-			if !errors.Is(err, errNoProject) {
-				return "", err // in several projects of one folder: the user must pick
-			}
-			continue
-		}
-		if !found[abs] {
-			found[abs] = true
-			hits = append(hits, f)
-		}
-	}
-	switch len(hits) {
-	case 0:
-		return "", fmt.Errorf("%w %s", errNoProject, a.loc())
-	case 1:
-		return hits[0], nil
-	}
-	return "", fmt.Errorf("%s is in several workspace folders (%s); pass --project DIR", a.loc(), strings.Join(hits, ", "))
-}
-
-// WorkspaceOf is a registered workspace with a folder containing dir, or "" if none.
-func WorkspaceOf(dir string) (string, error) {
-	all, err := Workspaces()
-	if err != nil {
-		return "", err
-	}
-	for _, ws := range all {
-		fs, err := folders(ws)
-		if err != nil {
-			return "", err
-		}
-		if deepest(fs, dir) != "" {
-			return ws, nil
-		}
-	}
-	return "", nil
-}
-
 // TraceField runs a field trace: it traces the value computed at
 // [project:]rel/path.go:LINE in both directions, live over SSA of the projects
 // in the run's folder (see FieldQuery.Dir), gives every step its call path and
-// hops from the indexes, and follows q.Follow services deep. A .java or .kt
-// file is traced from its project's syntax instead (jvm_field.go). Hops that
-// cannot be followed come back as warnings. Cancelling ctx stops it between
-// package loads.
-func TraceField(ctx context.Context, q FieldQuery, addr string) (*FieldTrace, error) {
-	dir, addr, err := runFolder(q.Dir, addr)
+// hops from the indexes, follows q.Follow services deep and, with q.Keep, keeps
+// the run in the history. A .java or .kt file is traced from its project's
+// syntax instead (jvm_field.go). Hops that cannot be followed come back as
+// warnings. Cancelling ctx stops it between package loads.
+func TraceField(ctx context.Context, q FieldQuery, addr string) (*FieldRun, error) {
+	if q.Only != "" && q.Only != "origin" && q.Only != "uses" {
+		return nil, fmt.Errorf("only %q, want origin or uses", q.Only)
+	}
+	if _, _, err := fieldAddr(addr); err != nil {
+		return nil, err
+	}
+	run := &fieldRun{loc: locator{ws: q.Workspace}}
+	sp, err := run.loc.locate(q.Dir, addr)
 	if err != nil {
 		return nil, err
 	}
-	q.Dir = dir
-	run := &fieldRun{q: q}
-	r, err := run.trace(ctx, addr, nil, 1)
+	q.Dir = sp.Folder
+	run.q = q
+	t, err := run.traceAt(ctx, sp, nil, 1)
 	if err != nil {
 		return nil, err
 	}
-	r.Addr, r.Dir, r.IncludeTests, r.MaxProjects = addr, dir, q.IncludeTests, q.MaxProjects
-	run.r = r
+	q.Keep, q.Progress = false, nil // run.q keeps both
+	r := &FieldRun{Addr: sp.Addr.String(), FieldQuery: q, FieldTrace: *t}
+	run.r = &r.FieldTrace
 	if q.Follow > 0 {
 		_, errs := run.followHops(ctx, q.Follow)
 		for _, e := range errs {
 			r.Warnings = append(r.Warnings, "hop not followed: "+e.Error())
 		}
 	}
-	return r, nil
-}
-
-// fieldTrace turns a Go tracker's walks into the two trees.
-func fieldTrace(t *tracker, seedProject project, projects []project) *FieldTrace {
-	return t.result(newPrinter(seedProject, projects))
+	if run.q.Keep {
+		err = saveRun(r)
+	}
+	return r, err
 }

@@ -67,13 +67,14 @@ button:hover{border-color:#6b78d8}
 <svg id="svg"><defs></defs><g id="g"></g></svg>
 <button id="menuBtn" title="history of field traces">☰</button><div id="hist"></div><div id="viewer"><div class="vh"><span id="vTitle"></span><span id="vMsg" class="hint" style="flex:0 1 auto;margin:0"></span><button id="vClose">close · esc</button></div><pre id="vBody"></pre></div><div id="res"></div><div id="dock"><div id="calls"></div><div id="side"></div><div id="legend"></div></div>
 <script>
-// Runs load by <script src>, which works from file:// where fetch() of a local file does not.
-const HIST='../trace-field-history/';
-const traceName=new URLSearchParams(location.search).get('t')||'latest';
-const loadScript=(src,ok,fail)=>{const el=document.createElement('script'); el.src=src; el.onload=ok; el.onerror=fail||(()=>ok()); document.head.appendChild(el);};
-// History menu: every run in index.js, newest first; the open run is highlighted.
-function buildMenu(){const H=window.HISTORY||[], m=document.getElementById('hist'), btn=document.getElementById('menuBtn');
-  m.innerHTML=`<div class="ttl">history · ${H.length} run${H.length===1?'':'s'}, newest first</div>`+(H.map((h,k)=>`<div class="hr${(h.name===traceName||traceName==='latest'&&k===0)?' cur':''}" data-t="${escH(h.name)}" title="${escH(h.name)}"><span class="at">${escH(h.at)}</span> ${escH(h.addr||h.name)}</div>`).join('')||'<div class="hr">no runs yet</div>');
+// The server lists and serves the kept runs; an exported page carries its run inline.
+const P=new URLSearchParams(location.search);
+let traceName=P.get('t')||''; // '' opens the newest run
+const OPEN=+P.get('open')||window.OPEN||0; // levels open at first; 0: the page's default
+const keepOpen=OPEN?{open:OPEN}:{};
+// History menu: every kept run, newest first; the open run is highlighted.
+function buildMenu(H){const m=document.getElementById('hist'), btn=document.getElementById('menuBtn');
+  m.innerHTML=`<div class="ttl">history · ${H.length} run${H.length===1?'':'s'}, newest first</div>`+(H.map(h=>`<div class="hr${h.name===traceName?' cur':''}" data-t="${escH(h.name)}" title="${escH(h.name)}"><span class="at">${escH(String(h.at).slice(0,19).replace('T',' '))}</span> ${escH(h.addr||h.name)}</div>`).join('')||'<div class="hr">no runs yet</div>');
   btn.onclick=e=>{e.stopPropagation(); m.classList.toggle('open');};
   m.onclick=e=>{const r=e.target.closest('[data-t]'); if(r)location.search='?t='+encodeURIComponent(r.dataset.t);};
   addEventListener('mousedown',e=>{if(!m.contains(e.target)&&e.target!==btn)m.classList.remove('open');});
@@ -81,9 +82,13 @@ function buildMenu(){const H=window.HISTORY||[], m=document.getElementById('hist
 const escH=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 // An exported page (--format html, or the export button) carries its run inline: no history, no server.
 if(window.EXPORTED){document.getElementById('menuBtn').remove(); start(window.TRACE);}
-else loadScript(HIST+'index.js',()=>{buildMenu(); loadScript(HIST+encodeURIComponent(traceName)+'.js',()=>start(window.TRACE),noData);});
-function noData(){document.body.insertAdjacentHTML('beforeend',`<div style="position:absolute;inset:40% 0 auto;text-align:center;color:#ff7a7a">no trace data at trace-field-history/${traceName.replace(/[<>&]/g,'')}.js<br><span style="color:#8b93c4">run: dotweavier trace field ADDR --format ui</span></div>`);}
-function start(D){
+else Promise.all([fetch('/trace-field/runs').then(r=>r.ok?r.json():[]),fetch('/trace-field/run?'+new URLSearchParams({run:traceName})).then(r=>r.ok?r.json():null)])
+  .then(([H,R])=>{if(!R)return noData(); traceName=R.Name; buildMenu(H||[]); start(R);},noData);
+function noData(){document.body.insertAdjacentHTML('beforeend',`<div style="position:absolute;inset:40% 0 auto;text-align:center;color:#ff7a7a">no field trace run ${escH(traceName)}<br><span style="color:#8b93c4">run: dotweavier trace field ADDR --format ui</span></div>`);}
+// R is a domain FieldRun; it keeps both trees, and Only says which one the page shows.
+function start(R){
+const D={addr:R.Addr||'', only:R.Only||'', maxProjects:R.MaxProjects, includeTests:R.IncludeTests,
+  origin:R.Only==='uses'?[]:R.Origin||[], uses:R.Only==='origin'?[]:R.Uses||[]};
 // Served by `dotweavier overview`, the page can run traces; from file:// it only shows them.
 const served=location.protocol.startsWith('http')&&!window.EXPORTED;
 const home=(D.addr.match(/^([^:]+):[^:]+\.(go|java|kt):\d+$/)||[])[1]||'';
@@ -98,7 +103,7 @@ const cut=(s,n)=>s&&s.length>n?s.slice(0,n-1)+'…':(s||'');
 // ---- model: center = seed; origin kids grow left (side -1), uses kids grow right (side 1) ----
 let all=[];
 // Open the first levels; a step with one way on stays open so chains read through; one with over 15 starts closed.
-function wrap(d,side,depth,parent,j){const nk=(d.kids||[]).length, n={d,side,depth,parent,path:parent.path.concat(j),open:nk<=15&&(depth<(D.open||6)||nk<=1||isHop(d)),kids:[]}; all.push(n);
+function wrap(d,side,depth,parent,j){const nk=(d.kids||[]).length, n={d,side,depth,parent,path:parent.path.concat(j),open:nk<=15&&(depth<(OPEN||6)||nk<=1||isHop(d)),kids:[]}; all.push(n);
   n.kids=(d.kids||[]).map((k,j)=>wrap(k,side,depth+1,n,j)); return n;}
 const isHop=d=>/^(grpc|http|pubsub)/.test(d.kind);
 const openHops=d=>(d.hops||[]).filter(h=>!h.followed).length;
@@ -214,14 +219,12 @@ addEventListener('keydown',e=>{if(e.target.id==='q')return;
 // ---- side panel ----
 const side=document.getElementById('side');
 // The options the run was traced with; runs saved before they were recorded show none.
-// A tree is empty only in a run traced with --only: the seed is in both otherwise.
-const only=!(D.origin||[]).length?'uses':!(D.uses||[]).length?'origin':'';
-const opts=[only&&'only='+only, D.maxProjects&&'max-projects='+D.maxProjects, D.includeTests&&'include-tests',
-  D.open&&'depth='+D.open].filter(Boolean).join(' ');
+const opts=[D.only&&'only='+D.only, D.maxProjects&&'max-projects='+D.maxProjects, D.includeTests&&'include-tests',
+  OPEN&&'depth='+OPEN].filter(Boolean).join(' ');
 side.innerHTML=`<div class="ctl"><h1>DOTWEAVIER · LIFECYCLE</h1><div class="ep">${esc(D.addr)}</div>${opts?`<div class="hint">${esc(opts)}</div>`:''}
  <div class="hint">${nOrigin} origin steps ◀ seed ▶ ${nUses} lifecycle steps</div>
  <div id="qbox"><span id="chip" hidden> <b title="remove project · backspace">×</b></span><input id="q" autocomplete="off"></div><div class="hint" id="hits"></div>
- <button id="ea">expand all</button><button id="ca">collapse all</button><button id="fi">fit</button><button id="fo">focus</button>${served?`<a href="/trace-field/export?run=${encodeURIComponent(traceName)}" download><button>export html</button></a>`:''}${served&&all.some(n=>n.side>=0&&openHops(n.d))?`<br><button id="fa">follow all hops</button> <select id="fd"><option>1</option><option selected>2</option><option>3</option></select> services deep <span class="hint" id="faMsg"></span>`:''}
+ <button id="ea">expand all</button><button id="ca">collapse all</button><button id="fi">fit</button><button id="fo">focus</button>${served?`<a href="/trace-field/export?${new URLSearchParams({run:traceName,...keepOpen})}" download><button>export html</button></a>`:''}${served&&all.some(n=>n.side>=0&&openHops(n.d))?`<br><button id="fa">follow all hops</button> <select id="fd"><option>1</option><option selected>2</option><option>3</option></select> services deep <span class="hint" id="faMsg"></span>`:''}
 
  </div><div id="det"></div>`;
 document.getElementById('legend').innerHTML=Object.entries(KIND).map(([k,c])=>`<span class="lg"><i style="background:${c}"></i>${k}</span>`).join('');
@@ -296,7 +299,7 @@ function details(){calls(); const el=document.getElementById('det'); if(!sel){el
 // Following a hop saves a new run on the server; the page opens it with the step still selected.
 async function follow(q,keep){const msg=document.getElementById('fhMsg')||document.getElementById('faMsg'); msg.textContent='following…';
   try{const r=await fetch('/trace-field/follow?'+new URLSearchParams({run:traceName,...q}),{method:'POST',headers:{'X-Dotweavier':'1'}}); const j=await r.json();
-    if(!r.ok)throw new Error(j.error||r.statusText); location.search='?'+new URLSearchParams({t:j.run,...(keep?{sel:keep.join('.')}:{}),...(scope!==null?{p:scope}:{})});}
+    if(!r.ok)throw new Error(j.error||r.statusText); location.search='?'+new URLSearchParams({t:j.run,...keepOpen,...(keep?{sel:keep.join('.')}:{}),...(scope!==null?{p:scope}:{})});}
   catch(e){msg.textContent=String(e.message||e);}}
 // Whole-file viewer (served pages only): line numbers, the step's line highlighted and scrolled to.
 async function viewFile(loc){const v=document.getElementById('viewer'), body=document.getElementById('vBody'), t=document.getElementById('vTitle');
@@ -312,9 +315,11 @@ document.getElementById('vClose').onclick=()=>document.getElementById('viewer').
 addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('viewer').classList.remove('open');});
 // Home-project locations carry no project prefix ("rel.go:LINE"); the server needs the full address.
 function qualify(loc){return home&&loc.split(':').length===2?home+':'+loc:loc;}
+// A trace from the viewer runs with the open run's options.
 async function traceFrom(addr){const msg=document.getElementById('vMsg'); msg.textContent='tracing '+addr+'…';
-  try{const r=await fetch('/trace-field?addr='+encodeURIComponent(addr),{method:'POST',headers:{'X-Dotweavier':'1'}}); const j=await r.json();
-    if(!r.ok)throw new Error(j.error||r.statusText); location.search='?'+new URLSearchParams({t:j.run,...(scope!==null?{p:scope}:{})});}
+  const q={addr,...(D.includeTests?{'include-tests':'1'}:{}),...(D.maxProjects?{'max-projects':D.maxProjects}:{}),...(D.only?{only:D.only}:{})};
+  try{const r=await fetch('/trace-field?'+new URLSearchParams(q),{method:'POST',headers:{'X-Dotweavier':'1'}}); const j=await r.json();
+    if(!r.ok)throw new Error(j.error||r.statusText); location.search='?'+new URLSearchParams({t:j.run,...keepOpen,...(scope!==null?{p:scope}:{})});}
   catch(e){msg.textContent=String(e.message||e);}}
 const want=new URLSearchParams(location.search).get('sel'); if(want){sel=all.find(n=>n.side>=0&&n.path.join('.')===want)||null; for(let p=sel?.parent;p;p=p.parent)p.open=true; if(sel)sel.open=true;}
 details(); draw(); focusView(); addEventListener('resize',focusView);

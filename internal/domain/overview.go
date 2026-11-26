@@ -77,21 +77,6 @@ func (src *OverviewSource) Warnings() []string {
 // Workspace is the name of the workspace this overview shows.
 func (src *OverviewSource) Workspace() string { return src.ws }
 
-// FolderOf is the folder that field traces and Source of address addr run over: the innermost one whose projects have its file, as folderWithFile finds it.
-// ponytail: a field trace sees only the projects under that one folder; trace over
-// every folder of the workspace if hops into other folders are needed.
-func (src *OverviewSource) FolderOf(addr string) (string, error) {
-	a, err := parseAddr(addr)
-	if err != nil {
-		return "", err
-	}
-	f, err := folderWithFile(src.folders, a, langOfExt(a.File))
-	if errors.Is(err, errNoProject) {
-		return "", fmt.Errorf("%w in workspace %s", err, src.ws)
-	}
-	return f, err
-}
-
 // mergedGraph merges the indexes of every project inside the absolute folders, joined and without tests.
 func mergedGraph(folders []string) (*graph, []string, error) {
 	g, _, warns, err := loadIndexes(folders, nil)

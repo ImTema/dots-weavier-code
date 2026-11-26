@@ -129,17 +129,19 @@ func hopStep(h *Hop, kids []*FieldStep) *FieldStep {
 }
 
 // followHops follows every hop on the lifecycle side, then the hops in what it
-// grafted, depth services deep, breadth-first, with maxFollow hops for budget. It
-// returns how many it followed and why the others failed.
+// grafted, depth services deep, breadth-first, with maxFollow hops for budget. A
+// handler already traced in the run is marked at the step, not traced again. It
+// returns how many hops it marked followed and why the others failed.
 // ponytail: breadth-first with a flat budget; per-service limits if traces fan out.
-func (run *fieldRun) followHops(ctx context.Context, depth int) (followed int, errs []error) {
+func (run *fieldRun) followHops(ctx context.Context, depth int) (marked int, errs []error) {
 	r := run.r
+	followed := 0 // traced, against the budget
 	type at struct {
 		path  []int
 		level int // services from the seed: 1 for hops in the seed's own trace
 	}
 	var queue []at
-	seen := map[string]bool{} // handlers already followed in this trace
+	seen := map[string]bool{} // handlers already followed in this run, by earlier follows too
 	var scan func(ss []*FieldStep, path []int, level int)
 	scan = func(ss []*FieldStep, path []int, level int) {
 		for i, s := range ss {
@@ -147,13 +149,18 @@ func (run *fieldRun) followHops(ctx context.Context, depth int) (followed int, e
 			if len(s.Hops) > 0 {
 				queue = append(queue, at{p, level})
 			}
+			for _, h := range s.Hops {
+				if h.Followed {
+					seen[h.Addr] = true
+				}
+			}
 			scan(s.Kids, p, level)
 		}
 	}
 	scan(r.Uses, nil, 1)
 	for len(queue) > 0 && followed < maxFollow {
 		if err := ctx.Err(); err != nil {
-			return followed, append(errs, err)
+			return marked + followed, append(errs, err)
 		}
 		q := queue[0]
 		queue = queue[1:]
@@ -173,6 +180,7 @@ func (run *fieldRun) followHops(ctx context.Context, depth int) (followed int, e
 				h.Followed = true
 				s.Kids = append(s.Kids, hopStep(h, nil))
 				s.Kids[len(s.Kids)-1].Code = h.Method + "  (traced at another step)"
+				marked++
 				continue
 			}
 			seen[h.Addr] = true
@@ -186,7 +194,7 @@ func (run *fieldRun) followHops(ctx context.Context, depth int) (followed int, e
 			scan(s.Kids[g].Kids, append(append([]int(nil), q.path...), g), q.level+1)
 		}
 	}
-	return followed, errs
+	return marked + followed, errs
 }
 
 func stepAt(ss []*FieldStep, path []int) (*FieldStep, error) {

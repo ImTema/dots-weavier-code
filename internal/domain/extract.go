@@ -340,6 +340,9 @@ func extract(ctx context.Context, g *graph, p project, tests bool) (st loadStats
 // loadSSA builds SSA bodies for p's own packages only, dependencies from export data; a shared fset keeps several loads' positions distinct.
 func loadSSA(ctx context.Context, p project, tests bool, st *loadStats, fset *token.FileSet) (*ssa.Program, map[*types.Package]bool, error) {
 	t0 := time.Now()
+	if fset == nil {
+		fset = token.NewFileSet()
+	}
 	cfg := &packages.Config{
 		Context: ctx,
 		Fset:    fset,
@@ -362,10 +365,7 @@ func loadSSA(ctx context.Context, p project, tests bool, st *loadStats, fset *to
 	st.load = time.Since(t0)
 
 	// Like ssautil.Packages, but keeping ill-typed packages (ADR 0010).
-	if len(pkgs) == 0 {
-		return nil, nil, fmt.Errorf("no packages")
-	}
-	prog := ssa.NewProgram(pkgs[0].Fset, ssa.InstantiateGenerics)
+	prog := ssa.NewProgram(fset, ssa.InstantiateGenerics)
 	root := map[*packages.Package]bool{}
 	for _, pk := range pkgs {
 		root[pk] = true

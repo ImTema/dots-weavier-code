@@ -50,11 +50,22 @@ button:hover{border-color:#6b78d8}
 .node.dim{opacity:.25}.node.hit rect{stroke:#fff!important;stroke-width:2.4}
 .node.sel rect{filter:drop-shadow(0 0 8px #a9b6ff)}
 .edge{fill:none;stroke-width:1.4;opacity:.7}
+.edge.dim,.proj.dim{opacity:.25}
+/* Search: project chip before the input; results list opens upward from the input, 10 rows at a time. */
+#qbox{display:flex;align-items:center;gap:6px}#qbox input{flex:1;min-width:0}
+#chip{display:inline-flex;gap:4px;margin:8px 0 4px;padding:4px 8px;white-space:nowrap;border:1px solid #6b78d8;border-radius:10px;color:#fff}#chip[hidden]{display:none}
+#chip b{cursor:pointer;font-weight:normal;color:#8b93c4}#chip b:hover{color:#fff}
+#res{position:fixed;z-index:4;width:520px;max-width:calc(100% - 20px);display:none;background:rgba(8,10,28,.97);border:1px solid #2a3166;border-radius:8px;box-shadow:0 6px 24px #000}
+#res .rr{padding:3px 10px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+#res .rr:hover{background:#141a3d}#res .rr.cur{background:#1d2456;color:#fff}
+#res .at{color:#5d6596}#res .ttl{padding:4px 10px;color:#5d6596;font-size:11px;border-top:1px solid #1b2045}
+.proj rect{fill-opacity:.05;stroke-opacity:.55;stroke-width:1.2;stroke-dasharray:6 4}
+.proj text{font:11px ui-monospace,Menlo,monospace;letter-spacing:.1em;fill-opacity:.8}
 .cap{font:12px ui-monospace,Menlo,monospace;letter-spacing:.2em;fill:#5d6596}
 </style></head>
 <body>
 <svg id="svg"><defs></defs><g id="g"></g></svg>
-<button id="menuBtn" title="history of field traces">☰</button><div id="hist"></div><div id="viewer"><div class="vh"><span id="vTitle"></span><span id="vMsg" class="hint" style="flex:0 1 auto;margin:0"></span><button id="vClose">close · esc</button></div><pre id="vBody"></pre></div><div id="dock"><div id="calls"></div><div id="side"></div><div id="legend"></div></div>
+<button id="menuBtn" title="history of field traces">☰</button><div id="hist"></div><div id="viewer"><div class="vh"><span id="vTitle"></span><span id="vMsg" class="hint" style="flex:0 1 auto;margin:0"></span><button id="vClose">close · esc</button></div><pre id="vBody"></pre></div><div id="res"></div><div id="dock"><div id="calls"></div><div id="side"></div><div id="legend"></div></div>
 <script>
 // Runs load by <script src>, which works from file:// where fetch() of a local file does not.
 const HIST='../trace-field-history/';
@@ -86,8 +97,8 @@ const cut=(s,n)=>s&&s.length>n?s.slice(0,n-1)+'…':(s||'');
 
 // ---- model: center = seed; origin kids grow left (side -1), uses kids grow right (side 1) ----
 let all=[];
-// Open the first levels; a step with one way on stays open so chains read through.
-function wrap(d,side,depth,parent,j){const n={d,side,depth,parent,path:parent.path.concat(j),open:depth<(D.open||6)||(d.kids||[]).length<=1||isHop(d),kids:[]}; all.push(n);
+// Open the first levels; a step with one way on stays open so chains read through; one with over 15 starts closed.
+function wrap(d,side,depth,parent,j){const nk=(d.kids||[]).length, n={d,side,depth,parent,path:parent.path.concat(j),open:nk<=15&&(depth<(D.open||6)||nk<=1||isHop(d)),kids:[]}; all.push(n);
   n.kids=(d.kids||[]).map((k,j)=>wrap(k,side,depth+1,n,j)); return n;}
 const isHop=d=>/^(grpc|http|pubsub)/.test(d.kind);
 const openHops=d=>(d.hops||[]).filter(h=>!h.followed).length;
@@ -98,12 +109,18 @@ const fromUses=(D.uses||[]).length>0;
 (fromUses?D.uses:(D.origin||[])).forEach((u,i)=>{const o=fromUses?(D.origin||[]).find(o=>o.loc===u.loc)||{kids:[]}:u;
   const c={d:fromUses?u:{...u,hops:[]},side:0,depth:0,parent:null,path:[i],open:true,kids:[]}; all.push(c);
   c.left=(o.kids||[]).map((k,j)=>wrap(k,-1,1,{path:[]},j)); c.left.forEach(k=>k.parent=c); c.right=fromUses?(u.kids||[]).map((k,j)=>wrap(k,1,1,c,j)):[]; centers.push(c);});
+// Search text and project are fixed per step, so they are computed once instead of on every query.
+all.forEach(n=>{n.hay=JSON.stringify({...n.d,kids:0}).toLowerCase(); n.p=proj(n);});
 const nOrigin=all.filter(n=>n.side<0).length, nUses=all.filter(n=>n.side>0).length;
 
 // ---- layout: tidy tree per side, leaves stacked, parents centered on their children ----
-function place(n,x,next){n.x=x; const ks=n.open?n.kids:[];
-  if(!ks.length){n.y=next.y; next.y+=ROW; return;}
-  ks.forEach(k=>place(k,x+n.side*COL,next)); n.y=(ks[0].y+ks.at(-1).y)/2;}
+// A step entering another project gets a gap above and below its subtree, room for the project outline and name.
+const GAP=ROW;
+function place(n,x,next){n.x=x; const ks=n.open?n.kids:[], enter=n.parent&&proj(n)!==proj(n.parent);
+  if(enter)next.y+=GAP;
+  if(!ks.length){n.y=next.y; next.y+=ROW;}
+  else{ks.forEach(k=>place(k,x+n.side*COL,next)); n.y=(ks[0].y+ks.at(-1).y)/2;}
+  if(enter)next.y+=GAP;}
 function shift(n,dy){n.y+=dy; if(n.open)n.kids.forEach(k=>shift(k,dy));}
 function layout(){let top=0;
   for(const c of centers){c.x=0;
@@ -116,22 +133,33 @@ function layout(){let top=0;
 // ---- view ----
 const svg=document.getElementById('svg'), g=document.getElementById('g');
 const view={x:0,y:0,k:1}; const apply=()=>g.setAttribute('transform',`translate(${view.x},${view.y}) scale(${view.k})`);
-let sel=null, hits=[], hitI=-1;
+let sel=null;
 function visible(){const out=[]; const walk=n=>{out.push(n); if(n.open)n.kids.forEach(walk);};
   centers.forEach(c=>{out.push(c); c.left.forEach(walk); c.right.forEach(walk);}); return out;}
+// Project of a step: "proj:file:line" names it, home locations are "file:line", fields inherit their parent's.
+function proj(n){const l=(n.d.loc||'').split(':'); return l.length===3?l[0]:l.length===2?home:n.parent?proj(n.parent):home;}
+const PCOL=['#6be4ff','#ffd06b','#6dffc6','#ff9b6b','#b88bff','#c4ff6b','#ff7ad9','#7aa2ff'], pcol={};
+// One outline per connected run of same-project steps, so a call into another service shows as a boundary.
+function outlines(vs){const ps=new Set(vs.map(proj)); if(ps.size<2)return '';
+  const box=new Map(); for(const n of vs){let r=n; while(r.parent&&proj(r.parent)===proj(n))r=r.parent;
+    const b=box.get(r)||{p:proj(n),x0:1e9,y0:1e9,x1:-1e9,y1:-1e9}; box.set(r,b);
+    b.x0=Math.min(b.x0,n.x-NW/2); b.x1=Math.max(b.x1,n.x+NW/2); b.y0=Math.min(b.y0,n.y-NH/2); b.y1=Math.max(b.y1,n.y+NH/2);}
+  let h='', P=14; for(const b of box.values()){const c=pcol[b.p]??=PCOL[Object.keys(pcol).length%PCOL.length];
+    h+=`<g class="proj${scope!==null&&b.p!==scope?' dim':''}"><rect x="${b.x0-P}" y="${b.y0-P-12}" width="${b.x1-b.x0+2*P}" height="${b.y1-b.y0+2*P+12}" rx="10" fill="${c}" stroke="${c}"/><text x="${b.x0-P+8}" y="${b.y0-P+1}" fill="${c}">${esc(b.p||'?')}</text></g>`;}
+  return h;}
 function title(n){const d=n.d; return d.kind==='field'?d.name:d.loc;}
-function draw(){layout(); const vs=visible(); const q=document.getElementById('q')?.value.trim().toLowerCase();
-  let h='<text class="cap" x="'+(-COL+NW/2-150)+'" y="-40">◀ ORIGIN</text><text class="cap" x="'+(COL)+'" y="-40">LIFECYCLE ▶</text>';
+function draw(){layout(); const vs=visible();
+  let h='<text class="cap" x="'+(-COL+NW/2-150)+'" y="-40">◀ ORIGIN</text><text class="cap" x="'+(COL)+'" y="-40">LIFECYCLE ▶</text>'+outlines(vs);
   for(const n of vs){const p=n.parent; if(!p)continue;
     const c=KIND[n.d.kind]||'#888';
     // origin edges run child -> parent, lifecycle edges parent -> child
     let x1,x2; if(n.side<0){x1=n.x+NW/2; x2=p.x-NW/2;} else {x1=p.x+NW/2; x2=n.x-NW/2;}
     const [y1,y2]=n.side<0?[n.y,p.y]:[p.y,n.y], mx=(x1+x2)/2;
-    h+=`<path class="edge" stroke="${c}" ${n.d.kind==='overwritten'||n.d.kind==='callback?'?'stroke-dasharray="5 4"':''} d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" marker-end="url(#${mk(n.d.kind)})"/>`;}
-  vs.forEach((n,i)=>{const d=n.d, c=KIND[d.kind]||'#888', match=q&&(JSON.stringify(d.kids?{...d,kids:0}:d).toLowerCase().includes(q));
+    h+=`<path class="edge${dimmed(n)?' dim':''}" stroke="${c}" ${n.d.kind==='overwritten'||n.d.kind==='callback?'?'stroke-dasharray="5 4"':''} d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" marker-end="url(#${mk(n.d.kind)})"/>`;}
+  vs.forEach((n,i)=>{const d=n.d, c=KIND[d.kind]||'#888', dim=dimmed(n), match=dimQ&&!dim;
     const more=!n.open&&n.kids.length?` ▸${count(n)}`:'';
     const line2=d.kind==='field'?(d.type||''):cut(d.code,44);
-    h+=`<g class="node ${q&&!match?'dim':''} ${match?'hit':''} ${sel===n?'sel':''}" data-i="${i}" transform="translate(${n.x-NW/2},${n.y-NH/2})">
+    h+=`<g class="node ${dim?'dim':''} ${match?'hit':''} ${sel===n?'sel':''}" data-i="${i}" transform="translate(${n.x-NW/2},${n.y-NH/2})">
       <rect width="${NW}" height="${NH}" fill="${d.kind==='field'?'#2a0f2d':'#0b0f2a'}" stroke="${c}" ${d.kind==='overwritten'?'stroke-dasharray="4 3"':''}/>
       <rect width="5" height="${NH}" fill="${c}" stroke="none" rx="2"/>
       <text class="t1" x="12" y="16"><tspan fill="${c}">${esc(d.kind)}</tspan> ${esc(cut(title(n),36))}<tspan fill="#ff7ad9">${more}</tspan>${n.side>=0&&openHops(d)?`<tspan fill="#ff4fe8"> ⇢${openHops(d)}</tspan>`:''}</text>
@@ -171,10 +199,6 @@ svg.addEventListener('wheel',e=>{e.preventDefault();
 addEventListener('gesturestart',e=>{e.preventDefault(); pinch={k:view.k,x:e.clientX,y:e.clientY};});
 addEventListener('gesturechange',e=>{e.preventDefault(); if(pinch)zoomAt(pinch.x,pinch.y,pinch.k*e.scale**2);}); // squared: a full pinch spans more zoom
 addEventListener('gestureend',e=>{e.preventDefault(); pinch=null;});
-function search(step){const q=document.getElementById('q').value.trim().toLowerCase(); hits=[];
-  if(q){all.forEach(n=>{const d={...n.d,kids:0}; if(JSON.stringify(d).toLowerCase().includes(q)){hits.push(n); for(let p=n.parent;p;p=p.parent)p.open=true;}});}
-  draw(); document.getElementById('hits').textContent=q?`${hits.length} matches${hits.length?' · enter: next':''}`:'';
-  if(step&&hits.length){hitI=(hitI+1)%hits.length; sel=hits[hitI]; draw(); center(sel); details();}}
 // Call path between the seed's function and the selected step's, computed by attachCalls.
 function calls(){const el=document.getElementById('calls'); if(!sel||!sel.side){el.style.display='none';return;}
   const c=sel.d.call; el.style.display='block';
@@ -183,7 +207,8 @@ function calls(){const el=document.getElementById('calls'); if(!sel||!sel.side){
     const hop=k?`<span class="hop" style="${/grpc|pubsub/.test(st.Via)?'color:#ff4fe8':''}">─${esc(st.Via)}${st.Method?' '+esc(st.Method):''}→</span>`:'';
     return hop+`<span class="fn" title="${esc(n.Project+':'+n.File+':'+n.Line)}">${esc(nm)}</span>`;}).join('')
     +` <span class="hint">· ${c.Steps.length-1} hops${c.Iface?` · ${c.Iface} interface (${c.Sure} sure)`:''}</span>`;}
-addEventListener('keydown',e=>{if(e.target.id==='q'){if(e.key==='Enter')search(true); return;}
+addEventListener('keydown',e=>{if(e.target.id==='q')return;
+  if(e.ctrlKey||e.metaKey||e.altKey)return; // leave copy, paste and other shortcuts to the browser
   if(e.key==='f')fit(); if(e.key==='c')focusView(); if(e.key==='Escape'){sel=null;draw();details();}});
 
 // ---- side panel ----
@@ -195,12 +220,61 @@ const opts=[only&&'only='+only, D.maxProjects&&'max-projects='+D.maxProjects, D.
   D.open&&'depth='+D.open].filter(Boolean).join(' ');
 side.innerHTML=`<div class="ctl"><h1>DOTWEAVIER · LIFECYCLE</h1><div class="ep">${esc(D.addr)}</div>${opts?`<div class="hint">${esc(opts)}</div>`:''}
  <div class="hint">${nOrigin} origin steps ◀ seed ▶ ${nUses} lifecycle steps</div>
- <input id="q" placeholder="search: file, code, field, type…"><div class="hint" id="hits"></div>
+ <div id="qbox"><span id="chip" hidden> <b title="remove project · backspace">×</b></span><input id="q" autocomplete="off"></div><div class="hint" id="hits"></div>
  <button id="ea">expand all</button><button id="ca">collapse all</button><button id="fi">fit</button><button id="fo">focus</button>${served?`<a href="/trace-field/export?run=${encodeURIComponent(traceName)}" download><button>export html</button></a>`:''}${served&&all.some(n=>n.side>=0&&openHops(n.d))?`<br><button id="fa">follow all hops</button> <select id="fd"><option>1</option><option selected>2</option><option>3</option></select> services deep <span class="hint" id="faMsg"></span>`:''}
 
  </div><div id="det"></div>`;
 document.getElementById('legend').innerHTML=Object.entries(KIND).map(([k,c])=>`<span class="lg"><i style="background:${c}"></i>${k}</span>`).join('');
-document.getElementById('q').oninput=()=>{hitI=-1;search(false);};
+
+// ---- search: typing changes only the results list; steps (dimming, opening, focus) change on Enter ----
+// mode 'proj' lists the projects on screen; picking one, or all projects (scope null), switches to 'step'.
+let mode='proj', scope=null, dimQ='', res=[], resQ=null, ri=-1, picked=false, off=0, timer=0, acc=0;
+const ROWS=10, qi=document.getElementById('q'), box=document.getElementById('res'), shown=()=>box.style.display==='block';
+const inScope=n=>scope===null||n.p===scope;
+function dimmed(n){return !inScope(n)||!!dimQ&&!n.hay.includes(dimQ);}
+// Results: projects with their on-screen step count, or steps of the scope, shallowest first, on-screen before collapsed.
+function refresh(){clearTimeout(timer); const q=qi.value.trim().toLowerCase(); resQ=q; ri=-1; picked=false; off=0;
+  if(mode==='proj'){const c=new Map(); visible().forEach(n=>c.set(n.p,(c.get(n.p)||0)+1));
+    res=[{all:1},...[...c].filter(([p])=>p.toLowerCase().includes(q)).map(([p,k])=>({p,k}))];}
+  else{const on=new Set(visible()); res=all.filter(n=>inScope(n)&&(!q||n.hay.includes(q))).sort((a,b)=>a.depth-b.depth||on.has(b)-on.has(a));}
+  document.getElementById('hits').textContent=mode==='proj'?`${res.length-1} projects on screen`:`${res.length} matches · enter: next`;
+  list();}
+function row(x){if(mode==='proj')return x.all?'all projects':`${esc(x.p||'?')} <span class="at">· ${x.k} on screen</span>`;
+  const d=x.d; return `${scope===null?`<span class="at">${esc(x.p||'?')} ·</span> `:''}<span style="color:${KIND[d.kind]||'#888'}">${esc(d.kind)}</span> ${esc(cut(title(x),48))} <span class="at">${esc(cut(d.kind==='field'?d.type:d.code,48))}</span>`;}
+function list(){if(document.activeElement!==qi||!res.length){box.style.display='none';return;}
+  const r=qi.getBoundingClientRect(); Object.assign(box.style,{display:'block',left:r.left+'px',bottom:innerHeight-r.top+4+'px'});
+  box.innerHTML=res.slice(off,off+ROWS).map((x,k)=>`<div class="rr${off+k===ri?' cur':''}" data-k="${off+k}">${row(x)}</div>`).join('')
+    +(res.length>ROWS?`<div class="ttl">${off+1}–${Math.min(off+ROWS,res.length)} of ${res.length} · scroll for more</div>`:'');}
+const track=()=>{off=Math.max(0,Math.min(off,ri,res.length-ROWS),ri-ROWS+1);}; // window follows the highlighted row
+function move(k){if(!res.length)return; ri=Math.max(0,Math.min(res.length-1,k)); picked=true; track(); list();}
+function enter(){if(resQ!==qi.value.trim().toLowerCase())refresh(); go();}
+// Enter: pick a project, or dim steps by the text and focus the highlighted result, else the next match.
+function go(){if(mode==='proj'){const x=res[ri>=0?ri:resQ&&res.length>1?1:0]; if(x)pick(x.all?null:x.p); return;}
+  dimQ=resQ; if(res.length){if(!picked)ri=(ri+1)%res.length; picked=false; sel=res[ri]; for(let p=sel.parent;p;p=p.parent)p.open=true;}
+  draw(); if(res.length){center(sel); details(); track();} list();}
+function pick(p){mode='step'; scope=p; setQ();}
+function unpick(){mode='proj'; scope=null; setQ();}
+function setQ(){dimQ=''; qi.value=''; chip(); draw(); refresh();
+  setP();}
+// The home project may be named '', so "no project" is scope null, never a falsy check.
+function setP(){try{const u=new URLSearchParams(location.search); scope!==null?u.set('p',scope):u.delete('p'); history.replaceState(null,'','?'+u);}catch{}} // file:// may refuse
+function chip(){const c=document.getElementById('chip'), nm=scope===null?'all projects':scope||'?'; c.hidden=mode==='proj'; c.firstChild.textContent=nm+' ';
+  qi.placeholder=mode==='proj'?'search: project…':`search steps in ${nm} · enter: see matches`;}
+qi.oninput=()=>{clearTimeout(timer); timer=setTimeout(refresh,150);};
+qi.onfocus=()=>resQ===qi.value.trim().toLowerCase()?list():refresh(); // refocus keeps the place in the matches
+qi.onblur=()=>{box.style.display='none';};
+qi.onkeydown=e=>{const k=e.key;
+  if(k==='Enter'){e.preventDefault(); enter();}
+  else if(k==='ArrowDown'||k==='ArrowUp'){e.preventDefault(); if(!shown())refresh(); move(ri+(k==='ArrowDown'?1:-1));}
+  else if(k==='Escape'){if(shown())box.style.display='none'; else if(qi.value||dimQ){qi.value=''; dimQ=''; draw(); refresh(); box.style.display='none';} else if(mode==='step')unpick();}
+  else if(k==='Backspace'&&!qi.value&&mode==='step')unpick();};
+box.onmousedown=e=>e.preventDefault(); // keep focus in the input
+box.onclick=e=>{const r=e.target.closest('.rr'); if(!r)return; clearTimeout(timer); ri=+r.dataset.k; picked=true; go();}; // acts on the rows shown, not a pending refresh
+box.addEventListener('wheel',e=>{e.preventDefault(); acc+=e.deltaY*(e.deltaMode===1?16:1); const s=Math.trunc(acc/20); if(!s)return;
+  acc-=s*20; off=Math.max(0,Math.min(res.length-ROWS,off+s)); list();},{passive:false});
+document.querySelector('#chip b').onclick=()=>{unpick(); qi.focus();};
+const wantP=new URLSearchParams(location.search).get('p'); if(wantP!==null){if(all.some(n=>n.p===wantP)){mode='step'; scope=wantP;} else setP();}
+chip();
 document.getElementById('ea').onclick=()=>setAll(true);
 document.getElementById('ca').onclick=()=>setAll(false);
 document.getElementById('fi').onclick=()=>fit();
@@ -214,14 +288,15 @@ function details(){calls(); const el=document.getElementById('det'); if(!sel){el
     (d.fn?`<div class="row">in <b>${esc(d.fn)}</b></div>`:'')+(d.type?`<div class="row">type <b>${esc(d.type)}</b></div>`:'')+
     (d.via?`<div class="row">called at <b>${esc(d.via)}</b></div>`:'')+
     ((d.hops||[]).length&&sel.side>=0?`<div class="row">calls other services:</div>`+d.hops.map((h,k)=>`<div class="row"><span class="k" style="background:${KIND[h.kind]||'#888'}">${esc(h.kind)}</span> ${esc(h.method)} → <b>${esc(h.project)}</b> ${esc(h.fn)} ${h.followed?'<span class="hint">followed</span>':served?`<button class="fh" data-k="${k}">follow ⇢</button>`:''}</div>`).join('')+'<div class="hint" id="fhMsg"></div>':'')+(d.code?`<pre>${d.before?`<span class="ctx"><span class="ln">${ln-1}</span>${esc(d.before)}</span>\n`:''}<span class="ln">${ln}</span><b>${esc(d.code)}</b>${d.after?`\n<span class="ctx"><span class="ln">${ln+1}</span>${esc(d.after)}</span>`:''}</pre>`:'')+
-    (sel.kids.length?`<div class="row">${count(sel)} steps ${sel.side<0?'further back':'further on'}</div>`:'')+
+    (sel.kids.length?`<div class="row">${count(sel)} steps ${sel.side<0?'further back':'further on'} <button id="tg">${sel.open?'collapse':'expand'}</button></div>`:'')+
     '';
+  document.getElementById('tg')?.addEventListener('click',()=>{sel.open=!sel.open; draw(); details();});
   document.getElementById('vf')?.addEventListener('click',()=>viewFile(qualify(d.loc)));
   document.querySelectorAll('#det .fh').forEach(b=>b.onclick=()=>follow({path:sel.path.join('.'),hop:b.dataset.k},sel.path));}
 // Following a hop saves a new run on the server; the page opens it with the step still selected.
 async function follow(q,keep){const msg=document.getElementById('fhMsg')||document.getElementById('faMsg'); msg.textContent='following…';
   try{const r=await fetch('/trace-field/follow?'+new URLSearchParams({run:traceName,...q}),{method:'POST',headers:{'X-Dotweavier':'1'}}); const j=await r.json();
-    if(!r.ok)throw new Error(j.error||r.statusText); location.search='?'+new URLSearchParams({t:j.run,...(keep?{sel:keep.join('.')}:{})});}
+    if(!r.ok)throw new Error(j.error||r.statusText); location.search='?'+new URLSearchParams({t:j.run,...(keep?{sel:keep.join('.')}:{}),...(scope!==null?{p:scope}:{})});}
   catch(e){msg.textContent=String(e.message||e);}}
 // Whole-file viewer (served pages only): line numbers, the step's line highlighted and scrolled to.
 async function viewFile(loc){const v=document.getElementById('viewer'), body=document.getElementById('vBody'), t=document.getElementById('vTitle');
@@ -239,7 +314,7 @@ addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('view
 function qualify(loc){return home&&loc.split(':').length===2?home+':'+loc:loc;}
 async function traceFrom(addr){const msg=document.getElementById('vMsg'); msg.textContent='tracing '+addr+'…';
   try{const r=await fetch('/trace-field?addr='+encodeURIComponent(addr),{method:'POST',headers:{'X-Dotweavier':'1'}}); const j=await r.json();
-    if(!r.ok)throw new Error(j.error||r.statusText); location.search='?t='+encodeURIComponent(j.run);}
+    if(!r.ok)throw new Error(j.error||r.statusText); location.search='?'+new URLSearchParams({t:j.run,...(scope!==null?{p:scope}:{})});}
   catch(e){msg.textContent=String(e.message||e);}}
 const want=new URLSearchParams(location.search).get('sel'); if(want){sel=all.find(n=>n.side>=0&&n.path.join('.')===want)||null; for(let p=sel?.parent;p;p=p.parent)p.open=true; if(sel)sel.open=true;}
 details(); draw(); focusView(); addEventListener('resize',focusView);

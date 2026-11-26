@@ -1,88 +1,114 @@
 # dotweavier
 
-dotweavier indexes Go, Java and Kotlin projects into one call graph and traces paths between symbols, across project boundaries. A call into a gRPC client is joined to the server method that handles it. Interface calls are marked **sure** when the concrete type is known to reach the call, and **guess** otherwise.
+Trace call paths and value flows across Go, Java and Kotlin services, through gRPC, HTTP and Pub/Sub.
+
+Status: early development. Commands, output and the storage format may change.
+
+dotweavier indexes your projects into one call graph and traces paths between symbols, across project boundaries. A call into a gRPC client is joined to the server method that handles it. Interface calls are marked **sure** when the concrete type is known to reach the call, and **guess** otherwise ([ADR 0005](docs/adr/0005-sure-and-guess-interface-hops.md)).
 
 dotweavier never writes inside the projects it analyzes. All state lives in `~/.dotweavier`.
 
-## Quick start
+## Install
 
-Requires Go and the Go toolchain on your `PATH`.
+Requirements:
+
+- Go 1.27.2 or later (from `go.mod`)
+- a C compiler, because the tree-sitter parser uses cgo
 
 ```sh
-go install ./cmd/dotweavier                 # from the repo root
-dotweavier init ~/code                      # add a folder of projects to the default workspace
-dotweavier index ~/code/orders              # index one project
+git clone https://github.com/ImTema/dots-weavier-code
+cd dots-weavier-code
+go install ./cmd/dotweavier
+```
+
+Putting `~/go/bin` on your `PATH`, updating and uninstalling are covered in [docs/cli.md](docs/cli.md#install).
+
+## Try it on the samples
+
+`samples-monorepo/` holds small Go, Java and Kotlin services that call each other over gRPC, HTTP and Pub/Sub. [Its README](samples-monorepo/README.md) lists every expected hop, so you can check each trace against it.
+
+From the repo root:
+
+```sh
+dotweavier init samples-monorepo --index
+```
+
+A project's name is its folder path under the folder you added with `init`, so here the projects are `golang/orders`, `golang/pricing`, `java/inventory` and so on.
+
+Trace the call paths between two symbols:
+
+```sh
+dotweavier trace path -A 'golang/orders::Service.Place' -B 'golang/pricing::Server.Quote'
+```
+
+The first of four paths:
+
+```
+1. golang/orders:internal/order/order.go:Service.Place -iface:sure-> golang/orders:internal/pricer/pricer.go:Client.Price -grpc /pricing.v1.PricingService/Quote-> golang/pricing:internal/server/server.go:Server.Quote  (1/1 sure)
+```
+
+Trace where a value on one line comes from and where it goes, and follow it into the services it calls, two services deep:
+
+```sh
+dotweavier trace field golang/orders:internal/order/order.go:109 --project samples-monorepo --follow 2
+```
+
+Line 109 is `orders` reserving stock. An excerpt of the lifecycle tree, which follows the reserver into the Java `inventory` service:
+
+```
+[seed] internal/order/order.go:109  resID, err := s.reserver.Reserve(ctx, c.ID, req.Items)  in Service.Place
+├─ [field] order.Service.reserver : order.Reserver
+│  └─ [read] internal/order/order.go:178  if err := s.reserver.Release(context.WithoutCancel(ctx), resID); err != nil {  in Service.release
+│     └─ [arg] internal/inventory/client.go:47  func (c *Client) Release(ctx context.Context, reservationID string) error {  in Client.Release
+│        └─ [grpc] java/inventory:.../grpc/InventoryGrpcService.java:52  /inventory.v1.InventoryService/Release
+│           └─ [seed] java/inventory:.../grpc/InventoryGrpcService.java:53  public Uni<ReleaseResponse> release(ReleaseRequest req) {
+```
+
+The full output also has the origin tree and the hops into `pricing`, `fulfillment` and `shipping`.
+
+## Use it on your code
+
+```sh
+dotweavier init ~/code --index      # add a folder of projects and index every project under it
 dotweavier trace path -A 'orders::Service.Place' -B 'pricing::Server.Quote'
 ```
 
-Full install, uninstall and flag reference: [docs/cli.md](docs/cli.md).
+Symbols are addressed as `project::Type.Method`, `project:rel/path.go:Type.Method` or `project:rel/path.go:LINE`. Workspaces, `--dry-run` and every flag are in [docs/cli.md](docs/cli.md).
 
-## Usage
+Go projects are loaded with the Go toolchain, so their modules must be downloadable. Run `go mod download` in a project that fails with `no packages`.
 
-Index a project into a named workspace:
-
-```sh
-dotweavier index ~/work/billing --workspace work
-```
-
-Trace a call path between two symbols:
+## Browser UI
 
 ```sh
-dotweavier trace path -A 'orders::Service.Place' -B 'pricing::Server.Quote'
+dotweavier overview                          # browser UI at http://127.0.0.1:7357
+dotweavier trace path -A … -B … --format ui  # open the paths in the overview
+dotweavier trace field … --format html       # write one self-contained HTML file
 ```
 
-```
-1. orders:internal/order/order.go:Service.Place -iface:sure-> orders:internal/pricer/pricer.go:Client.Price -grpc /pricing.v1.PricingService/Quote-> pricing:internal/server/server.go:Server.Quote  (1/1 sure)
-```
+## Supported languages and frameworks
 
-Trace what happens to a value on one line, and follow it into other services two hops deep:
+| Language | Framework or library | Side | Supported |
+|---|---|---|---|
+| Go | gRPC (`google.golang.org/grpc`, generated code) | client and server | yes |
+| Go | `net/http` (`Handle`/`HandleFunc`, `http.Client`, `NewRequest`) | client and server | yes |
+| Go | Google Cloud Pub/Sub (`cloud.google.com/go/pubsub/v2`) | publisher and subscriber | yes |
+| Java | gRPC server (Quarkus/Mutiny, grpc-java `ImplBase`) | server | yes |
+| Kotlin | gRPC server (grpc-kotlin `CoroutineImplBase`) | server | yes |
+| Kotlin | Ktor (`HttpClient`, `get("/path") { … }` routes) | client and server | yes |
+| Java, Kotlin | gRPC clients | client | no |
+| Java, Kotlin | Pub/Sub | publisher and subscriber | no |
+| Java | Spring `RestClient`, `@HttpExchange`, Spring MVC | client and server | no |
+| Java | MicroProfile REST | client and server | no |
 
-```sh
-dotweavier trace field golang/orders:internal/order/order.go:81 --project samples-monorepo --follow 2
-```
-
-Open results in the browser instead of the terminal:
-
-```sh
-dotweavier trace path -A 'orders::Service.Place' -B 'pricing::Server.Quote' --format ui   # overview at 127.0.0.1:7357
-dotweavier trace field orders:internal/order/order.go:94 --format html                    # self-contained HTML file
-```
-
-## Demo
-
-The `samples-monorepo/` folder holds small Go, Java and Kotlin services that call each other over gRPC, HTTP and Pub/Sub. `samples-monorepo/golang/README.md` lists every expected hop, so you can check a trace against it.
-
-```sh
-dotweavier init samples-monorepo
-for p in samples-monorepo/golang/orders samples-monorepo/golang/pricing samples-monorepo/java/inventory samples-monorepo/kotlin/shipping; do dotweavier index $p; done
-dotweavier trace field golang/orders:internal/order/order.go:81 --project samples-monorepo --follow 2
-```
-
-`orders` reserves stock and prices an order on this line. The trace follows the `Reserve`, `Release` and `Quote` calls into the handlers that serve them, in Java `inventory` and Go `pricing`. Excerpt:
-
-```
-followed 3 hops
-[seed] internal/order/order.go:81  resID, err := s.reserver.Reserve(ctx, c.ID, req.Items)  in Service.Place
-├─ [arg] internal/inventory/client.go:26  func (c *Client) Reserve(...)  in Client.Reserve
-│  └─ [grpc] java/inventory:.../grpc/InventoryGrpcService.java:31  /inventory.v1.InventoryService/Reserve
-│     └─ [seed] java/inventory:.../grpc/InventoryGrpcService.java:33  public Uni<ReserveResponse> reserve(ReserveRequest req) {
-├─ [arg] internal/inventory/client.go:47  func (c *Client) Release(...)  in Client.Release
-│  └─ [grpc] java/inventory:.../grpc/InventoryGrpcService.java:52  /inventory.v1.InventoryService/Release
-└─ [read] internal/pricer/pricer.go:23  CustomerId: c.ID,  in Client.Price
-   └─ [grpc] golang/pricing:internal/server/server.go:43  /pricing.v1.PricingService/Quote
-      └─ [seed] golang/pricing:internal/server/server.go:43  func (s *Server) Quote(ctx context.Context, req *pricingv1.QuoteRequest) ...
-         ├─ [arg] golang/pricing:internal/customers/client.go:27  func (c *Client) Tier(...)  in Client.Tier
-         └─ [arg] golang/pricing:internal/shipping/client.go:32  func (c *Client) Rate(...)  in Client.Rate
-```
-
-The excerpt keeps only the hops and the steps that lead to them. The real output has every step in between.
-
-Browser version: run `dotweavier overview`, open `http://127.0.0.1:7357/ui/trace-field.html`, trace the line from the file viewer, and press **follow all hops**.
-
-Known limit: Go HTTP clients are not linked yet, so `pricing → orders` and `pricing → shipping` are not followed.
+Plain calls and interface calls are followed in all three languages. Java and Kotlin are parsed from source with tree-sitter and traced within their own project ([ADR 0007](docs/adr/0007-jvm-extractor-from-source.md)). Ktor routes nested in `route("/prefix") { … }` are not read.
 
 ## Docs
 
 - [docs/cli.md](docs/cli.md): install, uninstall, full command and flag reference
 - [docs/GLOSSARY.md](docs/GLOSSARY.md): domain terms
 - [docs/adr/](docs/adr/): design decisions
+- [samples-monorepo/README.md](samples-monorepo/README.md): the sample services and their expected hops
+
+## Contributing
+
+Run the tests with `go test ./...`. Issues are tracked as markdown files under `.scratch/`.
